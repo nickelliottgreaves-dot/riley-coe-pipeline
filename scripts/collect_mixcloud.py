@@ -173,7 +173,7 @@ def fetch_cloudcasts_html(username: str, since: date, until: date) -> tuple[list
     errors = []
     try:
         with urlopen(req, timeout=25) as response:
-            final_profile_url = response.geturl()
+            final_profile_url = response.geturl() if hasattr(response, "geturl") else profile
             html = response.read(5_000_001).decode("utf-8", errors="replace")
     except (HTTPError, URLError, TimeoutError, OSError) as exc:
         return [], [f"Mixcloud public profile HTML fallback failed for {profile}: {type(exc).__name__}: {exc}"]
