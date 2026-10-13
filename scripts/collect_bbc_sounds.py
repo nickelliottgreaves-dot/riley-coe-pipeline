@@ -117,12 +117,12 @@ def extract_tracklist_candidates(parser,text,episode_url,episode_title,episode_d
             section.append(line)
         for line in section:
             # Only accept explicit separators; leave other line shapes for human review.
-            m=re.match(r"^(.{1,140}?)\\s+[–—-]\\s+(.{1,180})$",line)
+            m=re.match(r"^(.{1,140}?)\s+[–—-]\s+(.{1,180})$",line)
             if m:
                 left,right=m.groups()
                 # This convention is ambiguous on many sites, so record rather than confirm it.
                 add(right,left,"visible_text_artist_dash_title",line)
-            m=re.match(r"^(.{1,180}?)\\s+by\\s+(.{1,140})$",line,re.I)
+            m=re.match(r"^(.{1,180}?)\s+by\s+(.{1,140})$",line,re.I)
             if m:
                 title,artist=m.groups()
                 add(title,artist,"visible_text_title_by_artist",line)
