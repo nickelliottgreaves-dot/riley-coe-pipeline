@@ -13,13 +13,18 @@ class EvidencePackageTests(unittest.TestCase):
                 w.writerow({"episode_date":"2026-10-13","episode_title":"Example","episode_url":"https://www.bbc.co.uk/programmes/m0031tk4","tracklist_status":"visible_tracklist_heading_detected_needs_review","notes":"Heading found"})
             candidates=tmp_path/"bbc_track_candidates.csv"
             with candidates.open("w",newline="",encoding="utf-8") as f:
-                w=csv.DictWriter(f,fieldnames=["artist_candidate","track_title","review_status"])
+                w=csv.DictWriter(f,fieldnames=["episode_date","episode_title","episode_url","artist_candidate","track_title","extraction_method","review_status","evidence_text","notes"])
                 w.writeheader()
-                w.writerow({"artist_candidate":"Example Artist","track_title":"Example Song","review_status":"needs_manual_review"})
+                w.writerow({"episode_date":"2026-10-13","episode_title":"Example","episode_url":"https://www.bbc.co.uk/programmes/m0031tk4","artist_candidate":"Example Artist","track_title":"Example Song","extraction_method":"visible_text_title_by_artist","review_status":"needs_manual_review","evidence_text":"Example Song by Example Artist","notes":"review"})
+            mixcloud=tmp_path/"mixcloud_tracks.csv"
+            with mixcloud.open("w",newline="",encoding="utf-8") as f:
+                w=csv.DictWriter(f,fieldnames=["episode_date","episode_title","episode_url","artist","track_title","track_position","source","verification_status"])
+                w.writeheader()
+                w.writerow({"episode_date":"2026-10-14","episode_title":"Mixcloud Example","episode_url":"https://www.mixcloud.com/example/show","artist":"Mix Artist","track_title":"Mix Song","track_position":"1","source":"Mixcloud API","verification_status":"candidate"})
             out=tmp_path/"run"
             subprocess.run([sys.executable,str(ROOT/"scripts/assemble_run_package.py"),
                 "--start","2026-10-13","--end","2026-10-26","--bbc-episodes",str(bbc),
-                "--bbc-track-candidates",str(candidates),"--out-dir",str(out)],check=True,capture_output=True,text=True)
+                "--bbc-track-candidates",str(candidates),"--mixcloud-track-candidates",str(mixcloud),"--out-dir",str(out)],check=True,capture_output=True,text=True)
             with (out/"episodes.csv").open(newline="",encoding="utf-8") as f:
                 episodes=list(csv.DictReader(f))
             self.assertEqual(episodes[0]["tracklist_status"],"not_yet_checked")
@@ -27,6 +32,12 @@ class EvidencePackageTests(unittest.TestCase):
             with (out/"bbc_track_candidates.csv").open(newline="",encoding="utf-8") as f:
                 rows=list(csv.DictReader(f))
             self.assertEqual(rows[0]["artist_candidate"],"Example Artist")
+            with (out/"tracklist_candidate_review.csv").open(newline="",encoding="utf-8") as f:
+                review=list(csv.DictReader(f))
+            self.assertEqual(len(review),2)
+            self.assertEqual({row["artist_candidate"] for row in review},{"Example Artist","Mix Artist"})
+            self.assertTrue(all(row["review_status"]=="needs_manual_review" for row in review))
+            self.assertTrue((out/"mixcloud_api_track_candidates.csv").exists())
             with (out/"input_file_audit.csv").open(newline="",encoding="utf-8") as f:
                 audit=list(csv.DictReader(f))
             self.assertTrue(any(r["input_name"]=="bbc_track_candidates" and r["status"]=="present" for r in audit))
