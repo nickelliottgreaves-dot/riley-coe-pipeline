@@ -79,3 +79,16 @@ Until these stages exist and pass the evidence gate, the scheduled validator is 
 - `event_discovery_audit.csv` and `event_discovery_summary.json`: source-level results and limitations.
 
 The scheduled/manual Actions workflow runs this for today through the following 13 days and uploads `riley-coe-event-candidates-...`. These are **candidates, not a finished gig report**. Many venue sites use JavaScript, paginated listings or ticketing systems, and the collector does not yet render those pages, traverse pagination, open every candidate event page, or reliably extract supports. It deliberately sets `verified=false` and records zero completed calendar checks. Human/event-page verification and a venue-by-venue coverage record remain required before the run can pass.
+
+## Dated evidence-package assembler
+
+`scripts/assemble_run_package.py` assembles a dated review package from collector CSVs. It creates all validator-required files, imports candidate events only within the requested window, runs the full-pool matcher, creates a mandatory-venue checklist marked `not_checked`, and sets `claimed_status=PARTIAL`. It refuses to overwrite a non-empty output directory, so earlier evidence is preserved. This is a scaffold for review, not a substitute for episode/venue verification; empty input files and unsearched checks remain explicit gaps.
+
+Example after downloading the collector artifacts:
+
+```bash
+python scripts/assemble_run_package.py --start 2026-10-13 --end 2026-10-26 --episodes artifacts/mixcloud/mixcloud_episode_inventory.csv --events artifacts/event-candidates/event_candidates.csv --venue-audit artifacts/event-candidates/event_discovery_audit.csv --out-dir data/runs/2026-10-13_to_2026-10-26
+python scripts/validate_run.py --run-dir data/runs/2026-10-13_to_2026-10-26 --pool data/artist_pool.csv
+```
+
+The validator is expected to reject this scaffold until tracklists and venues are actually verified and regression checks completed. Never edit the manifest to `COMPLETE` just to make the gate pass.
