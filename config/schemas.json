@@ -22,6 +22,9 @@
     "artist_role",
     "source_url",
     "verified",
+    "price",
+    "ticket_status",
+    "discovery_method",
     "notes"
   ],
   "pool_matches": [
@@ -59,5 +62,24 @@
     "fuzzy_reviewed",
     "unmatched",
     "false_positive_rejected"
+  ],
+  "event_link_candidates": [
+    "venue",
+    "link_text",
+    "candidate_url",
+    "source_page_url",
+    "candidate_reason",
+    "verified",
+    "notes"
+  ],
+  "event_discovery_audit": [
+    "venue",
+    "source_url",
+    "http_status",
+    "content_type",
+    "structured_events_found",
+    "candidate_links_found",
+    "status",
+    "notes"
   ]
 }
