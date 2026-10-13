@@ -31,6 +31,7 @@ class WorkflowArtifactContractTests(unittest.TestCase):
         self.assertIn("tracklist_candidate_review.csv", ASSEMBLER)
         self.assertIn("Riley_Coe_tracklist_candidate_review_", ASSEMBLER)
         self.assertIn("event_jsonld_found", ASSEMBLER)
+        self.assertIn("visible_text_labelled_track_artist", (ROOT / "scripts/collect_bbc_sounds.py").read_text(encoding="utf-8"))
         self.assertIn("bbc_track_candidates", ASSEMBLER)
         self.assertIn("config/regression_artists.csv", ASSEMBLER)
         self.assertIn("Missing required regression artist checks", (ROOT / "scripts/validate_run.py").read_text(encoding="utf-8"))
