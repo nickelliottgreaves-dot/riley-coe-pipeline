@@ -139,6 +139,8 @@ def main():
             continue
         if not (r.get("artist") or "").strip():
             unresolved_row={k:r.get(k,"") for k in UNRESOLVED_FIELDS}
+            unresolved_row["artist_candidate"]=r.get("artist","")
+            unresolved_row["artist_role"]=r.get("artist_role","")
             unresolved_row["notes"]=((r.get("notes") or "")+" Performer missing; retained for manual triage.").strip()
             unresolved.append(unresolved_row)
             continue
