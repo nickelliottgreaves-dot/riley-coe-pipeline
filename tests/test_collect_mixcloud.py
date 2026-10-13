@@ -62,6 +62,39 @@ class MixcloudInventoryTests(unittest.TestCase):
         self.assertEqual(items[0]["created_time"], "2026-10-06")
         self.assertEqual(errors, [])
 
+    def test_html_fallback_discovers_shows_from_search_page(self):
+        html = b'<a href="/SixMusicAlternative/riley-coe-tuesday-6th-october-2026/">Riley &amp; Coe Tuesday 6th October 2026</a>'
+        response = type("Response", (), {
+            "__enter__": lambda self: self,
+            "__exit__": lambda self, *args: None,
+            "read": lambda self, n: html,
+            "geturl": lambda self: "https://www.mixcloud.com/search/?q=Riley%20%26%20Coe"
+        })()
+        with patch("scripts.collect_mixcloud.urlopen", side_effect=[
+            type("Response", (), {"__enter__": lambda self: self, "__exit__": lambda self, *args: None,
+                "read": lambda self, n: b'<a href="/help/">Help</a>', "geturl": lambda self: "https://www.mixcloud.com/SixMusicAlternative/"})(),
+            type("Response", (), {"__enter__": lambda self: self, "__exit__": lambda self, *args: None,
+                "read": lambda self, n: b'<a href="/help/">Help</a>', "geturl": lambda self: "https://www.mixcloud.com/SixMusicAlternative/uploads/"})(),
+            response
+        ]):
+            items, errors = fetch_cloudcasts_html("SixMusicAlternative", date(2026, 10, 6), date(2026, 10, 13))
+        self.assertEqual(len(items), 1)
+        self.assertIn("6th-october-2026", items[0]["url"])
+        self.assertEqual(errors, [])
+
+    def test_show_page_parser_reads_numbered_creator_comment_tracklist(self):
+        html = b'<div>Comments</div><div>The 6 Music Archive</div><div>Creator</div><div>Button: 00:00</div><div>1.</div><div>Threadbare</div><div>Lande Hekt</div><div>2.</div><div>New York No Wave</div><div>Ill Ease</div><div>Reply</div>'
+        response = type("Response", (), {"__enter__": lambda self: self, "__exit__": lambda self, *args: None,
+            "read": lambda self, n: html})()
+        item = {"name": "Riley & Coe Wednesday 30th September 2026",
+            "url": "https://www.mixcloud.com/SixMusicAlternative/riley-coe-wednesday-30th-september-2026/",
+            "created_time": "2026-09-30"}
+        with patch("scripts.collect_mixcloud.urlopen", return_value=response):
+            episode, tracks = fetch_show_page_tracks(item)
+        self.assertEqual([(x["track_title"], x["artist"]) for x in tracks],
+            [("Threadbare", "Lande Hekt"), ("New York No Wave", "Ill Ease")])
+        self.assertEqual(episode["tracklist_status"], "incomplete")
+
     def test_html_show_page_extracts_visible_track_rows_as_unverified(self):
         html = b'<h2>Tracklist</h2><div>1.</div><div>Song One</div><div>Artist One</div><div>2.</div><div>Song Two</div><div>Artist Two</div><div>Show more</div>'
         response = type("Response", (), {"__enter__": lambda self: self, "__exit__": lambda self, *args: None,
