@@ -55,7 +55,8 @@ class MixcloudInventoryTests(unittest.TestCase):
             })()
         with patch("scripts.collect_mixcloud.urlopen", side_effect=[
             response(html_empty, "https://www.mixcloud.com/SixMusicAlternative/"),
-            response(html_uploads, "https://www.mixcloud.com/SixMusicAlternative/uploads/")
+            response(html_uploads, "https://www.mixcloud.com/SixMusicAlternative/uploads/"),
+            response(b'<a href="/help/">Help</a>', "https://www.mixcloud.com/search/?q=Riley%20%26%20Coe")
         ]):
             items, errors = fetch_cloudcasts_html("SixMusicAlternative", date(2026, 10, 6), date(2026, 10, 13))
         self.assertEqual(len(items), 1)
