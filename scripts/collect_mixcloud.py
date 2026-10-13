@@ -73,6 +73,25 @@ def fetch_cloudcasts(username: str, since: date, until: date) -> tuple[list[dict
         errors.append("Stopped after 30 pages as a safety limit; inventory may be incomplete.")
     return found, errors
 
+def fetch_show_detail(item: dict) -> dict:
+    # The user cloudcasts endpoint may omit per-show tracklist sections. Fetch
+    # each individual public show object before concluding the sections are absent.
+    key = str(item.get("key") or "").strip()
+    if key and key.startswith("/"):
+        detail_url = API_ROOT + key
+    else:
+        public_url = str(item.get("url") or "").strip()
+        prefix = "https://www.mixcloud.com/"
+        if not public_url.startswith(prefix):
+            return item
+        detail_url = API_ROOT + "/" + public_url[len(prefix):].lstrip("/")
+    detail = get_json(detail_url)
+    if isinstance(detail, dict):
+        merged = dict(item)
+        merged.update(detail)
+        return merged
+    return item
+
 def sections_from(item: dict) -> list[dict]:
     sections = item.get("sections")
     if isinstance(sections, list):
@@ -143,9 +162,16 @@ def main() -> int:
 
     episodes, tracks = [], []
     for item in items:
-        episode, item_tracks = inventory_item(item)
+        try:
+            detail = fetch_show_detail(item) if not sections_from(item) else item
+            episode, item_tracks = inventory_item(detail)
+        except (HTTPError, URLError, TimeoutError, OSError, json.JSONDecodeError) as exc:
+            episode, item_tracks = inventory_item(item)
+            episode["notes"] += f" Individual show API request also failed: {type(exc).__name__}: {exc}"
+            errors.append(f"{episode['episode_title'] or episode['url']}: show-detail fetch failed: {exc}")
         episodes.append(episode)
         tracks.extend(item_tracks)
+        time.sleep(0.15)
     episodes.sort(key=lambda r: (r["episode_date"], r["episode_title"]))
     tracks.sort(key=lambda r: (r["episode_date"], int(r["track_position"] or 0)))
     out = args.out_dir
