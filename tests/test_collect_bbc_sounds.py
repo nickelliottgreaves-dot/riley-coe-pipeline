@@ -25,7 +25,7 @@ class BBCCollectorTests(unittest.TestCase):
         line_one="Track: Song One | Artist: Artist One"
         line_two="Artist: Artist Two; Title: Song Two"
         p.feed("<h2>Tracklist</h2><p>"+line_one+"</p><p>"+line_two+"</p>")
-        candidates=extract_tracklist_candidates(p,"Tracklist\\n"+line_one+"\\n"+line_two,
+        candidates=extract_tracklist_candidates(p,"Tracklist\n"+line_one+"\n"+line_two,
             "https://www.bbc.co.uk/programmes/m0031tk4","Test episode","2026-10-01")
         self.assertEqual(len(candidates),2)
         by_artist={row["artist_candidate"]:row for row in candidates}
