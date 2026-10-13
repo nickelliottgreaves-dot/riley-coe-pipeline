@@ -17,7 +17,7 @@ from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 API_ROOT = "https://api.mixcloud.com"
-DEFAULT_USER = "sixmusicalternative"
+DEFAULT_USER = "SixMusicAlternative"
 USER_AGENT = "riley-coe-pipeline/0.1 (research evidence collector)"
 EPISODE_FIELDS = ["episode_date", "episode_title", "source", "url", "tracklist_status", "tracks_extracted", "notes"]
 TRACK_FIELDS = ["episode_date", "episode_title", "episode_url", "artist", "track_title", "track_position", "source", "verification_status"]
