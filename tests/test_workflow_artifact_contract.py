@@ -27,5 +27,7 @@ class WorkflowArtifactContractTests(unittest.TestCase):
         self.assertIn("missing_or_unsupplied_inputs", ASSEMBLER)
         self.assertIn("bbc_track_candidates.csv", WORKFLOW)
         self.assertIn("bbc_track_candidates", ASSEMBLER)
+        self.assertIn("config/regression_artists.csv", ASSEMBLER)
+        self.assertIn("Missing required regression artist checks", (ROOT / "scripts/validate_run.py").read_text(encoding="utf-8"))
 
 if __name__ == "__main__": unittest.main()
