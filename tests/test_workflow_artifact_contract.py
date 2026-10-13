@@ -45,5 +45,9 @@ class WorkflowArtifactContractTests(unittest.TestCase):
         self.assertIn("calendar_coverage_verified", ASSEMBLER)
         self.assertIn("needs: [assemble-evidence-scaffold]", WORKFLOW)
         self.assertIn("artifacts/evidence-package", WORKFLOW)
+        self.assertIn("--sources config/venue_sources.csv", WORKFLOW)
+        self.assertIn("NO_SEED_LINKS", INSPECTOR)
+        for venue in ("The Globe","Little Buildings","Utilita Arena Newcastle","ZEROX Newcastle"):
+            self.assertIn(venue, (ROOT / "config/venue_sources.csv").read_text(encoding="utf-8"))
 
 if __name__ == "__main__": unittest.main()
