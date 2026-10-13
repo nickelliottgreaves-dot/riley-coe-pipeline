@@ -111,3 +111,10 @@ Every assembled scaffold now includes `input_file_audit.csv`, which records each
 
 
 The assembler also emits dated copies for downstream use: `Riley_Coe_events_<start>_to_<end>.csv`, `Riley_Coe_deduplicated_event_artists_<run-date>.csv`, `Riley_Coe_pool_matches_<run-date>.csv`, `Riley_Coe_venue_coverage_<run-date>.csv`, and `Riley_Coe_regression_artist_checks_<run-date>.csv`. The exact filenames are recorded in `run_manifest.json`; these are still partial candidate outputs until the evidence gates pass.
+
+
+### Unified track-candidate review queue
+
+The assembler preserves the original `mixcloud_api_track_candidates.csv` and `bbc_track_candidates.csv` inputs and emits `tracklist_candidate_review.csv`, normalising candidate artist, title, episode URL/date, extraction method and review status. Every Mixcloud API candidate and every BBC pattern/JSON-LD candidate is labelled `needs_manual_review`. This queue helps review the whole candidate pool but is not a complete tracklist and must not be used as evidence that an episode has been fully audited.
+
+The assembler also imports Event JSON-LD rows found by the bounded event-page inspector into `events.csv` when the structured date falls within the requested window. Performers remain `performer_role_unverified`; rows without performer metadata are retained in `unresolved_event_candidates.csv`. Duplicate event/artist/source rows are deduplicated, and none of these imports is marked verified.
