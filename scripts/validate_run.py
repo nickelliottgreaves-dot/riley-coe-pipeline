@@ -155,7 +155,17 @@ def main() -> int:
         if not row.get("source_url", "").strip():
             errors.append(f"Venue {venue}: missing evidence/source URL")
 
+    # If a venue's calendar check says events were found, at least one event
+    # act row must be present for that venue. A genuinely empty window can pass
+    # only when the venue evidence explicitly says no relevant events were found.
     events = tables.get("events.csv", [])
+    checked_event_venues = {
+        norm_venue(r.get("venue", "")) for r in venue_rows
+        if (r.get("status") or "").strip().lower() == "checked_events_found"
+    }
+    event_venues_present = {norm_venue(r.get("venue", "")) for r in events if r.get("venue", "").strip()}
+    for venue_key in sorted(checked_event_venues - event_venues_present):
+        errors.append(f"Venue marked checked_events_found has no event rows: {venue_key}")
     window_events = []
     for i, row in enumerate(events, 2):
         try:
@@ -214,10 +224,6 @@ def main() -> int:
         errors.append("No episode coverage rows: cannot establish tracklist coverage")
     if not venue_rows:
         errors.append("No venue coverage rows: cannot establish venue-first sweep")
-    if not events:
-        warnings.append("No event rows supplied")
-    if not matches:
-        warnings.append("No pool match rows supplied")
     if manifest.get("episode_coverage_complete") is not True:
         errors.append("Manifest episode_coverage_complete is not true")
     if manifest.get("venue_sweep_complete") is not True:
