@@ -6,7 +6,7 @@ verified events or marks the run complete. Existing output directories are not
 overwritten to protect prior evidence.
 """
 from __future__ import annotations
-import argparse, csv, json, subprocess, sys
+import argparse, csv, json, subprocess, sys, shutil
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -35,7 +35,7 @@ def main():
     ap.add_argument("--start",required=True); ap.add_argument("--end",required=True)
     ap.add_argument("--previous-successful-run",default="unknown/not yet established")
     ap.add_argument("--episodes",type=Path); ap.add_argument("--bbc-episodes",type=Path); ap.add_argument("--events",type=Path)
-    ap.add_argument("--venue-audit",type=Path); ap.add_argument("--out-dir",type=Path,required=True)
+    ap.add_argument("--venue-audit",type=Path); ap.add_argument("--event-page-inspection",type=Path); ap.add_argument("--event-page-audit",type=Path); ap.add_argument("--out-dir",type=Path,required=True)
     ap.add_argument("--pool",type=Path,default=ROOT/"data/artist_pool.csv")
     args=ap.parse_args()
     start=date.fromisoformat(args.start); end=date.fromisoformat(args.end)
@@ -43,6 +43,9 @@ def main():
     out=args.out_dir if args.out_dir.is_absolute() else ROOT/args.out_dir
     if out.exists() and any(out.iterdir()): raise SystemExit(f"Refusing to overwrite non-empty evidence directory: {out}")
     out.mkdir(parents=True,exist_ok=True)
+    for source, dest in [(args.event_page_inspection,"event_page_inspection.csv"),(args.event_page_audit,"event_page_crawl_audit.csv")]:
+        if source and Path(source).exists():
+            shutil.copy2(source,out/dest)
     episode_rows=read_csv(args.episodes,["episode_date","source","url","tracklist_status","tracks_extracted","notes"])
     episode_rows=[{k:r.get(k,"") for k in EPISODE_FIELDS} for r in episode_rows]
     bbc_rows=read_csv(args.bbc_episodes,["episode_date","episode_title","episode_url","tracklist_status","notes"]) if args.bbc_episodes else []
