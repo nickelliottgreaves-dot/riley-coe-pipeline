@@ -115,6 +115,24 @@ def main() -> int:
         except ValueError:
             errors.append(f"episodes.csv row {i}: invalid episode_date")
 
+    # The source registry is a separate prerequisite: an unknown venue URL must
+    # not be silently treated as a completed official-calendar check.
+    source_registry = ROOT / "config" / "venue_sources.csv"
+    try:
+        with source_registry.open(encoding="utf-8-sig", newline="") as f:
+            source_rows = list(csv.DictReader(f))
+        source_map = {norm(r.get("venue", "")): r for r in source_rows}
+        for required_name in required_venues:
+            source = source_map.get(norm(required_name))
+            if not source:
+                errors.append(f"Mandatory venue missing from config/venue_sources.csv: {required_name}")
+            elif not source.get("source_url", "").strip().startswith(("https://", "http://")):
+                errors.append(f"Mandatory venue has no verified source URL in venue_sources.csv: {required_name}")
+            elif source.get("source_status", "").strip() not in {"verified_official_calendar", "verified_official_site"}:
+                errors.append(f"Mandatory venue source is not verified: {required_name}")
+    except (OSError, csv.Error) as exc:
+        errors.append(f"Cannot load config/venue_sources.csv: {exc}")
+
     venue_rows = tables.get("venue_coverage.csv", [])
     try:
         with REQUIRED_VENUES_FILE.open(encoding="utf-8-sig", newline="") as f:
