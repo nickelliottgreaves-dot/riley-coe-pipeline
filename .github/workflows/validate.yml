@@ -5,8 +5,6 @@ on:
   pull_request:
   workflow_dispatch:
   schedule:
-    # 09:00 UK in winter / 09:00 UTC in summer is not DST-aware; use 08:00 UTC
-    # and treat this as a prompt to review, not proof that live research ran.
     - cron: "0 8 * * 1"
 
 permissions:
@@ -20,7 +18,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Run validator regression tests
+      - name: Run validator and collector regression tests
         run: python -m unittest discover -s tests -v
       - name: Validate committed artist pool
         run: |
@@ -29,13 +27,38 @@ jobs:
           from pathlib import Path
           p = Path("data/artist_pool.csv")
           with p.open(encoding="utf-8-sig", newline="") as f:
-              r = list(csv.DictReader(f))
-          names = [x["artist"].strip().casefold() for x in r]
-          assert len(r) == 747, f"Expected 747 seed rows, found {len(r)}"
+              rows = list(csv.DictReader(f))
+          names = [row["artist"].strip().casefold() for row in rows]
+          assert len(rows) == 747, f"Expected 747 seed rows, found {len(rows)}"
           assert len(names) == len(set(names)), "Duplicate normalized artist names in seed pool"
-          assert all(x["artist"].strip() and x["status"].strip() for x in r), "Blank artist/status"
-          print(f"Artist pool seed OK: {len(r)} rows")
+          assert all(row["artist"].strip() and row["status"].strip() for row in rows), "Blank artist/status"
+          print(f"Artist pool seed OK: {len(rows)} rows")
           PY
+
+  mixcloud-inventory:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Inventory recent Mixcloud episodes
+        id: collect
+        run: |
+          mkdir -p artifacts/mixcloud
+          SINCE=$(python -c "from datetime import date,timedelta; print((date.today()-timedelta(days=7)).isoformat())")
+          UNTIL=$(python -c "from datetime import date; print(date.today().isoformat())")
+          echo "Window: $SINCE through $UNTIL"
+          python scripts/collect_mixcloud.py --since "$SINCE" --until "$UNTIL" --out-dir artifacts/mixcloud
+      - name: Preserve episode inventory and audit even when collection fails
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: riley-coe-mixcloud-inventory-${{ github.run_id }}
+          path: artifacts/mixcloud/
+          if-no-files-found: warn
+          retention-days: 30
 
   scheduled-evidence-gate:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
