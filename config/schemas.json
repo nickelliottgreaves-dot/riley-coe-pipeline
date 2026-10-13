@@ -25,14 +25,13 @@
     "notes"
   ],
   "pool_matches": [
-    "event_date",
-    "venue",
-    "event_title",
     "event_artist",
     "matched_pool_artist",
+    "candidate_pool_artist",
     "match_type",
     "source_url",
-    "verified"
+    "verified",
+    "notes"
   ],
   "regression_artist_checks": [
     "artist",
@@ -56,6 +55,7 @@
   "allowed_match_type": [
     "exact",
     "alias",
+    "fuzzy_candidate",
     "fuzzy_reviewed",
     "unmatched",
     "false_positive_rejected"
