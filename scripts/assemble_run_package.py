@@ -147,7 +147,7 @@ def main():
     write_csv(dedup_path,["event_artist","events_count","event_dates","venues","event_titles","source_urls"],dedup_rows)
     missing_inputs=[r["input_name"] for r in input_audit if r["status"] in {"missing","not_supplied"}]
     manifest={"run_date":date.today().isoformat(),"window_start":start.isoformat(),"window_end":end.isoformat(),
-              "previous_successful_run":args.previous_successful_run,"claimed_status":"PARTIAL",
+              "previous_successful_run":args.previous_successful_run,"claimed_status":"PARTIAL",\n              "episode_coverage_complete":False,"venue_sweep_complete":False,"artist_pool_compared":False,"all_event_sources_verified":False,
               "researcher_notes":"Automatically assembled evidence scaffold. Not a completed research run. BBC Sounds/visible tracklists, event detail pages, supports, prices/ticket status, regression checks, full venue coverage and safety-net searches still require verification.",
               "package_kind":"candidate_scaffold","source_episode_rows":len(episode_rows),"candidate_event_rows":len(events),"unresolved_event_candidates":len(unresolved),
               "mandatory_venue_rows":len(venue_rows),"venue_calendar_checks_completed":0,"regression_artists_seeded":len(regression_rows),"regression_artist_checks_completed":0,
