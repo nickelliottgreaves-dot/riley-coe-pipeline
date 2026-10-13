@@ -19,6 +19,22 @@ class ValidatorTests(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("Missing run_manifest.json", result.stdout)
 
+
+    def test_every_required_venue_has_an_official_source_registry_entry(self):
+        import csv, re
+        required_path = ROOT / "config" / "required_venues.csv"
+        source_path = ROOT / "config" / "venue_sources.csv"
+        norm = lambda s: "".join(ch for ch in re.sub(r"\\s+", " ", s.casefold()) if ch.isalnum())
+        with required_path.open(encoding="utf-8-sig", newline="") as f:
+            required = [r["venue"] for r in csv.DictReader(f) if r["mandatory"].strip().lower() == "true"]
+        with source_path.open(encoding="utf-8-sig", newline="") as f:
+            sources = {norm(r["venue"]): r for r in csv.DictReader(f)}
+        for venue in required:
+            self.assertIn(norm(venue), sources, f"Missing source registry entry: {venue}")
+            row = sources[norm(venue)]
+            self.assertTrue(row["source_url"].startswith("https://"), f"Missing URL for {venue}")
+            self.assertIn(row["source_status"], {"verified_official_calendar", "verified_official_site", "verified_official_social_listing"})
+
     def test_false_complete_flags_fail(self):
         with tempfile.TemporaryDirectory() as tmp:
             p = Path(tmp)
