@@ -237,11 +237,30 @@ def main() -> int:
         )
 
     regressions = tables.get("regression_artist_checks.csv", [])
+    regression_seed_path = ROOT / "config" / "regression_artists.csv"
+    try:
+        with regression_seed_path.open(encoding="utf-8-sig", newline="") as f:
+            regression_seed = list(csv.DictReader(f))
+        seed_names = {norm(r.get("artist", "")) for r in regression_seed if r.get("artist", "").strip()}
+    except (OSError, csv.Error) as exc:
+        seed_names = set()
+        errors.append(f"Cannot load regression artist seed list: {exc}")
+    regression_names = {norm(r.get("artist", "")) for r in regressions if r.get("artist", "").strip()}
+    missing_regression_rows = sorted(seed_names - regression_names)
+    if missing_regression_rows:
+        errors.append("Missing required regression artist checks: " + ", ".join(missing_regression_rows))
     for i, row in enumerate(regressions, 2):
         if not row.get("artist", "").strip():
             errors.append(f"regression_artist_checks.csv row {i}: blank artist")
-        if truthy(row.get("searched", "")) and not row.get("evidence_url", "").strip():
+        searched=truthy(row.get("searched", ""))
+        if searched and not row.get("evidence_url", "").strip():
             errors.append(f"regression_artist_checks.csv row {i}: searched item has no evidence URL")
+        if not searched:
+            warnings.append(f"Regression artist {row.get('artist','')} has not been searched")
+            if manifest.get("claimed_status") == "COMPLETE":
+                errors.append(f"regression_artist_checks.csv row {i}: COMPLETE run has an unsearched regression artist")
+        elif row.get("evidence_url", "").strip() and not row.get("evidence_url", "").strip().startswith(("https://", "http://")):
+            errors.append(f"regression_artist_checks.csv row {i}: evidence_url is not an HTTP(S) URL")
 
     if not episodes:
         errors.append("No episode coverage rows: cannot establish tracklist coverage")
