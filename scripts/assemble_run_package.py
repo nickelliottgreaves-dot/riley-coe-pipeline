@@ -34,7 +34,7 @@ def main():
     ap=argparse.ArgumentParser()
     ap.add_argument("--start",required=True); ap.add_argument("--end",required=True)
     ap.add_argument("--previous-successful-run",default="unknown/not yet established")
-    ap.add_argument("--episodes",type=Path); ap.add_argument("--events",type=Path)
+    ap.add_argument("--episodes",type=Path); ap.add_argument("--bbc-episodes",type=Path); ap.add_argument("--events",type=Path)
     ap.add_argument("--venue-audit",type=Path); ap.add_argument("--out-dir",type=Path,required=True)
     ap.add_argument("--pool",type=Path,default=ROOT/"data/artist_pool.csv")
     args=ap.parse_args()
@@ -45,6 +45,11 @@ def main():
     out.mkdir(parents=True,exist_ok=True)
     episode_rows=read_csv(args.episodes,["episode_date","source","url","tracklist_status","tracks_extracted","notes"])
     episode_rows=[{k:r.get(k,"") for k in EPISODE_FIELDS} for r in episode_rows]
+    bbc_rows=read_csv(args.bbc_episodes,["episode_date","episode_title","episode_url","tracklist_status","notes"]) if args.bbc_episodes else []
+    for r in bbc_rows:
+        episode_rows.append({"episode_date":r.get("episode_date",""),"source":"BBC Sounds official episode page",
+            "url":r.get("episode_url",""),"tracklist_status":r.get("tracklist_status","needs_review"),
+            "tracks_extracted":"0","notes":((r.get("notes") or "")+" BBC inventory only; visible tracklist completeness and all artists remain to be verified.").strip()})
     event_rows=read_csv(args.events,["event_date","venue","event_title","artist","artist_role","source_url","verified","notes"]) if args.events else []
     # Preserve only event rows inside the requested window; every candidate remains unverified.
     events=[]; unresolved=[]
