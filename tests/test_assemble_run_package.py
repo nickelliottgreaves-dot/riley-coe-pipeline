@@ -52,6 +52,7 @@ class EvidencePackageTests(unittest.TestCase):
                 w=csv.DictWriter(f,fieldnames=fields); w.writeheader()
                 w.writerow({"venue":"The Cluny","page_url":"https://thecluny.com/gigs/example","event_title":"Example Live","event_date":"2026-10-20T19:00:00+01:00","performer_names":"Example Artist; Support Artist","price":"18.00","currency":"GBP","availability":"InStock","event_jsonld_found":"true","notes":"Structured candidate only"})
                 w.writerow({"venue":"The Cluny","page_url":"https://thecluny.com/gigs/unresolved","event_title":"Unresolved Live","event_date":"2026-10-21","performer_names":"","event_jsonld_found":"true","notes":"No performer metadata"})
+                w.writerow({"venue":"The Cluny","page_url":"https://thecluny.com/gigs/undated","event_title":"Undated Live","event_date":"","performer_names":"Undated Artist","event_jsonld_found":"true","notes":"No date metadata"})
             out=root/"run"
             subprocess.run([sys.executable,str(ROOT/"scripts/assemble_run_package.py"),
                 "--start","2026-10-13","--end","2026-10-26","--event-page-inspection",str(inspection),
@@ -64,8 +65,11 @@ class EvidencePackageTests(unittest.TestCase):
             self.assertTrue(all(row["price"]=="18.00 GBP" for row in events))
             with (out/"unresolved_event_candidates.csv").open(newline="",encoding="utf-8") as f:
                 unresolved=list(csv.DictReader(f))
-            self.assertEqual(len(unresolved),1)
-            self.assertEqual(unresolved[0]["event_title"],"Unresolved Live")
+            self.assertEqual(len(unresolved),2)
+            self.assertIn("Unresolved Live",{row["event_title"] for row in unresolved})
+            undated=next(row for row in unresolved if row["event_title"]=="Undated Live")
+            self.assertEqual(undated["artist_candidate"],"Undated Artist")
+            self.assertIn("Date missing or invalid",undated["notes"])
 
     def test_creates_partial_package_and_refuses_overwrite(self):
         with tempfile.TemporaryDirectory() as tmp:
