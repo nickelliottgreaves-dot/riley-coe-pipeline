@@ -76,7 +76,7 @@ def main():
         source_state=(r.get("tracklist_status") or "needs_review").strip()
         # Map collector-specific states to the validator's controlled vocabulary.
         # A detected heading is not proof that the complete list was extracted.
-        normalized_state="complete" if source_state=="complete" else "not_yet_checked"
+        normalized_state="not_yet_checked"
         episode_rows.append({"episode_date":r.get("episode_date",""),"source":"BBC Sounds official episode page",
             "url":r.get("episode_url",""),"tracklist_status":normalized_state,
             "tracks_extracted":"0","notes":((r.get("notes") or "")+f" Original BBC collector state: {source_state}. BBC inventory/candidates only; visible tracklist completeness and all artists remain to be verified.").strip()})
