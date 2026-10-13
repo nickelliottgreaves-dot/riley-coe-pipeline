@@ -137,9 +137,35 @@ jobs:
           if-no-files-found: warn
           retention-days: 30
 
+  event-page-inspection:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    needs: [event-candidate-discovery]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Download event-link candidates
+        uses: actions/download-artifact@v4
+        with:
+          name: riley-coe-event-candidates-${{ github.run_id }}
+          path: artifacts/event-candidates
+      - name: Inspect event detail pages and bounded same-host links
+        run: |
+          python scripts/inspect_event_links.py --links artifacts/event-candidates/event_link_candidates.csv --out-dir artifacts/event-page-inspection --max-pages-per-venue 30 --max-depth 2
+      - name: Preserve event-page snapshots and crawl audit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: riley-coe-event-page-inspection-${{ github.run_id }}
+          path: artifacts/event-page-inspection/
+          if-no-files-found: warn
+          retention-days: 30
+
   assemble-evidence-scaffold:
     if: always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
-    needs: [mixcloud-inventory, bbc-sounds-inventory, venue-page-inventory, event-candidate-discovery]
+    needs: [mixcloud-inventory, bbc-sounds-inventory, venue-page-inventory, event-candidate-discovery, event-page-inspection]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
