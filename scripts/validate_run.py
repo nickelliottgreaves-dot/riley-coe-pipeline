@@ -136,7 +136,7 @@ def main() -> int:
                 errors.append(f"Mandatory venue missing from config/venue_sources.csv: {required_name}")
             elif not source.get("source_url", "").strip().startswith(("https://", "http://")):
                 errors.append(f"Mandatory venue has no verified source URL in venue_sources.csv: {required_name}")
-            elif source.get("source_status", "").strip() not in {"verified_official_calendar", "verified_official_site"}:
+            elif source.get("source_status", "").strip() not in {"verified_official_calendar", "verified_official_site", "verified_official_social_listing"}:
                 errors.append(f"Mandatory venue source is not verified: {required_name}")
     except (OSError, csv.Error) as exc:
         errors.append(f"Cannot load config/venue_sources.csv: {exc}")
