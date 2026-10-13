@@ -7,7 +7,7 @@ Every candidate must be checked against the actual visible show page or another
 official source before it can be marked complete in the run evidence.
 """
 from __future__ import annotations
-import argparse, csv, json, sys, time
+import argparse, csv, json, re, sys, time
 from datetime import date, datetime, timezone
 from html.parser import HTMLParser
 from urllib.parse import urljoin, urlparse
@@ -180,7 +180,18 @@ def fetch_cloudcasts_html(username: str, since: date, until: date) -> tuple[list
     parser.feed(html)
     items, seen = [], set()
     base = f"https://www.mixcloud.com/{username.strip('/')}/"
-    for href, anchor_title in parser.links:
+    links = list(parser.links)
+    # Some profile templates place show URLs in embedded JSON rather than
+    # ordinary anchors; inspect raw HTML too, without treating it as a tracklist.
+    raw_patterns = [
+        rf"(?:https?:)?//(?:www\\.)?mixcloud\\.com/{re.escape(username.strip('/'))}/([^/\\\"'?#<>\\s]+)/?",
+        rf"(?:href|url|key)[\\\"']+\\s*[:=]\\s*[\\\"']/{re.escape(username.strip('/'))}/([^/\\\"'?#<>\\s]+)/?"
+    ]
+    for pattern in raw_patterns:
+        for slug in re.findall(pattern, html, flags=re.I):
+            url = f"https://www.mixcloud.com/{username.strip('/')}/{slug}"
+            links.append((url, slug.strip('/').replace('-', ' ')))
+    for href, anchor_title in links:
         url = urljoin(base, href)
         parsed = urlparse(url)
         parts = [part for part in parsed.path.split("/") if part]
@@ -197,7 +208,7 @@ def fetch_cloudcasts_html(username: str, since: date, until: date) -> tuple[list
         seen.add(url)
         items.append({"name": title, "title": title, "url": url, "created_time": published.isoformat(), "_html_fallback": True})
     if not items:
-        errors.append(f"Mixcloud profile HTML loaded but no dated show links were extracted from {profile}; inspect the saved profile markup/parser assumptions.")
+        errors.append(f"Mixcloud profile HTML loaded ({len(html)} chars, {len(parser.links)} anchor links, {len(links)} anchor/raw URL candidates) but no dated show links were extracted from {profile}; sample links: {links[:8]}.")
     return items, errors
 
 def fetch_show_page_tracks(item: dict) -> tuple[dict, list[dict]]:
