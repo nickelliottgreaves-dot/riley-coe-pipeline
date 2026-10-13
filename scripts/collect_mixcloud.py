@@ -184,8 +184,8 @@ def fetch_cloudcasts_html(username: str, since: date, until: date) -> tuple[list
     # Some profile templates place show URLs in embedded JSON rather than
     # ordinary anchors; inspect raw HTML too, without treating it as a tracklist.
     raw_patterns = [
-        rf"(?:https?:)?//(?:www\\.)?mixcloud\\.com/{re.escape(username.strip('/'))}/([^/\\\"'?#<>\\s]+)/?",
-        rf"(?:href|url|key)[\\\"']+\\s*[:=]\\s*[\\\"']/{re.escape(username.strip('/'))}/([^/\\\"'?#<>\\s]+)/?"
+        rf"(?:https?:)?//(?:www\.)?mixcloud\.com/{re.escape(username.strip('/'))}/([^/\"'?#<>\s]+)/?",
+        rf"(?:href|url|key)[\"']+\s*[:=]\s*[\"']/{re.escape(username.strip('/'))}/([^/\"'?#<>\s]+)/?"
     ]
     for pattern in raw_patterns:
         for slug in re.findall(pattern, html, flags=re.I):
