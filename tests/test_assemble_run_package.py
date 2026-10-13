@@ -97,6 +97,12 @@ class EvidencePackageTests(unittest.TestCase):
             self.assertTrue(rows)
             self.assertTrue(all(r["status"]=="not_checked" for r in rows))
             self.assertTrue((out/"pool_matches.csv").exists())
+            with (out/"venue_discovery_coverage.csv").open(newline="",encoding="utf-8") as f:
+                discovery=list(csv.DictReader(f))
+            self.assertEqual(len(discovery),16)
+            self.assertTrue(all(row["calendar_coverage_verified"]=="false" for row in discovery))
+            self.assertTrue(all(row["homepage_fetch_status"]=="not_run" for row in discovery))
+            self.assertTrue(any(name.startswith("Riley_Coe_venue_discovery_coverage_") for name in manifest["dated_exports"]))
             with (out/"regression_artist_checks.csv").open(newline="") as f:
                 regression=list(csv.DictReader(f))
             self.assertEqual(len(regression),9)
