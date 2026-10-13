@@ -17,6 +17,7 @@ EVENT_FIELDS=["event_date","venue","event_title","artist","artist_role","source_
 UNRESOLVED_FIELDS=["event_date","venue","event_title","source_url","price","ticket_status","discovery_method","notes"]
 MATCH_FIELDS=["event_artist","matched_pool_artist","candidate_pool_artist","match_type","source_url","verified","notes"]
 REGRESSION_FIELDS=["artist","searched","result","evidence_url","notes"]
+INPUT_AUDIT_FIELDS=["input_name","path","status","size_bytes","notes"]
 
 def read_csv(path, fields):
     if not path or not Path(path).exists(): return []
@@ -43,6 +44,27 @@ def main():
     out=args.out_dir if args.out_dir.is_absolute() else ROOT/args.out_dir
     if out.exists() and any(out.iterdir()): raise SystemExit(f"Refusing to overwrite non-empty evidence directory: {out}")
     out.mkdir(parents=True,exist_ok=True)
+    input_specs=[
+        ("mixcloud_episode_inventory",args.episodes,True),
+        ("bbc_episode_inventory",args.bbc_episodes,True),
+        ("event_candidates",args.events,True),
+        ("event_discovery_audit",args.venue_audit,True),
+        ("event_page_inspection",args.event_page_inspection,True),
+        ("event_page_crawl_audit",args.event_page_audit,True),
+        ("artist_pool",args.pool,True),
+        ("required_venues",ROOT/"config/required_venues.csv",True),
+        ("venue_sources",ROOT/"config/venue_sources.csv",True),
+        ("artist_aliases",ROOT/"config/artist_aliases.csv",True),
+    ]
+    input_audit=[]
+    for name,path,required_input in input_specs:
+        if path is None:
+            input_audit.append({"input_name":name,"path":"","status":"not_supplied","size_bytes":"","notes":"No input path supplied to assembler."})
+        elif not Path(path).exists():
+            input_audit.append({"input_name":name,"path":str(path),"status":"missing","size_bytes":"","notes":"Expected input file absent; absence must not be interpreted as zero records."})
+        else:
+            input_audit.append({"input_name":name,"path":str(path),"status":"present","size_bytes":Path(path).stat().st_size,"notes":"File exists; presence does not certify content completeness."})
+    write_csv(out/"input_file_audit.csv",INPUT_AUDIT_FIELDS,input_audit)
     for source, dest in [(args.event_page_inspection,"event_page_inspection.csv"),(args.event_page_audit,"event_page_crawl_audit.csv")]:
         if source and Path(source).exists():
             shutil.copy2(source,out/dest)
@@ -86,13 +108,14 @@ def main():
     write_csv(out/"pool_matches.csv",MATCH_FIELDS,[])
     # Run matcher to ensure every candidate artist has a corresponding pool comparison.
     subprocess.run([sys.executable,str(ROOT/"scripts/match_event_artists.py"),"--events",str(out/"events.csv"),"--pool",str(args.pool),"--aliases",str(ROOT/"config/artist_aliases.csv"),"--out",str(out/"pool_matches.csv")],check=True)
+    missing_inputs=[r["input_name"] for r in input_audit if r["status"] in {"missing","not_supplied"}]
     manifest={"run_date":date.today().isoformat(),"window_start":start.isoformat(),"window_end":end.isoformat(),
               "previous_successful_run":args.previous_successful_run,"claimed_status":"PARTIAL",
               "researcher_notes":"Automatically assembled evidence scaffold. Not a completed research run. BBC Sounds/visible tracklists, event detail pages, supports, prices/ticket status, regression checks, full venue coverage and safety-net searches still require verification.",
               "package_kind":"candidate_scaffold","source_episode_rows":len(episode_rows),"candidate_event_rows":len(events),"unresolved_event_candidates":len(unresolved),
-              "mandatory_venue_rows":len(venue_rows),"venue_calendar_checks_completed":0}
+              "mandatory_venue_rows":len(venue_rows),"venue_calendar_checks_completed":0,\n              "input_file_audit":"input_file_audit.csv","missing_or_unsupplied_inputs":missing_inputs,"input_files_present":sum(r["status"]=="present" for r in input_audit)}
     (out/"run_manifest.json").write_text(json.dumps(manifest,indent=2)+"\n",encoding="utf-8")
-    summary={"output_directory":str(out),"status":"PARTIAL","episode_rows":len(episode_rows),"event_candidate_rows":len(events),"unresolved_event_candidates":len(unresolved),"mandatory_venue_rows":len(venue_rows),"complete_claimed":False}
+    summary={"output_directory":str(out),"status":"PARTIAL","episode_rows":len(episode_rows),"event_candidate_rows":len(events),"unresolved_event_candidates":len(unresolved),"mandatory_venue_rows":len(venue_rows),"complete_claimed":False,"missing_or_unsupplied_inputs":missing_inputs}
     (out/"package_assembly_summary.json").write_text(json.dumps(summary,indent=2)+"\n",encoding="utf-8")
     print(json.dumps(summary,indent=2))
     return 0
