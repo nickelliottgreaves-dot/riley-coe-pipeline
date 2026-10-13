@@ -2,7 +2,7 @@ import unittest
 from datetime import date
 from unittest.mock import patch
 from io import BytesIO
-from scripts.collect_mixcloud import inventory_item, parse_date, parse_mixcloud_title_date, fetch_cloudcasts_html, fetch_show_page_tracks, fetch_cloudcasts_search
+from scripts.collect_mixcloud import inventory_item, parse_date, parse_mixcloud_title_date, fetch_cloudcasts, fetch_cloudcasts_html, fetch_show_page_tracks, fetch_cloudcasts_search
 
 class MixcloudInventoryTests(unittest.TestCase):
     def test_no_sections_is_unavailable_not_complete(self):
