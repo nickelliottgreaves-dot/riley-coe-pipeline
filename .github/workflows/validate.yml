@@ -60,6 +60,25 @@ jobs:
           if-no-files-found: warn
           retention-days: 30
 
+  venue-page-inventory:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Fetch official venue source pages for discovery
+        run: python scripts/collect_venue_pages.py --sources config/venue_sources.csv --out-dir artifacts/venue-pages
+      - name: Preserve page text and access audit even when a source fails
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: riley-coe-venue-page-inventory-${{ github.run_id }}
+          path: artifacts/venue-pages/
+          if-no-files-found: warn
+          retention-days: 30
+
   scheduled-evidence-gate:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
