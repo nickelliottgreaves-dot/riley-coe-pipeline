@@ -113,7 +113,8 @@ def main():
               "previous_successful_run":args.previous_successful_run,"claimed_status":"PARTIAL",
               "researcher_notes":"Automatically assembled evidence scaffold. Not a completed research run. BBC Sounds/visible tracklists, event detail pages, supports, prices/ticket status, regression checks, full venue coverage and safety-net searches still require verification.",
               "package_kind":"candidate_scaffold","source_episode_rows":len(episode_rows),"candidate_event_rows":len(events),"unresolved_event_candidates":len(unresolved),
-              "mandatory_venue_rows":len(venue_rows),"venue_calendar_checks_completed":0,\n              "input_file_audit":"input_file_audit.csv","missing_or_unsupplied_inputs":missing_inputs,"input_files_present":sum(r["status"]=="present" for r in input_audit)}
+              "mandatory_venue_rows":len(venue_rows),"venue_calendar_checks_completed":0,
+              "input_file_audit":"input_file_audit.csv","missing_or_unsupplied_inputs":missing_inputs,"input_files_present":sum(r["status"]=="present" for r in input_audit)}
     (out/"run_manifest.json").write_text(json.dumps(manifest,indent=2)+"\n",encoding="utf-8")
     summary={"output_directory":str(out),"status":"PARTIAL","episode_rows":len(episode_rows),"event_candidate_rows":len(events),"unresolved_event_candidates":len(unresolved),"mandatory_venue_rows":len(venue_rows),"complete_claimed":False,"missing_or_unsupplied_inputs":missing_inputs}
     (out/"package_assembly_summary.json").write_text(json.dumps(summary,indent=2)+"\n",encoding="utf-8")
