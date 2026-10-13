@@ -117,6 +117,50 @@ def parse_mixcloud_title_date(title: str) -> date | None:
             pass
     return None
 
+def fetch_cloudcasts_search(username: str, since: date, until: date) -> tuple[list[dict], list[str]]:
+    """Fallback discovery via Mixcloud's documented public cloudcast search."""
+    url = f"{API_ROOT}/search/?{urlencode({'q': 'Riley & Coe', 'type': 'cloudcast', 'limit': 100, 'offset': 0})}"
+    found, errors, visited = [], [], set()
+    pages = 0
+    while url and url not in visited and pages < 5:
+        visited.add(url)
+        pages += 1
+        try:
+            payload = get_json(url)
+        except (HTTPError, URLError, TimeoutError, OSError, json.JSONDecodeError) as exc:
+            errors.append(f"Mixcloud public search failed for {url}: {type(exc).__name__}: {exc}")
+            break
+        data = payload.get("data", [])
+        if not isinstance(data, list):
+            errors.append(f"Unexpected Mixcloud search response shape at {url}")
+            break
+        for item in data:
+            if not isinstance(item, dict):
+                continue
+            public_url = str(item.get("url") or "")
+            path_parts = [part for part in urlparse(public_url).path.split("/") if part]
+            author = item.get("user") or item.get("owner") or {}
+            author_url = str(author.get("url") or "") if isinstance(author, dict) else ""
+            belongs = bool(path_parts and path_parts[0].casefold() == username.strip("/").casefold())
+            belongs = belongs or username.strip("/").casefold() in author_url.casefold()
+            if not belongs:
+                continue
+            published = parse_date(item.get("created_time") or item.get("updated_time"))
+            title = str(item.get("name") or item.get("title") or "").strip()
+            if published and since <= published <= until:
+                found.append(item)
+            elif not published:
+                parsed = parse_mixcloud_title_date(title)
+                if parsed and since <= parsed <= until:
+                    item = dict(item)
+                    item["created_time"] = parsed.isoformat()
+                    found.append(item)
+        url = payload.get("paging", {}).get("next")
+        time.sleep(0.15)
+    if not found and not errors:
+        errors.append("Mixcloud public search returned no dated Riley & Coe cloudcasts for the requested window.")
+    return found, errors
+
 def fetch_cloudcasts_html(username: str, since: date, until: date) -> tuple[list[dict], list[str]]:
     """Fallback when the legacy Mixcloud API endpoint is unavailable."""
     profile = f"https://www.mixcloud.com/{username.strip('/')}/"
