@@ -193,6 +193,7 @@ jobs:
             --episodes "artifacts/riley-coe-mixcloud-inventory-${{ github.run_id }}/mixcloud_episode_inventory.csv" \
             --bbc-episodes "artifacts/riley-coe-bbc-sounds-inventory-${{ github.run_id }}/bbc_episode_inventory.csv" \
             --bbc-track-candidates "artifacts/riley-coe-bbc-sounds-inventory-${{ github.run_id }}/bbc_track_candidates.csv" \
+            --mixcloud-track-candidates "artifacts/riley-coe-mixcloud-inventory-${{ github.run_id }}/mixcloud_api_track_candidates.csv" \
             --events "artifacts/riley-coe-event-candidates-${{ github.run_id }}/event_candidates.csv" \
             --venue-audit "artifacts/riley-coe-event-candidates-${{ github.run_id }}/event_discovery_audit.csv" \
             --event-page-inspection "artifacts/riley-coe-event-page-inspection-${{ github.run_id }}/event_page_inspection.csv" \
