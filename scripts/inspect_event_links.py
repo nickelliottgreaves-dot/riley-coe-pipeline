@@ -73,6 +73,7 @@ def likely(href,text):
 def main():
     ap=argparse.ArgumentParser()
     ap.add_argument("--links",type=Path,required=True)
+    ap.add_argument("--sources",type=Path,default=Path("config/venue_sources.csv"),help="Venue registry so zero-link venues still receive audit rows")
     ap.add_argument("--out-dir",type=Path,required=True)
     ap.add_argument("--max-pages-per-venue",type=int,default=30)
     ap.add_argument("--max-depth",type=int,default=2)
@@ -82,6 +83,13 @@ def main():
     args.out_dir.mkdir(parents=True,exist_ok=True); snapdir=args.out_dir/"snapshots"; snapdir.mkdir(exist_ok=True)
     with args.links.open(encoding="utf-8-sig",newline="") as f: seeds=list(csv.DictReader(f))
     by_venue=defaultdict(list)
+    # Initialise every configured venue, not just venues for which discovery
+    # happened to find a link. Zero candidates is an auditable outcome, not
+    # proof of an empty calendar.
+    with args.sources.open(encoding="utf-8-sig",newline="") as f:
+        for source in csv.DictReader(f):
+            venue=(source.get("venue") or "").strip()
+            if venue: by_venue[venue]
     for row in seeds:
         url=(row.get("candidate_url") or "").strip()
         if url.startswith(("https://","http://")): by_venue[(row.get("venue") or "Unknown").strip()].append(url)
@@ -132,12 +140,12 @@ def main():
                 failed+=1
                 all_rows.append({"venue":venue,"page_url":url,"http_status":"","content_type":"","page_title":"","event_title":"","event_date":"","performer_names":"","price":"","currency":"","availability":"","event_jsonld_found":"false","visible_text_snapshot":"","verified":"false","status":"fetch_failed","notes":f"{type(exc).__name__}: {exc}"})
             time.sleep(max(0,args.delay))
-        audits.append({"venue":venue,"seed_candidate_links":len(set(urls)),"pages_fetched":len(visited)-failed,"pages_failed":failed,"same_host_links_added":added,"crawl_cap_reached":str(cap).lower(),"status":"PARTIAL","notes":"Bounded crawl only; cap, JavaScript content, pagination and event/support completeness require review."})
+        audits.append({"venue":venue,"seed_candidate_links":len(set(urls)),"pages_fetched":len(visited)-failed,"pages_failed":failed,"same_host_links_added":added,"crawl_cap_reached":str(cap).lower(),"status":"PARTIAL" if urls else "NO_SEED_LINKS","notes":"Bounded crawl only; cap, JavaScript content, pagination and event/support completeness require review." if urls else "No candidate links supplied for this configured venue. This is a discovery gap, not evidence that the calendar is empty."})
     with (args.out_dir/"event_page_inspection.csv").open("w",encoding="utf-8",newline="") as f:
         w=csv.DictWriter(f,fieldnames=EVENT_FIELDS);w.writeheader();w.writerows(all_rows)
     with (args.out_dir/"event_page_crawl_audit.csv").open("w",encoding="utf-8",newline="") as f:
         w=csv.DictWriter(f,fieldnames=AUDIT_FIELDS);w.writeheader();w.writerows(audits)
-    summary={"venues_crawled":len(audits),"pages_inspected":sum(r["pages_fetched"]+r["pages_failed"] for r in audits),"pages_failed":sum(r["pages_failed"] for r in audits),"event_jsonld_rows":sum(r["event_jsonld_found"]=="true" for r in all_rows),"crawl_caps_reached":sum(r["crawl_cap_reached"]=="true" for r in audits),"status":"PARTIAL","limitations":["No event row is marked verified.","Only same-host links are followed after seed discovery.","JavaScript-only calendars, hidden pagination, third-party ticket pages and support acts can be missed.","Manual event-by-event verification and venue coverage records remain required."]}
+    summary={"venues_configured":sum(1 for _ in audits),"venues_with_seed_links":sum(r["seed_candidate_links"]>0 for r in audits),"venues_without_seed_links":sum(r["seed_candidate_links"]==0 for r in audits),"pages_inspected":sum(r["pages_fetched"]+r["pages_failed"] for r in audits),"pages_failed":sum(r["pages_failed"] for r in audits),"event_jsonld_rows":sum(r["event_jsonld_found"]=="true" for r in all_rows),"crawl_caps_reached":sum(r["crawl_cap_reached"]=="true" for r in audits),"status":"PARTIAL","limitations":["No event row is marked verified.","Only same-host links are followed after seed discovery.","JavaScript-only calendars, hidden pagination, third-party ticket pages and support acts can be missed.","Manual event-by-event verification and venue coverage records remain required."]}
     (args.out_dir/"event_page_crawl_summary.json").write_text(json.dumps(summary,indent=2)+"\n",encoding="utf-8")
     print(json.dumps(summary,indent=2))
     return 1 if not audits or any(r["pages_failed"] for r in audits) else 0
