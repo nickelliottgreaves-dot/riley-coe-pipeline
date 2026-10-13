@@ -84,7 +84,7 @@ class MixcloudInventoryTests(unittest.TestCase):
         self.assertEqual(errors, [])
 
     def test_date_slug_probe_finds_confirmed_public_show_page(self):
-        html = b'<title>Riley &amp; Coe Monday 5th October 2026</title>'
+        html = b'<title>Riley & Coe Monday 5th October 2026</title>'
         response = type("Response", (), {
             "__enter__": lambda self: self,
             "__exit__": lambda self, *args: None,
