@@ -33,7 +33,7 @@ class MixcloudInventoryTests(unittest.TestCase):
         self.assertEqual(errors, [])
 
     def test_html_fallback_discovers_dated_profile_links(self):
-        html = b'<a href="/SixMusicAlternative/riley-coe-tuesday-6th-october-2026/">Riley &amp; Coe Tuesday 6th October 2026</a>'
+        html = b'<a href="/SixMusicAlternative/riley-coe-tuesday-6th-october-2026/">Play</a>'
         response = type("Response", (), {"__enter__": lambda self: self, "__exit__": lambda self, *args: None,
             "read": lambda self, n: html})()
         with patch("scripts.collect_mixcloud.urlopen", return_value=response):
