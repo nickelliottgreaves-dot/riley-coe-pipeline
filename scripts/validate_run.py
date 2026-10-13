@@ -15,7 +15,7 @@ REQUIRED_FILES = {
     "episodes.csv": ["episode_date", "source", "url", "tracklist_status", "tracks_extracted", "notes"],
     "venue_coverage.csv": ["venue", "checked", "source_url", "status", "notes"],
     "events.csv": ["event_date", "venue", "event_title", "artist", "artist_role", "source_url", "verified", "notes"],
-    "pool_matches.csv": ["event_date", "venue", "event_title", "event_artist", "matched_pool_artist", "match_type", "source_url", "verified"],
+    "pool_matches.csv": ["event_artist", "matched_pool_artist", "candidate_pool_artist", "match_type", "source_url", "verified", "notes"],
     "regression_artist_checks.csv": ["artist", "searched", "result", "evidence_url", "notes"],
 }
 TRACKLIST_STATES = {"complete", "incomplete", "unavailable", "not_yet_checked"}
