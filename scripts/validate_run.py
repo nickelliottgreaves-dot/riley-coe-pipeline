@@ -184,13 +184,25 @@ def main() -> int:
         window_events.append(row)
 
     matches = tables.get("pool_matches.csv", [])
+    allowed_match_types = {"exact", "alias", "fuzzy_candidate", "fuzzy_reviewed", "unmatched", "false_positive_rejected"}
+    pool_name_keys = {norm(n) for n in pool_names}
     for i, row in enumerate(matches, 2):
         if not row.get("source_url", "").strip():
             errors.append(f"pool_matches.csv row {i}: missing evidence URL")
-        if not row.get("match_type", "").strip():
-            errors.append(f"pool_matches.csv row {i}: missing match_type")
-        if row.get("matched_pool_artist", "").strip() and norm(row["matched_pool_artist"]) not in {norm(n) for n in pool_names}:
-            warnings.append(f"Match row {i}: matched_pool_artist is not an exact normalized pool name; alias resolution needs review")
+        match_type = (row.get("match_type") or "").strip().lower()
+        matched_name = (row.get("matched_pool_artist") or "").strip()
+        candidate_names = [x.strip() for x in (row.get("candidate_pool_artist") or "").split("|") if x.strip()]
+        if match_type not in allowed_match_types:
+            errors.append(f"pool_matches.csv row {i}: invalid match_type {match_type!r}")
+        if match_type in {"exact", "alias", "fuzzy_reviewed"} and not matched_name:
+            errors.append(f"pool_matches.csv row {i}: confirmed match type has no matched_pool_artist")
+        if match_type == "fuzzy_candidate" and (matched_name or not candidate_names):
+            errors.append(f"pool_matches.csv row {i}: fuzzy_candidate must have candidate_pool_artist and no confirmed match")
+        if matched_name and norm(matched_name) not in pool_name_keys:
+            errors.append(f"pool_matches.csv row {i}: matched_pool_artist is not an exact normalized pool name")
+        for candidate in candidate_names:
+            if norm(candidate) not in pool_name_keys:
+                errors.append(f"pool_matches.csv row {i}: candidate is not an exact pool entry: {candidate}")
 
     # Every distinct billed event artist must appear in the match table, including non-matches.
     normalize_event_artist = lambda s: "".join(ch for ch in norm(s) if ch.isalnum())
