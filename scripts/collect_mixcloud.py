@@ -196,7 +196,7 @@ def fetch_cloudcasts_html(username: str, since: date, until: date) -> tuple[list
         parser.feed(page)
         links = list(parser.links)
         raw_patterns = [
-            rf"(?:https?:)?//(?:www\\.)?mixcloud\\.com/{re.escape(username.strip('/'))}/([^/?#<>\\s]+)/?"
+            rf"(?:https?:)?//(?:www\.)?mixcloud\.com/{re.escape(username.strip('/'))}/([^/?#<>\s]+)/?"
         ]
         for pattern in raw_patterns:
             for slug in re.findall(pattern, page, flags=re.I):
