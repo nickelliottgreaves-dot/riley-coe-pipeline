@@ -8,7 +8,7 @@ official source before it can be marked complete in the run evidence.
 """
 from __future__ import annotations
 import argparse, csv, json, re, sys, time
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timezone, timedelta
 from html.parser import HTMLParser
 from urllib.parse import urljoin, urlparse
 from pathlib import Path
@@ -251,6 +251,58 @@ def fetch_cloudcasts_html(username: str, since: date, until: date) -> tuple[list
         errors.append("Mixcloud HTML discovery found no dated show links. " + " | ".join(diagnostics))
     return items, errors
 
+
+def fetch_cloudcasts_date_slug_probe(username: str, since: date, until: date) -> tuple[list[dict], list[str]]:
+    """Last-resort discovery by probing the dated Riley & Coe slug convention.
+
+    Mixcloud's profile and API endpoints may fail while individual public show
+    pages remain available. Probe weekdays only, verify the final URL stayed
+    on the requested show path, and retain gaps rather than inventing episodes.
+    """
+    from calendar import day_name
+    found: list[dict] = []
+    errors: list[str] = []
+    day = since
+    while day <= until:
+        if day.weekday() <= 3:  # Riley & Coe normally airs Monday–Thursday.
+            suffixes = ("", "-gid-solo", "-marc-solo")
+            ordinal = f"{day.day}{'th' if 11 <= day.day % 100 <= 13 else {1: 'st', 2: 'nd', 3: 'rd'}.get(day.day % 10, 'th')}"
+            weekday = day_name[day.weekday()].lower()
+            month = day.strftime("%B").lower()
+            for suffix in suffixes:
+                slug = f"riley-coe-{weekday}-{ordinal}-{month}-{day.year}{suffix}"
+                requested = f"https://www.mixcloud.com/{username.strip('/')}/{slug}/"
+                req = Request(requested, headers={
+                    "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
+                    "Accept": "text/html,application/xhtml+xml"
+                })
+                try:
+                    with urlopen(req, timeout=12) as response:
+                        final_url = response.geturl() if hasattr(response, "geturl") else requested
+                        html = response.read(500_001).decode("utf-8", errors="replace")
+                    requested_path = urlparse(requested).path.rstrip("/")
+                    final_path = urlparse(final_url).path.rstrip("/")
+                    if final_path != requested_path or "Riley & Coe" not in html:
+                        continue
+                    found.append({
+                        "name": f"Riley & Coe {day.strftime('%A')} {ordinal} {day.strftime('%B %Y')}{suffix.replace('-', ' ')}",
+                        "title": f"Riley & Coe {day.strftime('%A')} {ordinal} {day.strftime('%B %Y')}",
+                        "url": requested,
+                        "created_time": day.isoformat(),
+                        "_html_fallback": True
+                    })
+                    break  # one episode slug per broadcast date is enough
+                except HTTPError as exc:
+                    if exc.code not in {404, 410}:
+                        errors.append(f"Date-slug probe failed for {requested}: HTTP {exc.code}")
+                except (URLError, TimeoutError, OSError) as exc:
+                    errors.append(f"Date-slug probe failed for {requested}: {type(exc).__name__}: {exc}")
+                time.sleep(0.05)
+        day += timedelta(days=1)
+    if not found:
+        errors.append("Dated Mixcloud show-slug fallback found no confirmed episodes in the requested window.")
+    return found, errors
+
 def fetch_show_page_tracks(item: dict) -> tuple[dict, list[dict]]:
     """Extract only clearly structured visible track rows from a public show page."""
     url = str(item.get("url") or "")
@@ -400,7 +452,15 @@ def main() -> int:
                 warnings.extend(search_errors)
                 errors = html_errors
             else:
-                errors = api_errors + search_errors + html_errors
+                slug_items, slug_errors = fetch_cloudcasts_date_slug_probe(args.username, since, until)
+                if slug_items:
+                    items = slug_items
+                    warnings.extend(api_errors)
+                    warnings.extend(search_errors)
+                    warnings.extend(html_errors)
+                    errors = slug_errors
+                else:
+                    errors = api_errors + search_errors + html_errors + slug_errors
 
     episodes, tracks = [], []
     for item in items:
