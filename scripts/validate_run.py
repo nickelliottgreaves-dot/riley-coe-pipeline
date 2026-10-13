@@ -115,6 +115,13 @@ def main() -> int:
         except ValueError:
             errors.append(f"episodes.csv row {i}: invalid episode_date")
 
+    venue_rows = tables.get("venue_coverage.csv", [])
+    try:
+        with REQUIRED_VENUES_FILE.open(encoding="utf-8-sig", newline="") as f:
+            required_venues = [r["venue"].strip() for r in csv.DictReader(f) if r.get("mandatory", "").strip().lower() == "true"]
+    except (OSError, KeyError, csv.Error) as exc:
+        errors.append(f"Cannot load required venue list: {exc}")
+        required_venues = []
     # The source registry is a separate prerequisite: an unknown venue URL must
     # not be silently treated as a completed official-calendar check.
     source_registry = ROOT / "config" / "venue_sources.csv"
@@ -133,13 +140,6 @@ def main() -> int:
     except (OSError, csv.Error) as exc:
         errors.append(f"Cannot load config/venue_sources.csv: {exc}")
 
-    venue_rows = tables.get("venue_coverage.csv", [])
-    try:
-        with REQUIRED_VENUES_FILE.open(encoding="utf-8-sig", newline="") as f:
-            required_venues = [r["venue"].strip() for r in csv.DictReader(f) if r.get("mandatory", "").strip().lower() == "true"]
-    except (OSError, KeyError, csv.Error) as exc:
-        errors.append(f"Cannot load required venue list: {exc}")
-        required_venues = []
     venue_map = {norm(r.get("venue", "")): r for r in venue_rows}
     for venue in required_venues:
         row = venue_map.get(norm(venue))
