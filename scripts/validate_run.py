@@ -142,6 +142,26 @@ def main() -> int:
     except (OSError, csv.Error) as exc:
         errors.append(f"Cannot load config/venue_sources.csv: {exc}")
 
+    discovery_path = run_dir / "venue_discovery_coverage.csv"
+    if discovery_path.exists():
+        discovery_rows = read_csv(discovery_path, ["venue", "source_url", "homepage_fetch_status", "structured_event_count", "candidate_link_count", "detail_pages_fetched", "detail_pages_failed", "crawl_cap_reached", "calendar_coverage_verified", "notes"], errors)
+        discovery_map = {norm_venue(r.get("venue", "")): r for r in discovery_rows}
+        for required_name in required_venues:
+            row = discovery_map.get(norm_venue(required_name))
+            if not row:
+                errors.append(f"venue_discovery_coverage.csv: missing mandatory venue row: {required_name}")
+            elif manifest.get("claimed_status") == "COMPLETE" and not truthy(row.get("calendar_coverage_verified", "")):
+                errors.append(f"venue_discovery_coverage.csv: COMPLETE run lacks verified calendar coverage for {required_name}")
+        if manifest.get("claimed_status") == "COMPLETE":
+            if any((r.get("crawl_cap_reached") or "").strip().lower() == "true" for r in discovery_rows):
+                errors.append("venue_discovery_coverage.csv: COMPLETE run has a venue crawl cap recorded")
+            if any(int(r.get("detail_pages_failed") or 0) > 0 for r in discovery_rows if (r.get("detail_pages_failed") or "").strip().isdigit()):
+                errors.append("venue_discovery_coverage.csv: COMPLETE run has failed detail-page fetches")
+    elif manifest.get("claimed_status") == "COMPLETE":
+        errors.append("Missing venue_discovery_coverage.csv for COMPLETE run")
+    else:
+        warnings.append("venue_discovery_coverage.csv missing; per-venue discovery provenance unavailable")
+
     venue_map = {norm_venue(r.get("venue", "")): r for r in venue_rows}
     for venue in required_venues:
         row = venue_map.get(norm_venue(venue))
