@@ -189,7 +189,7 @@ def fetch_cloudcasts_html(username: str, since: date, until: date) -> tuple[list
     infer tracklists from discovery markup.
     """
     profile = f"https://www.mixcloud.com/{username.strip('/')}/"
-    urls = [profile, urljoin(profile, "uploads/")]
+    urls = [profile, urljoin(profile, "uploads/"), "https://www.mixcloud.com/search/?q=Riley%20%26%20Coe"]
     errors: list[str] = []
     items: list[dict] = []
     seen: set[str] = set()
@@ -245,7 +245,7 @@ def fetch_cloudcasts_html(username: str, since: date, until: date) -> tuple[list
                 "name": title, "title": title, "url": canonical,
                 "created_time": published.isoformat(), "_html_fallback": True
             })
-        diagnostics.append(f"{page_url} -> {final_url}; html_chars={len(html)}; anchors={len(parser.links)}; candidate_links={len(links)}; dated_shows_added={added_from_page}")
+        diagnostics.append(f"{page_url} -> {final_url}; html_chars={len(html)}; anchors={len(parser.links)}; candidate_links={len(links)}; dated_shows_added={added_from_page}; sample_links={links[:8]}")
 
     if not items:
         errors.append("Mixcloud HTML discovery found no dated show links. " + " | ".join(diagnostics))
@@ -260,27 +260,34 @@ def fetch_show_page_tracks(item: dict) -> tuple[dict, list[dict]]:
     parser = MixcloudHTMLParser()
     parser.feed(html)
     lines = [line.strip() for line in parser.text if line.strip()]
-    # Find the tracklist heading and parse visible ordinal/title/artist triplets.
+    # Mixcloud sometimes exposes tracks in the show-page tracklist, but in
+    # other layouts the creator posts the numbered tracklist in a comment.
+    # Prefer a dedicated heading; otherwise begin after the creator marker.
     start = next((i for i, line in enumerate(lines) if line.casefold() in {"tracklist", "track listing", "tracks"}), None)
+    if start is None:
+        creator = next((i for i, line in enumerate(lines) if line.casefold() == "creator"), None)
+        start = creator if creator is not None else None
     tracks = []
     if start is not None:
         import re
         i = start + 1
         position = 0
+        stop_markers = {"show more", "load more", "reply", "there is no more content to load", "listeners"}
         while i < len(lines):
+            if lines[i].casefold() in stop_markers:
+                break
             if re.fullmatch(r"\d{1,3}\.", lines[i]):
                 if i + 2 < len(lines):
-                    title = lines[i + 1]
-                    artist = lines[i + 2]
-                    if title.casefold() not in {"show more", "load more", "comments", "listeners"} and artist.casefold() not in {"show more", "load more", "comments", "listeners"}:
+                    title = lines[i + 1].strip()
+                    artist = lines[i + 2].strip()
+                    invalid = {"show more", "load more", "comments", "listeners", "creator", "favorite", "share", "add to", "more"}
+                    if title.casefold() not in invalid and artist.casefold() not in invalid and not re.fullmatch(r"\d{1,3}\.", title):
                         position += 1
                         tracks.append({"episode_date": str(item.get("created_time", ""))[:10], "episode_title": str(item.get("name") or item.get("title") or ""),
                             "episode_url": url, "artist": artist, "track_title": title, "track_position": str(position),
                             "source": "Mixcloud visible public show page", "verification_status": "needs_complete_visible_page_verification"})
                         i += 3
                         continue
-            if lines[i].casefold() in {"show more", "load more"}:
-                break
             i += 1
     episode, _ = inventory_item(item)
     episode["source"] = "Mixcloud public HTML fallback"
