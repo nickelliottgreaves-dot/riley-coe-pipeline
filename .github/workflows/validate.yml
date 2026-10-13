@@ -103,15 +103,21 @@ jobs:
           retention-days: 30
 
   scheduled-evidence-gate:
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    if: always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+    needs: [assemble-evidence-scaffold]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Validate latest run evidence (must fail closed)
-        run: python scripts/validate_run.py --run-dir data/runs/current --pool data/artist_pool.csv
+      - name: Download this run's assembled evidence scaffold
+        uses: actions/download-artifact@v4
+        with:
+          name: riley-coe-evidence-scaffold-${{ github.run_id }}
+          path: artifacts/evidence-package
+      - name: Validate assembled evidence (must fail closed until complete)
+        run: python scripts/validate_run.py --run-dir artifacts/evidence-package --pool data/artist_pool.csv
 
   event-candidate-discovery:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
