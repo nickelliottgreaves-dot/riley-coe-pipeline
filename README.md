@@ -70,3 +70,12 @@ Do not approve an alias without a source/reason. Fuzzy candidates never become p
 - End-to-end creation of the dated run package and proof that all required outputs can be read back.
 
 Until these stages exist and pass the evidence gate, the scheduled validator is expected to fail. That is safer than reporting a partial collection as complete.
+
+## Event-candidate discovery milestone
+
+`scripts/discover_event_candidates.py` now visits each configured official venue source and produces:
+- `event_candidates.csv`: structured Event JSON-LD records with dates in the requested window, performers where exposed, price/availability fields when exposed, and an explicit `verified=false` marker;
+- `event_link_candidates.csv`: likely event/calendar/ticket links from each source page;
+- `event_discovery_audit.csv` and `event_discovery_summary.json`: source-level results and limitations.
+
+The scheduled/manual Actions workflow runs this for today through the following 13 days and uploads `riley-coe-event-candidates-...`. These are **candidates, not a finished gig report**. Many venue sites use JavaScript, paginated listings or ticketing systems, and the collector does not yet render those pages, traverse pagination, open every candidate event page, or reliably extract supports. It deliberately sets `verified=false` and records zero completed calendar checks. Human/event-page verification and a venue-by-venue coverage record remain required before the run can pass.
