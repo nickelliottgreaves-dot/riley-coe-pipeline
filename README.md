@@ -92,3 +92,9 @@ python scripts/validate_run.py --run-dir data/runs/2026-10-13_to_2026-10-26 --po
 ```
 
 The validator is expected to reject this scaffold until tracklists and venues are actually verified and regression checks completed. Never edit the manifest to `COMPLETE` just to make the gate pass.
+
+## BBC Sounds episode inventory
+
+`scripts/collect_bbc_sounds.py` discovers episode links from the official Riley & Coe programme episode listing, fetches episode pages, preserves text snapshots, and records whether a Music Played/Tracklist heading appears. It does **not** infer tracklist completeness or automatically certify artist rows. Episodes with undetected dates or uncertain listing pagination remain visible in the audit. The weekly workflow stores this as `riley-coe-bbc-sounds-inventory-...` and merges its episode records into the dated partial package.
+
+Official BBC guidance says episode tracklists are shown on eligible on-demand episode pages, but also notes that some episodes may not have a tracklist. Therefore heading detection alone is not enough: a reviewer must check the complete visible list and extract every artist before episode coverage can be marked complete.
