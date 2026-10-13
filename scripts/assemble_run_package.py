@@ -177,6 +177,7 @@ def main():
         f"Riley_Coe_pool_matches_{run_day}.csv":"pool_matches.csv",
         f"Riley_Coe_venue_coverage_{run_day}.csv":"venue_coverage.csv",
         f"Riley_Coe_regression_artist_checks_{run_day}.csv":"regression_artist_checks.csv",
+        f"Riley_Coe_tracklist_candidate_review_{run_day}.csv":"tracklist_candidate_review.csv",
     }
     for export_name, source_name in dated_exports.items():
         shutil.copy2(out/source_name,out/export_name)
