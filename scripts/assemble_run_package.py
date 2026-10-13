@@ -14,7 +14,7 @@ ROOT=Path(__file__).resolve().parents[1]
 EPISODE_FIELDS=["episode_date","source","url","tracklist_status","tracks_extracted","notes"]
 VENUE_FIELDS=["venue","checked","source_url","status","notes"]
 EVENT_FIELDS=["event_date","venue","event_title","artist","artist_role","source_url","verified","price","ticket_status","notes"]
-UNRESOLVED_FIELDS=["event_date","venue","event_title","source_url","price","ticket_status","discovery_method","notes"]
+UNRESOLVED_FIELDS=["event_date","venue","event_title","artist_candidate","artist_role","source_url","price","ticket_status","discovery_method","notes"]
 MATCH_FIELDS=["event_artist","matched_pool_artist","candidate_pool_artist","match_type","source_url","verified","notes"]
 REGRESSION_FIELDS=["artist","searched","result","evidence_url","notes"]
 INPUT_AUDIT_FIELDS=["input_name","path","status","size_bytes","notes"]
@@ -110,7 +110,7 @@ def main():
             except ValueError:
                 dt=""  # Preserve malformed dates in unresolved review output.
         base={"event_date":dt,"venue":item.get("venue",""),"event_title":item.get("event_title",""),
-              "source_url":item.get("page_url",""),"verified":"false",
+              "source_url":item.get("page_url",""),"verified":"false","discovery_method":"inspected_page_jsonld",
               "price":(item.get("price","") + ((" "+item.get("currency","")) if item.get("currency") else "")).strip(),
               "ticket_status":item.get("availability","")}
         performers=[x.strip() for x in (item.get("performer_names") or "").split(";") if x.strip()]
@@ -130,6 +130,8 @@ def main():
             event_day=date.fromisoformat(dt)
         except ValueError:
             unresolved_row={k:r.get(k,"") for k in UNRESOLVED_FIELDS}
+            unresolved_row["artist_candidate"]=r.get("artist","")
+            unresolved_row["artist_role"]=r.get("artist_role","")
             unresolved_row["notes"]=((r.get("notes") or "")+" Date missing or invalid; retained for manual triage, not counted as an in-window event.").strip()
             unresolved.append(unresolved_row)
             continue
