@@ -4,15 +4,9 @@ Private repository for building an auditable, fail-closed weekly Riley & Coe art
 
 ## Current milestone
 
-This repository now contains:
-- the authoritative 5 October 2026 v7 artist pool seed (747 artist rows) at `data/artist_pool.csv`;
-- a mandatory venue checklist at `config/required_venues.csv`;
-- the evidence schemas at `config/schemas.json`;
-- a fail-closed evidence validator at `scripts/validate_run.py`;
-- regression tests at `tests/test_validator.py`;
-- GitHub Actions checks on push/pull request and a Monday scheduled evidence gate.
+This repository contains the 747-row artist-pool seed, a mandatory venue registry, a fail-closed evidence validator, regression tests, and scheduled/manual collectors for Mixcloud episode inventory, BBC Sounds episode inventory and provisional track candidates, official venue page discovery, and bounded event-page inspection. The assembler creates a dated `PARTIAL` evidence package and exports the requested CSV families.
 
-**Important limitation:** this is the validation scaffold, not yet a live research collector. It does not currently fetch Mixcloud/BBC tracklists or search venue calendars automatically. Until a real evidence package is created, the scheduled gate should fail rather than pretend the weekly research is complete.
+**Important limitation:** this is still not a complete weekly gig-research service. The collectors do not prove full tracklist or venue-calendar coverage, do not reliably extract all support acts, and do not complete independent safety-net searches. No run may be described as complete until the evidence is reviewed and the validator passes.
 
 ## What counts as a valid run
 
@@ -46,7 +40,7 @@ The scheduled/manual workflow now runs `scripts/collect_mixcloud.py` against the
 - `mixcloud_api_track_candidates.csv`
 - `mixcloud_collection_audit.json`
 
-This is deliberately a discovery inventory, not a claim that tracklists are complete. API sections are labelled as candidates requiring visible-page verification; absent sections are marked unavailable. The collector does not yet cover BBC Sounds and does not perform venue research. The full-run validator remains a separate fail-closed gate.
+This is deliberately a discovery inventory, not a claim that tracklists are complete. API sections are labelled as candidates requiring visible-page verification; absent sections are marked unavailable. BBC Sounds inventory is handled separately by `scripts/collect_bbc_sounds.py`. Venue research is also handled by separate candidate-discovery and event-page inspection stages. The full-run validator remains a separate fail-closed gate.
 
 After a scheduled run, open the repository's **Actions** tab, open the latest **Riley & Coe evidence validation** run, and download the artifact named `riley-coe-mixcloud-inventory-...`. GitHub scheduled workflows run on the default branch and may be delayed, so the Actions history is the source of truth for whether a run actually happened.
 
