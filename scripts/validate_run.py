@@ -91,6 +91,7 @@ def main() -> int:
         pool_rows = read_csv(args.pool, ["artist", "status"], errors)
     pool_names = [r.get("artist", "").strip() for r in pool_rows if r.get("artist", "").strip()]
     norm = lambda s: " ".join((s or "").casefold().split())
+    norm_venue = lambda s: "".join(ch for ch in norm(s) if ch.isalnum())
     duplicates = sorted({n for n in map(norm, pool_names) if n and sum(norm(x) == n for x in pool_names) > 1})
     if duplicates:
         errors.append(f"Artist pool contains duplicate normalized names ({len(duplicates)}): {', '.join(duplicates[:10])}")
@@ -128,9 +129,9 @@ def main() -> int:
     try:
         with source_registry.open(encoding="utf-8-sig", newline="") as f:
             source_rows = list(csv.DictReader(f))
-        source_map = {norm(r.get("venue", "")): r for r in source_rows}
+        source_map = {norm_venue(r.get("venue", "")): r for r in source_rows}
         for required_name in required_venues:
-            source = source_map.get(norm(required_name))
+            source = source_map.get(norm_venue(required_name))
             if not source:
                 errors.append(f"Mandatory venue missing from config/venue_sources.csv: {required_name}")
             elif not source.get("source_url", "").strip().startswith(("https://", "http://")):
@@ -140,9 +141,9 @@ def main() -> int:
     except (OSError, csv.Error) as exc:
         errors.append(f"Cannot load config/venue_sources.csv: {exc}")
 
-    venue_map = {norm(r.get("venue", "")): r for r in venue_rows}
+    venue_map = {norm_venue(r.get("venue", "")): r for r in venue_rows}
     for venue in required_venues:
-        row = venue_map.get(norm(venue))
+        row = venue_map.get(norm_venue(venue))
         if not row:
             errors.append(f"Mandatory venue has no coverage row: {venue}")
             continue
@@ -227,7 +228,7 @@ def main() -> int:
 
     # Any inaccessible/not-checked mandatory venue blocks COMPLETE even if a user
     # has accidentally set the manifest booleans to true.
-    if any((venue_map.get(norm(v), {}).get("status", "").strip().lower() in {"inaccessible", "not_checked"}) for v in required_venues):
+    if any((venue_map.get(norm_venue(v), {}).get("status", "").strip().lower() in {"inaccessible", "not_checked"}) for v in required_venues):
         errors.append("At least one mandatory venue was inaccessible or not checked")
 
     status = "FAILED" if errors else ("PARTIAL" if warnings else "COMPLETE")
