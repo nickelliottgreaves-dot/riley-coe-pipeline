@@ -8,7 +8,7 @@ official source before it can be marked complete in the run evidence.
 """
 from __future__ import annotations
 import argparse, csv, json, re, sys, time
-from datetime import date, datetime, timezone, timedelta
+from datetime import date, datetime, timezone
 from html.parser import HTMLParser
 from urllib.parse import urljoin, urlparse
 from pathlib import Path
@@ -185,15 +185,7 @@ def main() -> int:
                 warnings.extend(search_errors)
                 errors = html_errors
             else:
-                slug_items, slug_errors = fetch_cloudcasts_date_slug_probe(args.username, since, until)
-                if slug_items:
-                    items = slug_items
-                    warnings.extend(api_errors)
-                    warnings.extend(search_errors)
-                    warnings.extend(html_errors)
-                    errors = slug_errors
-                else:
-                    errors = api_errors + search_errors + html_errors + slug_errors
+                errors = api_errors + search_errors + html_errors
 
     episodes, tracks = [], []
     for item in items:
