@@ -323,13 +323,21 @@ def main() -> int:
 
     if not items and errors:
         api_errors = list(errors)
-        html_items, html_errors = fetch_cloudcasts_html(args.username, since, until)
-        if html_items:
-            items = html_items
+        search_items, search_errors = fetch_cloudcasts_search(args.username, since, until)
+        if search_items:
+            items = search_items
             warnings.extend(api_errors)
-            errors = html_errors
+            warnings.extend(search_errors)
+            errors = []
         else:
-            errors = api_errors + html_errors
+            html_items, html_errors = fetch_cloudcasts_html(args.username, since, until)
+            if html_items:
+                items = html_items
+                warnings.extend(api_errors)
+                warnings.extend(search_errors)
+                errors = html_errors
+            else:
+                errors = api_errors + search_errors + html_errors
 
     episodes, tracks = [], []
     for item in items:
