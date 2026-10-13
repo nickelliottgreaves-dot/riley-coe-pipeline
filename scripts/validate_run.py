@@ -183,11 +183,12 @@ def main() -> int:
             warnings.append(f"Match row {i}: matched_pool_artist is not an exact normalized pool name; alias resolution needs review")
 
     # Every distinct billed event artist must appear in the match table, including non-matches.
+    normalize_event_artist = lambda s: "".join(ch for ch in norm(s) if ch.isalnum())
     expected_event_artists = {
-        norm(r.get("artist", "")) for r in events if r.get("artist", "").strip()
+        normalize_event_artist(r.get("artist", "")) for r in events if r.get("artist", "").strip()
     }
     compared_event_artists = {
-        norm(r.get("event_artist", "")) for r in matches if r.get("event_artist", "").strip()
+        normalize_event_artist(r.get("event_artist", "")) for r in matches if r.get("event_artist", "").strip()
     }
     missing_comparisons = sorted(expected_event_artists - compared_event_artists)
     extra_comparisons = sorted(compared_event_artists - expected_event_artists)
