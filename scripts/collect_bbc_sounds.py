@@ -146,7 +146,7 @@ def main():
     args=ap.parse_args(); start=date.fromisoformat(args.start); end=date.fromisoformat(args.end)
     if end<start: ap.error("--end must not precede --start")
     out=args.out_dir; snaps=out/"snapshots"; snaps.mkdir(parents=True,exist_ok=True)
-    episodes=[]; tracklists=[]; errors=[]; listing_pages=[]; visited=set()
+    episodes=[]; tracklists=[]; errors=[]; listing_pages=[]; visited=set(); listing_failed=False
     next_url=args.listing_url; pages=0
     while next_url and next_url not in visited and pages<12:
         visited.add(next_url); pages+=1
@@ -164,7 +164,8 @@ def main():
             page_links=[urljoin(next_url,h) for h,t in parser.links if re.search(r"next|older|page=\d+",h+" "+t,re.I) and "/episodes" in urljoin(next_url,h)]
             next_url=next((u for u in page_links if u not in visited),"")
         except (HTTPError,URLError,TimeoutError,OSError,ValueError) as exc:
-            errors.append(f"Listing {next_url}: {type(exc).__name__}: {exc}"); break
+            errors.append(f"Listing {next_url}: {type(exc).__name__}: {exc}"); listing_failed=True; break
+    pagination_status="listing_fetch_failed" if listing_failed else ("page_cap_reached" if next_url and pages>=12 else "next_link_not_exposed_or_listing_exhausted")
     rows=[]; linkrows=[]; trackrows=[]
     for ep in episodes:
         url=ep["url"]
@@ -199,7 +200,7 @@ def main():
         w=csv.DictWriter(f,fieldnames=LINK_FIELDS); w.writeheader(); w.writerows(linkrows)
     with (out/"bbc_track_candidates.csv").open("w",encoding="utf-8",newline="") as f:
         w=csv.DictWriter(f,fieldnames=TRACK_FIELDS); w.writeheader(); w.writerows(trackrows)
-    summary={"window_start":start.isoformat(),"window_end":end.isoformat(),"series_url":args.listing_url,"listing_pages_fetched":len(listing_pages),"episodes_discovered":len(episodes),"episode_pages_in_window_or_undated":len(rows),"visible_tracklist_headings_detected":sum(r["visible_tracklist_heading_detected"]=="true" for r in rows),"provisional_track_artist_candidates":len(trackrows),"episodes_certified_complete":0,"errors":errors,"listing_pages":listing_pages,"status":"PARTIAL","limitations":["BBC episode listing pagination may not expose every episode; inspect pagination audit.","Episode dates may not be machine-readable in visible text.","Tracklist heading detection is not completeness verification.","Track/artist candidates are extracted only from explicit JSON-LD or simple visible-text patterns; all candidates require manual review.","Text-pattern extraction may miss tracks and can misassign artist/title order; no episode is marked complete automatically."]}
+    summary={"window_start":start.isoformat(),"window_end":end.isoformat(),"series_url":args.listing_url,"listing_pages_fetched":len(listing_pages),"listing_pagination_status":pagination_status,"listing_page_cap_reached":pagination_status=="page_cap_reached","episodes_discovered":len(episodes),"episode_pages_in_window_or_undated":len(rows),"visible_tracklist_headings_detected":sum(r["visible_tracklist_heading_detected"]=="true" for r in rows),"undated_episode_pages":sum(not bool(r["episode_date"]) for r in rows),"inaccessible_episode_pages":sum(r["page_fetch_status"]=="failed" for r in rows),"provisional_track_artist_candidates":len(trackrows),"episodes_certified_complete":0,"errors":errors,"listing_pages":listing_pages,"status":"PARTIAL","limitations":["BBC episode listing pagination may not expose every episode; inspect listing_pagination_status and page-cap flag.","Episode dates may not be machine-readable in visible text.","Tracklist heading detection is not completeness verification.","Track/artist candidates are extracted only from explicit JSON-LD or simple visible-text patterns; all candidates require manual review.","Text-pattern extraction may miss tracks and can misassign artist/title order; no episode is marked complete automatically."]}
     (out/"bbc_collection_audit.json").write_text(json.dumps(summary,indent=2)+"\n",encoding="utf-8")
     print(json.dumps(summary,indent=2))
     return 1 if errors else 0
