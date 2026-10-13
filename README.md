@@ -49,3 +49,24 @@ The scheduled/manual workflow now runs `scripts/collect_mixcloud.py` against the
 This is deliberately a discovery inventory, not a claim that tracklists are complete. API sections are labelled as candidates requiring visible-page verification; absent sections are marked unavailable. The collector does not yet cover BBC Sounds and does not perform venue research. The full-run validator remains a separate fail-closed gate.
 
 After a scheduled run, open the repository's **Actions** tab, open the latest **Riley & Coe evidence validation** run, and download the artifact named `riley-coe-mixcloud-inventory-...`. GitHub scheduled workflows run on the default branch and may be delayed, so the Actions history is the source of truth for whether a run actually happened.
+
+## Venue source inventory and matching
+
+The scheduled/manual workflow also fetches configured official venue pages and preserves visible text plus `venue_page_access_audit.csv` as an Actions artifact. This proves only that a page was reachable and its text was captured. It does **not** prove that every date, pagination page, event detail, or support act in the 14-day window was checked. The collector therefore reports zero completed calendar checks by design.
+
+The matching engine is `scripts/match_event_artists.py`. Given an event CSV and the full artist pool, it emits one row per distinct event artist:
+- `exact`: normalized exact pool match;
+- `alias`: only an alias explicitly marked `approved` in `config/artist_aliases.csv`;
+- `fuzzy_candidate`: similarity suggestion for manual review, not a confirmed hit;
+- `unmatched`: no accepted match.
+
+Do not approve an alias without a source/reason. Fuzzy candidates never become positive matches automatically.
+
+## What is still missing before a genuinely complete run
+
+- BBC Sounds coverage and a reliable saved last-successful-run cursor.
+- Visible-page verification of each Mixcloud tracklist, with artist extraction only after completeness is established.
+- Calendar-aware event extraction, pagination/detail-page traversal, 14-day filtering, support-act extraction, prices/ticket status, and a regional safety-net search.
+- End-to-end creation of the dated run package and proof that all required outputs can be read back.
+
+Until these stages exist and pass the evidence gate, the scheduled validator is expected to fail. That is safer than reporting a partial collection as complete.
