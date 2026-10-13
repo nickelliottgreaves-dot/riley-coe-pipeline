@@ -41,6 +41,8 @@ class EvidencePackageTests(unittest.TestCase):
             self.assertEqual(manifest["venue_calendar_checks_completed"],0)
             self.assertEqual(manifest["regression_artists_seeded"],9)
             self.assertEqual(manifest["regression_artist_checks_completed"],0)
+            self.assertTrue(any(name.startswith("Riley_Coe_events_") for name in manifest["dated_exports"]))
+            self.assertTrue(any(name.startswith("Riley_Coe_deduplicated_event_artists_") for name in manifest["dated_exports"]))
             self.assertIn("missing_or_unsupplied_inputs",manifest)
             with (out/"input_file_audit.csv").open(newline="") as f:
                 inputs=list(csv.DictReader(f))
