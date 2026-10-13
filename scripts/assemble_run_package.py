@@ -82,6 +82,30 @@ def main():
             "url":r.get("episode_url",""),"tracklist_status":normalized_state,
             "tracks_extracted":"0","notes":((r.get("notes") or "")+f" Original BBC collector state: {source_state}. BBC inventory/candidates only; visible tracklist completeness and all artists remain to be verified.").strip()})
     event_rows=read_csv(args.events,["event_date","venue","event_title","artist","artist_role","source_url","verified","notes"]) if args.events else []
+    # Add Event JSON-LD candidates from inspected detail pages; they remain unverified.
+    inspected_rows=read_csv(args.event_page_inspection,["venue","page_url","event_title","event_date","performer_names","price","currency","availability","event_jsonld_found","notes"]) if args.event_page_inspection else []
+    for item in inspected_rows:
+        if (item.get("event_jsonld_found") or "").casefold() != "true":
+            continue
+        raw=(item.get("event_date") or "").strip()
+        dt=raw[:10] if len(raw)>=10 else ""
+        try:
+            if not dt or not (start <= date.fromisoformat(dt) <= end):
+                continue
+        except ValueError:
+            continue
+        base={"event_date":dt,"venue":item.get("venue",""),"event_title":item.get("event_title",""),
+              "source_url":item.get("page_url",""),"verified":"false",
+              "price":(item.get("price","") + ((" "+item.get("currency","")) if item.get("currency") else "")).strip(),
+              "ticket_status":item.get("availability","")}
+        performers=[x.strip() for x in (item.get("performer_names") or "").split(";") if x.strip()]
+        if performers:
+            for performer in performers:
+                event_rows.append({**base,"artist":performer,"artist_role":"performer_role_unverified",
+                    "notes":"Inspected-page JSON-LD candidate; billing role and details need independent verification. "+(item.get("notes") or "")})
+        else:
+            event_rows.append({**base,"artist":"","artist_role":"unknown",
+                "notes":"Unresolved inspected-page JSON-LD candidate; performer not exposed. "+(item.get("notes") or "")})
     # Preserve only event rows inside the requested window; every candidate remains unverified.
     events=[]; unresolved=[]
     for r in event_rows:
