@@ -9,6 +9,8 @@ official source before it can be marked complete in the run evidence.
 from __future__ import annotations
 import argparse, csv, json, sys, time
 from datetime import date, datetime, timezone
+from html.parser import HTMLParser
+from urllib.parse import urljoin, urlparse
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
@@ -72,6 +74,120 @@ def fetch_cloudcasts(username: str, since: date, until: date) -> tuple[list[dict
     if pages >= 30 and url and url not in visited:
         errors.append("Stopped after 30 pages as a safety limit; inventory may be incomplete.")
     return found, errors
+
+class MixcloudHTMLParser(HTMLParser):
+    """Capture visible page text and links for the public-HTML fallback."""
+    def __init__(self):
+        super().__init__()
+        self.text = []
+        self.links = []
+        self._anchor = None
+        self._skip = 0
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+        if tag in {"script", "style", "noscript"}:
+            self._skip += 1
+        if tag == "a" and attrs.get("href"):
+            self._anchor = {"href": attrs["href"], "text": []}
+    def handle_endtag(self, tag):
+        if tag == "a" and self._anchor:
+            self.links.append((self._anchor["href"], " ".join(self._anchor["text"]).strip()))
+            self._anchor = None
+        if tag in {"script", "style", "noscript"} and self._skip:
+            self._skip -= 1
+    def handle_data(self, data):
+        if self._skip:
+            return
+        value = " ".join(data.split())
+        if value:
+            self.text.append(value)
+            if self._anchor is not None:
+                self._anchor["text"].append(value)
+
+def parse_mixcloud_title_date(title: str) -> date | None:
+    # Public show titles usually include weekday + ordinal day + month + year.
+    match = __import__("re").search(r"\\b(\\d{1,2})(?:st|nd|rd|th)?\\s+([A-Za-z]+)\\s+(20\\d{2})\\b", title or "", __import__("re").I)
+    if not match:
+        return None
+    from datetime import datetime
+    for fmt in ("%d %B %Y", "%d %b %Y"):
+        try:
+            return datetime.strptime(" ".join(match.groups()), fmt).date()
+        except ValueError:
+            pass
+    return None
+
+def fetch_cloudcasts_html(username: str, since: date, until: date) -> tuple[list[dict], list[str]]:
+    """Fallback when the legacy Mixcloud API endpoint is unavailable."""
+    profile = f"https://www.mixcloud.com/{username.strip('/')}/"
+    req = Request(profile, headers={"User-Agent": USER_AGENT, "Accept": "text/html,application/xhtml+xml"})
+    errors = []
+    try:
+        with urlopen(req, timeout=25) as response:
+            html = response.read(5_000_001).decode("utf-8", errors="replace")
+    except (HTTPError, URLError, TimeoutError, OSError) as exc:
+        return [], [f"Mixcloud public profile HTML fallback failed for {profile}: {type(exc).__name__}: {exc}"]
+    parser = MixcloudHTMLParser()
+    parser.feed(html)
+    items, seen = [], set()
+    base = f"https://www.mixcloud.com/{username.strip('/')}/"
+    for href, anchor_title in parser.links:
+        url = urljoin(base, href)
+        parsed = urlparse(url)
+        parts = [part for part in parsed.path.split("/") if part]
+        if parsed.netloc.lower() not in {"www.mixcloud.com", "mixcloud.com"} or len(parts) < 2:
+            continue
+        if parts[0].casefold() != username.strip("/").casefold() or parts[1].casefold() in {"uploads", "favorites", "playlists", "following", "followers"}:
+            continue
+        if url.rstrip("/") == base.rstrip("/") or url in seen:
+            continue
+        title = anchor_title.strip() or parts[-1].replace("-", " ")
+        published = parse_mixcloud_title_date(title)
+        if not published or not (since <= published <= until):
+            continue
+        seen.add(url)
+        items.append({"name": title, "title": title, "url": url, "created_time": published.isoformat(), "_html_fallback": True})
+    if not items:
+        errors.append(f"Mixcloud profile HTML loaded but no dated show links were extracted from {profile}; inspect the saved profile markup/parser assumptions.")
+    return items, errors
+
+def fetch_show_page_tracks(item: dict) -> tuple[dict, list[dict]]:
+    """Extract only clearly structured visible track rows from a public show page."""
+    url = str(item.get("url") or "")
+    req = Request(url, headers={"User-Agent": USER_AGENT, "Accept": "text/html,application/xhtml+xml"})
+    with urlopen(req, timeout=25) as response:
+        html = response.read(5_000_001).decode("utf-8", errors="replace")
+    parser = MixcloudHTMLParser()
+    parser.feed(html)
+    lines = [line.strip() for line in parser.text if line.strip()]
+    # Find the tracklist heading and parse visible ordinal/title/artist triplets.
+    start = next((i for i, line in enumerate(lines) if line.casefold() in {"tracklist", "track listing", "tracks"}), None)
+    tracks = []
+    if start is not None:
+        import re
+        i = start + 1
+        position = 0
+        while i < len(lines):
+            if re.fullmatch(r"\\d{1,3}\\.", lines[i]):
+                if i + 2 < len(lines):
+                    title = lines[i + 1]
+                    artist = lines[i + 2]
+                    if title.casefold() not in {"show more", "load more", "comments", "listeners"} and artist.casefold() not in {"show more", "load more", "comments", "listeners"}:
+                        position += 1
+                        tracks.append({"episode_date": str(item.get("created_time", ""))[:10], "episode_title": str(item.get("name") or item.get("title") or ""),
+                            "episode_url": url, "artist": artist, "track_title": title, "track_position": str(position),
+                            "source": "Mixcloud visible public show page", "verification_status": "needs_complete_visible_page_verification"})
+                        i += 3
+                        continue
+            if lines[i].casefold() in {"show more", "load more"}:
+                break
+            i += 1
+    episode, _ = inventory_item(item)
+    episode["source"] = "Mixcloud public HTML fallback"
+    episode["tracks_extracted"] = str(len(tracks))
+    episode["tracklist_status"] = "incomplete" if tracks else "unavailable"
+    episode["notes"] = ("Extracted visible ordinal/title/artist rows from the public HTML page; compare with the complete visible tracklist. " if tracks else "Public HTML page yielded no clearly structured track rows; manual review required. ") + "No tracklist is certified complete automatically."
+    return episode, tracks
 
 def fetch_show_detail(item: dict) -> dict:
     # The user cloudcasts endpoint may omit per-show tracklist sections. Fetch
