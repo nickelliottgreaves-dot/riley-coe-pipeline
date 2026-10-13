@@ -116,6 +116,22 @@ def extract_tracklist_candidates(parser,text,episode_url,episode_title,episode_d
                 break
             section.append(line)
         for line in section:
+            # Strongly labelled artist/title pairs on one line are safer than
+            # pairing labels across adjacent HTML text nodes. Still review-only.
+            labelled=re.match(
+                r"^\s*(?:track|title)\s*:\s*(.{1,180}?)\s*[|;]\s*artist\s*:\s*(.{1,140})\s*$",
+                line,re.I)
+            if labelled:
+                title,artist=labelled.groups()
+                add(title,artist,"visible_text_labelled_track_artist",line)
+                continue
+            labelled=re.match(
+                r"^\s*artist\s*:\s*(.{1,140}?)\s*[|;]\s*(?:track|title)\s*:\s*(.{1,180})\s*$",
+                line,re.I)
+            if labelled:
+                artist,title=labelled.groups()
+                add(title,artist,"visible_text_labelled_artist_track",line)
+                continue
             # Only accept explicit separators; leave other line shapes for human review.
             m=re.match(r"^(.{1,140}?)\s+[–—-]\s+(.{1,180})$",line)
             if m:
