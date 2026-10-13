@@ -15,7 +15,7 @@ class BBCCollectorTests(unittest.TestCase):
     def test_extracts_review_only_visible_text_candidates(self):
         p=TextParser()
         p.feed("<h2>Tracklist</h2><p>Artist One - Song One</p><p>Song Two by Artist Two</p>")
-        candidates=extract_tracklist_candidates(p,"Tracklist\\nArtist One - Song One\\nSong Two by Artist Two","https://www.bbc.co.uk/programmes/m0031tk4","Test episode","2026-10-01")
+        candidates=extract_tracklist_candidates(p,"Tracklist\nArtist One - Song One\nSong Two by Artist Two","https://www.bbc.co.uk/programmes/m0031tk4","Test episode","2026-10-01")
         self.assertEqual(len(candidates),2)
         self.assertEqual(candidates[0]["artist_candidate"],"Artist One")
         self.assertEqual(candidates[0]["track_title"],"Song One")
