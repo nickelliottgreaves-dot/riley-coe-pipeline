@@ -29,6 +29,7 @@ class WorkflowArtifactContractTests(unittest.TestCase):
         self.assertIn("--mixcloud-track-candidates", WORKFLOW)
         self.assertIn("mixcloud_api_track_candidates.csv", ASSEMBLER)
         self.assertIn("tracklist_candidate_review.csv", ASSEMBLER)
+        self.assertIn("Riley_Coe_tracklist_candidate_review_", ASSEMBLER)
         self.assertIn("event_jsonld_found", ASSEMBLER)
         self.assertIn("bbc_track_candidates", ASSEMBLER)
         self.assertIn("config/regression_artists.csv", ASSEMBLER)
