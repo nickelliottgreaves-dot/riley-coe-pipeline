@@ -98,3 +98,9 @@ The validator is expected to reject this scaffold until tracklists and venues ar
 `scripts/collect_bbc_sounds.py` discovers episode links from the official Riley & Coe programme episode listing, fetches episode pages, preserves text snapshots, and records whether a Music Played/Tracklist heading appears. It does **not** infer tracklist completeness or automatically certify artist rows. Episodes with undetected dates or uncertain listing pagination remain visible in the audit. The weekly workflow stores this as `riley-coe-bbc-sounds-inventory-...` and merges its episode records into the dated partial package.
 
 Official BBC guidance says episode tracklists are shown on eligible on-demand episode pages, but also notes that some episodes may not have a tracklist. Therefore heading detection alone is not enough: a reviewer must check the complete visible list and extract every artist before episode coverage can be marked complete.
+
+## Second-stage event-page inspection
+
+`scripts/inspect_event_links.py` now follows discovered event links and a bounded number of same-host event/calendar links per venue. It stores visible-text snapshots, captures structured Event JSON-LD fields where available (event title/date, performers, prices and availability), and records crawl caps and failures. All records remain unverified. The scheduled workflow runs this stage after link discovery and includes the inspection CSV and crawl audit in the dated evidence scaffold.
+
+The crawler is deliberately bounded (30 pages per venue, depth 2 by default) and is not proof of complete calendar coverage. Third-party ticket pages, JavaScript-only event lists, pagination patterns not discoverable from links, and support acts may still be missed. Manual verification remains mandatory.
