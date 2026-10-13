@@ -31,6 +31,30 @@ class EvidencePackageTests(unittest.TestCase):
                 audit=list(csv.DictReader(f))
             self.assertTrue(any(r["input_name"]=="bbc_track_candidates" and r["status"]=="present" for r in audit))
 
+    def test_merges_inspected_event_jsonld_as_unverified_candidates(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            inspection=root/"inspection.csv"
+            fields=["venue","page_url","event_title","event_date","performer_names","price","currency","availability","event_jsonld_found","notes"]
+            with inspection.open("w",newline="",encoding="utf-8") as f:
+                w=csv.DictWriter(f,fieldnames=fields); w.writeheader()
+                w.writerow({"venue":"The Cluny","page_url":"https://thecluny.com/gigs/example","event_title":"Example Live","event_date":"2026-10-20T19:00:00+01:00","performer_names":"Example Artist; Support Artist","price":"18.00","currency":"GBP","availability":"InStock","event_jsonld_found":"true","notes":"Structured candidate only"})
+                w.writerow({"venue":"The Cluny","page_url":"https://thecluny.com/gigs/unresolved","event_title":"Unresolved Live","event_date":"2026-10-21","performer_names":"","event_jsonld_found":"true","notes":"No performer metadata"})
+            out=root/"run"
+            subprocess.run([sys.executable,str(ROOT/"scripts/assemble_run_package.py"),
+                "--start","2026-10-13","--end","2026-10-26","--event-page-inspection",str(inspection),
+                "--out-dir",str(out)],check=True,capture_output=True,text=True)
+            with (out/"events.csv").open(newline="",encoding="utf-8") as f:
+                events=list(csv.DictReader(f))
+            self.assertEqual({row["artist"] for row in events},{"Example Artist","Support Artist"})
+            self.assertTrue(all(row["verified"]=="false" for row in events))
+            self.assertTrue(all(row["artist_role"]=="performer_role_unverified" for row in events))
+            self.assertTrue(all(row["price"]=="18.00 GBP" for row in events))
+            with (out/"unresolved_event_candidates.csv").open(newline="",encoding="utf-8") as f:
+                unresolved=list(csv.DictReader(f))
+            self.assertEqual(len(unresolved),1)
+            self.assertEqual(unresolved[0]["event_title"],"Unresolved Live")
+
     def test_creates_partial_package_and_refuses_overwrite(self):
         with tempfile.TemporaryDirectory() as tmp:
             out=Path(tmp)/"run"
