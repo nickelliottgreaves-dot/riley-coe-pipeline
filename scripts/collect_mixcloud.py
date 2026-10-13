@@ -203,6 +203,10 @@ def fetch_cloudcasts_html(username: str, since: date, until: date) -> tuple[list
             continue
         title = anchor_title.strip() or parts[-1].replace("-", " ")
         published = parse_mixcloud_title_date(title)
+        if not published:
+            # Anchor labels can be generic ("Play", "Listen") while the slug
+            # retains the show's dated title.
+            published = parse_mixcloud_title_date(parts[-1].replace("-", " "))
         if not published or not (since <= published <= until):
             continue
         seen.add(url)
