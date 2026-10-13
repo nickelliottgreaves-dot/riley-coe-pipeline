@@ -25,5 +25,7 @@ class WorkflowArtifactContractTests(unittest.TestCase):
             self.assertIn(artifact, WORKFLOW)
         self.assertIn("input_file_audit.csv", ASSEMBLER)
         self.assertIn("missing_or_unsupplied_inputs", ASSEMBLER)
+        self.assertIn("bbc_track_candidates.csv", WORKFLOW)
+        self.assertIn("bbc_track_candidates", ASSEMBLER)
 
 if __name__ == "__main__": unittest.main()
