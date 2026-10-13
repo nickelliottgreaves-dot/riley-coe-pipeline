@@ -123,3 +123,10 @@ The assembler also imports Event JSON-LD rows found by the bounded event-page in
 ### Per-venue discovery coverage audit
 
 Every assembled run now emits `venue_discovery_coverage.csv` plus `Riley_Coe_venue_discovery_coverage_<run-date>.csv`, with one row for each of the 16 mandatory venues. It joins the configured official source, homepage fetch status, structured-event and candidate-link counts, and bounded detail-page crawl counts/failures/cap status when those inputs exist. `calendar_coverage_verified` intentionally remains `false`: these are discovery metrics, not proof that all calendar pages, date filters, JavaScript listings, external ticket pages or support bills were exhaustively checked. The validator now requires a row for every mandatory venue in this audit and rejects a `COMPLETE` claim if any venue lacks the verified flag, a crawl cap was reached, or recorded detail-page fetches failed. The separate `venue_coverage.csv` remains `not_checked` until explicit calendar verification evidence is supplied.
+
+
+### Safety-net venue sweep and zero-link audits
+
+The configured venue discovery registry now includes four optional safety-net venues in addition to the 16 mandatory rooms/sites: The Globe, Little Buildings, Utilita Arena Newcastle and ZEROX Newcastle. These are searched in the same venue-first candidate-discovery flow, so their billed acts can be compared against the full artist pool without reverting to artist-by-artist venue searches.
+
+The event-page inspector receives the full venue registry and writes one crawl-audit row per configured venue, including venues for which discovery found zero candidate links. Such rows use `NO_SEED_LINKS` and explicitly mean "discovery gap"—never "no relevant gigs". The dated discovery coverage export includes mandatory and optional venues, while only the 16 required venues block the mandatory venue-completion gate.
