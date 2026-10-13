@@ -121,6 +121,7 @@ def fetch_cloudcasts_search(username: str, since: date, until: date) -> tuple[li
     """Fallback discovery via Mixcloud's documented public cloudcast search."""
     url = f"{API_ROOT}/search/?{urlencode({'q': 'Riley & Coe', 'type': 'cloudcast', 'limit': 100, 'offset': 0})}"
     found, errors, visited = [], [], set()
+    scanned, sample_urls = 0, []
     pages = 0
     while url and url not in visited and pages < 5:
         visited.add(url)
@@ -137,10 +138,14 @@ def fetch_cloudcasts_search(username: str, since: date, until: date) -> tuple[li
         for item in data:
             if not isinstance(item, dict):
                 continue
-            public_url = str(item.get("url") or "")
+            scanned += 1
+            public_url = str(item.get("url") or item.get("key") or "")
+            if public_url.startswith("/"):
+                public_url = "https://www.mixcloud.com" + public_url
             path_parts = [part for part in urlparse(public_url).path.split("/") if part]
+            if public_url and len(sample_urls) < 5: sample_urls.append(public_url)
             author = item.get("user") or item.get("owner") or {}
-            author_url = str(author.get("url") or "") if isinstance(author, dict) else ""
+            author_url = str((author.get("url") or author.get("key") or "") if isinstance(author, dict) else "")
             belongs = bool(path_parts and path_parts[0].casefold() == username.strip("/").casefold())
             belongs = belongs or username.strip("/").casefold() in author_url.casefold()
             if not belongs:
@@ -158,7 +163,7 @@ def fetch_cloudcasts_search(username: str, since: date, until: date) -> tuple[li
         url = payload.get("paging", {}).get("next")
         time.sleep(0.15)
     if not found and not errors:
-        errors.append("Mixcloud public search returned no dated Riley & Coe cloudcasts for the requested window.")
+        errors.append(f"Mixcloud public search returned no dated Riley & Coe cloudcasts for the requested window (scanned {scanned} results; sample URLs: {sample_urls}).")
     return found, errors
 
 def fetch_cloudcasts_html(username: str, since: date, until: date) -> tuple[list[dict], list[str]]:
