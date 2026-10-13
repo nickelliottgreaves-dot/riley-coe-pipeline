@@ -43,6 +43,7 @@ class ValidatorTests(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("episode_coverage_complete is not true", result.stdout)
             self.assertIn("venue_sweep_complete is not true", result.stdout)
+            self.assertIn("Missing venue_discovery_coverage.csv for COMPLETE run", result.stdout)
 
 if __name__ == "__main__":
     unittest.main()
