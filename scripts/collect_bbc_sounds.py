@@ -20,6 +20,7 @@ SERIES_URL="https://www.bbc.co.uk/programmes/m001mf2c/episodes"
 UA="riley-coe-pipeline/0.3 (BBC Sounds episode inventory)"
 EP_FIELDS=["episode_date","episode_title","episode_url","listing_source_url","page_fetch_status","visible_tracklist_heading_detected","tracklist_status","notes"]
 LINK_FIELDS=["episode_url","episode_title","episode_date","source_url","tracklist_status","candidate_artists","snapshot_file","notes"]
+TRACK_FIELDS=["episode_date","episode_title","episode_url","track_title","artist_candidate","extraction_method","review_status","evidence_text","notes"]
 
 class TextParser(HTMLParser):
     def __init__(self):
@@ -67,6 +68,66 @@ def episode_id(url):
     m=re.search(r"/(?:programmes|sounds/play)/(m[0-9a-z]{7,})",url,re.I)
     return m.group(1) if m else ""
 
+def _jsonld_objects(value):
+    """Yield nested JSON-LD objects without assuming one schema shape."""
+    if isinstance(value,dict):
+        yield value
+        for child in value.values():
+            yield from _jsonld_objects(child)
+    elif isinstance(value,list):
+        for child in value:
+            yield from _jsonld_objects(child)
+
+def extract_tracklist_candidates(parser,text,episode_url,episode_title,episode_date):
+    """Extract review-only artist candidates from structured metadata and clear text patterns."""
+    found=[]
+    seen=set()
+    def add(title,artist,method,evidence):
+        title=" ".join(str(title or "").split()).strip(" -–—:")
+        artist=" ".join(str(artist or "").split()).strip(" -–—:")
+        key=(title.casefold(),artist.casefold(),method)
+        if not title or not artist or key in seen: return
+        if len(title)>180 or len(artist)>140: return
+        seen.add(key)
+        found.append({"episode_date":episode_date,"episode_title":episode_title,"episode_url":episode_url,
+            "track_title":title,"artist_candidate":artist,"extraction_method":method,"review_status":"needs_manual_review",
+            "evidence_text":str(evidence)[:500],"notes":"Candidate extraction only; compare against the complete official visible tracklist. Not certified complete or verified."})
+    # JSON-LD is useful where BBC pages expose MusicRecording/Playlist metadata.
+    for raw in parser._jsonld:
+        try: data=json.loads(raw)
+        except (TypeError,ValueError): continue
+        for obj in _jsonld_objects(data):
+            types=obj.get("@type",[])
+            if isinstance(types,str): types=[types]
+            name=obj.get("name","")
+            artist=obj.get("byArtist") or obj.get("artist") or obj.get("creator")
+            if isinstance(artist,dict): artist=artist.get("name","")
+            elif isinstance(artist,list):
+                artist=", ".join(str(a.get("name","") if isinstance(a,dict) else a) for a in artist)
+            if any(str(t).casefold() in {"musicrecording","musictrack"} for t in types) and name and artist:
+                add(name,artist,"jsonld_music_recording",json.dumps(obj,ensure_ascii=False))
+    # Restrict simple text patterns to the visible text after a tracklist heading.
+    lines=[line.strip() for line in text.splitlines() if line.strip()]
+    start_idx=next((i for i,line in enumerate(lines) if re.search(r"^(music played|tracklist|track listing)$",line,re.I)),None)
+    if start_idx is not None:
+        section=[]
+        for line in lines[start_idx+1:]:
+            if re.match(r"^(related|more episodes|you may also like|credits|about this programme|contributors)$",line,re.I):
+                break
+            section.append(line)
+        for line in section:
+            # Only accept explicit separators; leave other line shapes for human review.
+            m=re.match(r"^(.{1,140}?)\\s+[–—-]\\s+(.{1,180})$",line)
+            if m:
+                left,right=m.groups()
+                # This convention is ambiguous on many sites, so record rather than confirm it.
+                add(right,left,"visible_text_artist_dash_title",line)
+            m=re.match(r"^(.{1,180}?)\\s+by\\s+(.{1,140})$",line,re.I)
+            if m:
+                title,artist=m.groups()
+                add(title,artist,"visible_text_title_by_artist",line)
+    return found
+
 def find_episodes(html,base):
     p=TextParser(); p.feed(html); out={}
     for href,title in p.links:
@@ -104,7 +165,7 @@ def main():
             next_url=next((u for u in page_links if u not in visited),"")
         except (HTTPError,URLError,TimeoutError,OSError,ValueError) as exc:
             errors.append(f"Listing {next_url}: {type(exc).__name__}: {exc}"); break
-    rows=[]; linkrows=[]
+    rows=[]; linkrows=[]; trackrows=[]
     for ep in episodes:
         url=ep["url"]
         try:
@@ -122,8 +183,11 @@ def main():
             snap=snaps/(episode_id(url)+".txt")
             snap.write_text("SOURCE: "+url+"\nLISTING: "+ep["listing_source_url"]+"\n\n"+text+"\n",encoding="utf-8")
             state="visible_tracklist_heading_detected_needs_review" if has_heading else "tracklist_not_detected_needs_review"
+            candidates_found=extract_tracklist_candidates(p,text,url,ep["title"],dt)
+            trackrows.extend(candidates_found)
+            candidate_artist_names=sorted({r["artist_candidate"] for r in candidates_found},key=str.casefold)
             rows.append({"episode_date":dt,"episode_title":ep["title"],"episode_url":url,"listing_source_url":ep["listing_source_url"],"page_fetch_status":page_status,"visible_tracklist_heading_detected":str(has_heading).lower(),"tracklist_status":state,"notes":(note+" " if note else "")+"Page access does not prove tracklist completeness; inspect saved visible-text snapshot and official page."})
-            linkrows.append({"episode_url":url,"episode_title":ep["title"],"episode_date":dt,"source_url":url,"tracklist_status":state,"candidate_artists":"","snapshot_file":str(snap.relative_to(out)),"notes":"No artist rows are certified automatically; extract every artist from the complete visible tracklist."})
+            linkrows.append({"episode_url":url,"episode_title":ep["title"],"episode_date":dt,"source_url":url,"tracklist_status":state,"candidate_artists":"; ".join(candidate_artist_names),"snapshot_file":str(snap.relative_to(out)),"notes":f"{len(candidates_found)} provisional track/artist candidates extracted where patterns matched; manually compare against complete visible tracklist."})
         except (HTTPError,URLError,TimeoutError,OSError,ValueError) as exc:
             rows.append({"episode_date":"","episode_title":ep["title"],"episode_url":url,"listing_source_url":ep["listing_source_url"],"page_fetch_status":"failed","visible_tracklist_heading_detected":"false","tracklist_status":"inaccessible","notes":f"{type(exc).__name__}: {exc}"})
             errors.append(f"Episode {url}: {type(exc).__name__}: {exc}")
@@ -133,7 +197,9 @@ def main():
         w=csv.DictWriter(f,fieldnames=fields); w.writeheader(); w.writerows(rows)
     with (out/"bbc_tracklist_review_queue.csv").open("w",encoding="utf-8",newline="") as f:
         w=csv.DictWriter(f,fieldnames=LINK_FIELDS); w.writeheader(); w.writerows(linkrows)
-    summary={"window_start":start.isoformat(),"window_end":end.isoformat(),"series_url":args.listing_url,"listing_pages_fetched":len(listing_pages),"episodes_discovered":len(episodes),"episode_pages_in_window_or_undated":len(rows),"visible_tracklist_headings_detected":sum(r["visible_tracklist_heading_detected"]=="true" for r in rows),"episodes_certified_complete":0,"errors":errors,"listing_pages":listing_pages,"status":"PARTIAL","limitations":["BBC episode listing pagination may not expose every episode; inspect pagination audit.","Episode dates may not be machine-readable in visible text.","Tracklist heading detection is not completeness verification.","Tracklist artist extraction is deliberately left for visible-page review; no episode is marked complete automatically."]}
+    with (out/"bbc_track_candidates.csv").open("w",encoding="utf-8",newline="") as f:
+        w=csv.DictWriter(f,fieldnames=TRACK_FIELDS); w.writeheader(); w.writerows(trackrows)
+    summary={"window_start":start.isoformat(),"window_end":end.isoformat(),"series_url":args.listing_url,"listing_pages_fetched":len(listing_pages),"episodes_discovered":len(episodes),"episode_pages_in_window_or_undated":len(rows),"visible_tracklist_headings_detected":sum(r["visible_tracklist_heading_detected"]=="true" for r in rows),"provisional_track_artist_candidates":len(trackrows),"episodes_certified_complete":0,"errors":errors,"listing_pages":listing_pages,"status":"PARTIAL","limitations":["BBC episode listing pagination may not expose every episode; inspect pagination audit.","Episode dates may not be machine-readable in visible text.","Tracklist heading detection is not completeness verification.","Track/artist candidates are extracted only from explicit JSON-LD or simple visible-text patterns; all candidates require manual review.","Text-pattern extraction may miss tracks and can misassign artist/title order; no episode is marked complete automatically."]}
     (out/"bbc_collection_audit.json").write_text(json.dumps(summary,indent=2)+"\n",encoding="utf-8")
     print(json.dumps(summary,indent=2))
     return 1 if errors else 0
