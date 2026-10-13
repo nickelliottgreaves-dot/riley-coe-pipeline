@@ -104,3 +104,8 @@ Official BBC guidance says episode tracklists are shown on eligible on-demand ep
 `scripts/inspect_event_links.py` now follows discovered event links and a bounded number of same-host event/calendar links per venue. It stores visible-text snapshots, captures structured Event JSON-LD fields where available (event title/date, performers, prices and availability), and records crawl caps and failures. All records remain unverified. The scheduled workflow runs this stage after link discovery and includes the inspection CSV and crawl audit in the dated evidence scaffold.
 
 The crawler is deliberately bounded (30 pages per venue, depth 2 by default) and is not proof of complete calendar coverage. Third-party ticket pages, JavaScript-only event lists, pagination patterns not discoverable from links, and support acts may still be missed. Manual verification remains mandatory.
+
+
+### Evidence-input provenance
+
+Every assembled scaffold now includes `input_file_audit.csv`, which records each expected collector/configuration input as `present`, `missing`, or `not_supplied`, including file size where available. The manifest and assembly summary list missing or unsupplied inputs explicitly. An absent input is never evidence that no episodes or events existed. This audit does not certify that a present file is complete.
