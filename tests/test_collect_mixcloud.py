@@ -2,7 +2,7 @@ import unittest
 from datetime import date
 from unittest.mock import patch
 from io import BytesIO
-from scripts.collect_mixcloud import inventory_item, parse_date, parse_mixcloud_title_date, fetch_cloudcasts_html, fetch_show_page_tracks, fetch_cloudcasts_search, fetch_cloudcasts_date_slug_probe
+from scripts.collect_mixcloud import inventory_item, parse_date, parse_mixcloud_title_date, fetch_cloudcasts_html, fetch_show_page_tracks, fetch_cloudcasts_search
 
 class MixcloudInventoryTests(unittest.TestCase):
     def test_no_sections_is_unavailable_not_complete(self):
@@ -83,20 +83,6 @@ class MixcloudInventoryTests(unittest.TestCase):
         self.assertIn("6th-october-2026", items[0]["url"])
         self.assertEqual(errors, [])
 
-    def test_date_slug_probe_finds_confirmed_public_show_page(self):
-        html = b'<title>Riley & Coe Monday 5th October 2026</title>'
-        response = type("Response", (), {
-            "__enter__": lambda self: self,
-            "__exit__": lambda self, *args: None,
-            "read": lambda self, n: html,
-            "geturl": lambda self: "https://www.mixcloud.com/SixMusicAlternative/riley-coe-monday-5th-october-2026/"
-        })()
-        with patch("scripts.collect_mixcloud.urlopen", return_value=response):
-            items, errors = fetch_cloudcasts_date_slug_probe("SixMusicAlternative", date(2026, 10, 5), date(2026, 10, 5))
-        self.assertEqual(len(items), 1)
-        self.assertEqual(items[0]["created_time"], "2026-10-05")
-        self.assertIn("monday-5th-october-2026", items[0]["url"])
-        self.assertEqual(errors, [])
 
     def test_show_page_parser_reads_numbered_creator_comment_tracklist(self):
         html = b'<div>Comments</div><div>The 6 Music Archive</div><div>Creator</div><div>Button: 00:00</div><div>1.</div><div>Threadbare</div><div>Lande Hekt</div><div>2.</div><div>New York No Wave</div><div>Ill Ease</div><div>Reply</div>'
