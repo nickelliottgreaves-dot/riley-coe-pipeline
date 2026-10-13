@@ -79,7 +79,7 @@ def fetch_cloudcasts(username: str, since: date, until: date) -> tuple[list[dict
             errors.append("Stopped after 30 pages as a safety limit; inventory may be incomplete.")
         if found or not account_failed_at_first_page:
             break
-    return found, errors
+    return found, ([] if found else errors)
 
 def fetch_show_detail(item: dict) -> dict:
     # The user cloudcasts endpoint may omit per-show tracklist sections. Fetch
