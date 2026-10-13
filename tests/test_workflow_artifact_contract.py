@@ -36,6 +36,9 @@ class WorkflowArtifactContractTests(unittest.TestCase):
         self.assertIn("Missing required regression artist checks", (ROOT / "scripts/validate_run.py").read_text(encoding="utf-8"))
         self.assertIn("Riley_Coe_deduplicated_event_artists_", ASSEMBLER)
         self.assertIn("Riley_Coe_venue_coverage_", ASSEMBLER)
+        self.assertIn("venue_discovery_coverage.csv", ASSEMBLER)
+        self.assertIn("Riley_Coe_venue_discovery_coverage_", ASSEMBLER)
+        self.assertIn("calendar_coverage_verified", ASSEMBLER)
         self.assertIn("needs: [assemble-evidence-scaffold]", WORKFLOW)
         self.assertIn("artifacts/evidence-package", WORKFLOW)
 
