@@ -119,13 +119,39 @@ def main():
     write_csv(out/"pool_matches.csv",MATCH_FIELDS,[])
     # Run matcher to ensure every candidate artist has a corresponding pool comparison.
     subprocess.run([sys.executable,str(ROOT/"scripts/match_event_artists.py"),"--events",str(out/"events.csv"),"--pool",str(args.pool),"--aliases",str(ROOT/"config/artist_aliases.csv"),"--out",str(out/"pool_matches.csv")],check=True)
+    # Also publish the dated filenames used by the weekly research workflow.
+    run_day=date.today().isoformat()
+    dated_exports={
+        f"Riley_Coe_events_{start.isoformat()}_to_{end.isoformat()}.csv":"events.csv",
+        f"Riley_Coe_pool_matches_{run_day}.csv":"pool_matches.csv",
+        f"Riley_Coe_venue_coverage_{run_day}.csv":"venue_coverage.csv",
+        f"Riley_Coe_regression_artist_checks_{run_day}.csv":"regression_artist_checks.csv",
+    }
+    for export_name, source_name in dated_exports.items():
+        shutil.copy2(out/source_name,out/export_name)
+    artist_groups={}
+    for event in events:
+        display=(event.get("artist") or "").strip()
+        if not display: continue
+        key=" ".join(display.casefold().split())
+        group=artist_groups.setdefault(key,{"event_artist":display,"events_count":0,"event_dates":set(),"venues":set(),"event_titles":set(),"source_urls":set()})
+        group["events_count"]+=1
+        for field,value in (("event_dates",event.get("event_date","")),("venues",event.get("venue","")),("event_titles",event.get("event_title","")),("source_urls",event.get("source_url",""))):
+            if value: group[field].add(value)
+    dedup_rows=[]
+    for group in sorted(artist_groups.values(),key=lambda g:g["event_artist"].casefold()):
+        dedup_rows.append({"event_artist":group["event_artist"],"events_count":group["events_count"],
+            "event_dates":"; ".join(sorted(group["event_dates"])),"venues":"; ".join(sorted(group["venues"])),
+            "event_titles":"; ".join(sorted(group["event_titles"])),"source_urls":"; ".join(sorted(group["source_urls"]))})
+    dedup_path=out/f"Riley_Coe_deduplicated_event_artists_{run_day}.csv"
+    write_csv(dedup_path,["event_artist","events_count","event_dates","venues","event_titles","source_urls"],dedup_rows)
     missing_inputs=[r["input_name"] for r in input_audit if r["status"] in {"missing","not_supplied"}]
     manifest={"run_date":date.today().isoformat(),"window_start":start.isoformat(),"window_end":end.isoformat(),
               "previous_successful_run":args.previous_successful_run,"claimed_status":"PARTIAL",
               "researcher_notes":"Automatically assembled evidence scaffold. Not a completed research run. BBC Sounds/visible tracklists, event detail pages, supports, prices/ticket status, regression checks, full venue coverage and safety-net searches still require verification.",
               "package_kind":"candidate_scaffold","source_episode_rows":len(episode_rows),"candidate_event_rows":len(events),"unresolved_event_candidates":len(unresolved),
               "mandatory_venue_rows":len(venue_rows),"venue_calendar_checks_completed":0,"regression_artists_seeded":len(regression_rows),"regression_artist_checks_completed":0,
-              "input_file_audit":"input_file_audit.csv","missing_or_unsupplied_inputs":missing_inputs,"input_files_present":sum(r["status"]=="present" for r in input_audit)}
+              "input_file_audit":"input_file_audit.csv","dated_exports":list(dated_exports)+[dedup_path.name],"missing_or_unsupplied_inputs":missing_inputs,"input_files_present":sum(r["status"]=="present" for r in input_audit)}
     (out/"run_manifest.json").write_text(json.dumps(manifest,indent=2)+"\n",encoding="utf-8")
     summary={"output_directory":str(out),"status":"PARTIAL","episode_rows":len(episode_rows),"event_candidate_rows":len(events),"unresolved_event_candidates":len(unresolved),"mandatory_venue_rows":len(venue_rows),"regression_artists_seeded":len(regression_rows),"regression_artist_checks_completed":0,"complete_claimed":False,"missing_or_unsupplied_inputs":missing_inputs}
     (out/"package_assembly_summary.json").write_text(json.dumps(summary,indent=2)+"\n",encoding="utf-8")
