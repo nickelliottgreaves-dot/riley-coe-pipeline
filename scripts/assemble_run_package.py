@@ -14,6 +14,7 @@ ROOT=Path(__file__).resolve().parents[1]
 EPISODE_FIELDS=["episode_date","source","url","tracklist_status","tracks_extracted","notes"]
 VENUE_FIELDS=["venue","checked","source_url","status","notes"]
 EVENT_FIELDS=["event_date","venue","event_title","artist","artist_role","source_url","verified","price","ticket_status","notes"]
+UNRESOLVED_FIELDS=["event_date","venue","event_title","source_url","price","ticket_status","discovery_method","notes"]
 MATCH_FIELDS=["event_artist","matched_pool_artist","candidate_pool_artist","match_type","source_url","verified","notes"]
 REGRESSION_FIELDS=["artist","searched","result","evidence_url","notes"]
 
@@ -46,10 +47,13 @@ def main():
     episode_rows=[{k:r.get(k,"") for k in EPISODE_FIELDS} for r in episode_rows]
     event_rows=read_csv(args.events,["event_date","venue","event_title","artist","artist_role","source_url","verified","notes"]) if args.events else []
     # Preserve only event rows inside the requested window; every candidate remains unverified.
-    events=[]
+    events=[]; unresolved=[]
     for r in event_rows:
         dt=(r.get("event_date") or "").strip()
         if dt and start.isoformat()<=dt<=end.isoformat():
+            if not (r.get("artist") or "").strip():
+                unresolved.append({k:r.get(k,"") for k in UNRESOLVED_FIELDS})
+                continue
             events.append({**{k:r.get(k,"") for k in EVENT_FIELDS},"verified":"false",
                            "notes":((r.get("notes") or "")+" Candidate imported; independently verify the event detail page and support bill.").strip()})
     venue_audit=read_csv(args.venue_audit,["venue","source_url","status","notes"]) if args.venue_audit else []
@@ -69,6 +73,7 @@ def main():
     write_csv(out/"episodes.csv",EPISODE_FIELDS,episode_rows)
     write_csv(out/"venue_coverage.csv",VENUE_FIELDS,venue_rows)
     write_csv(out/"events.csv",EVENT_FIELDS,events)
+    write_csv(out/"unresolved_event_candidates.csv",UNRESOLVED_FIELDS,unresolved)
     write_csv(out/"regression_artist_checks.csv",REGRESSION_FIELDS,[])
     write_csv(out/"pool_matches.csv",MATCH_FIELDS,[])
     # Run matcher to ensure every candidate artist has a corresponding pool comparison.
@@ -76,10 +81,10 @@ def main():
     manifest={"run_date":date.today().isoformat(),"window_start":start.isoformat(),"window_end":end.isoformat(),
               "previous_successful_run":args.previous_successful_run,"claimed_status":"PARTIAL",
               "researcher_notes":"Automatically assembled evidence scaffold. Not a completed research run. BBC Sounds/visible tracklists, event detail pages, supports, prices/ticket status, regression checks, full venue coverage and safety-net searches still require verification.",
-              "package_kind":"candidate_scaffold","source_episode_rows":len(episode_rows),"candidate_event_rows":len(events),
+              "package_kind":"candidate_scaffold","source_episode_rows":len(episode_rows),"candidate_event_rows":len(events),"unresolved_event_candidates":len(unresolved),
               "mandatory_venue_rows":len(venue_rows),"venue_calendar_checks_completed":0}
     (out/"run_manifest.json").write_text(json.dumps(manifest,indent=2)+"\n",encoding="utf-8")
-    summary={"output_directory":str(out),"status":"PARTIAL","episode_rows":len(episode_rows),"event_candidate_rows":len(events),"mandatory_venue_rows":len(venue_rows),"complete_claimed":False}
+    summary={"output_directory":str(out),"status":"PARTIAL","episode_rows":len(episode_rows),"event_candidate_rows":len(events),"unresolved_event_candidates":len(unresolved),"mandatory_venue_rows":len(venue_rows),"complete_claimed":False}
     (out/"package_assembly_summary.json").write_text(json.dumps(summary,indent=2)+"\n",encoding="utf-8")
     print(json.dumps(summary,indent=2))
     return 0
