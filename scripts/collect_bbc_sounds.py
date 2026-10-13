@@ -120,7 +120,7 @@ def extract_tracklist_candidates(parser,text,episode_url,episode_title,episode_d
         # when the page's "Show more" button means the overall list is incomplete.
         i = 0
         while i < len(section):
-            if re.fullmatch(r"\\d{1,3}\\.", section[i]):
+            if re.fullmatch(r"\d{1,3}\.", section[i]):
                 if i + 3 < len(section):
                     title_a, title_b, artist = section[i + 1:i + 4]
                     if title_a.casefold() == title_b.casefold():
