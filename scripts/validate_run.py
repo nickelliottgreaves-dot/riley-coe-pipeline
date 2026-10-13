@@ -92,6 +92,7 @@ def main() -> int:
     pool_names = [r.get("artist", "").strip() for r in pool_rows if r.get("artist", "").strip()]
     norm = lambda s: " ".join((s or "").casefold().split())
     norm_venue = lambda s: "".join(ch for ch in norm(s) if ch.isalnum())
+    normalize_event_artist = lambda s: "".join(ch for ch in norm(s) if ch.isalnum())
     duplicates = sorted({n for n in map(norm, pool_names) if n and sum(norm(x) == n for x in pool_names) > 1})
     if duplicates:
         errors.append(f"Artist pool contains duplicate normalized names ({len(duplicates)}): {', '.join(duplicates[:10])}")
@@ -186,10 +187,17 @@ def main() -> int:
     matches = tables.get("pool_matches.csv", [])
     allowed_match_types = {"exact", "alias", "fuzzy_candidate", "fuzzy_reviewed", "unmatched", "false_positive_rejected"}
     pool_name_keys = {norm(n) for n in pool_names}
+    try:
+        alias_rows = read_csv(ROOT / "config" / "artist_aliases.csv", ["alias", "canonical", "review_status"], errors)
+        approved_alias_map = {normalize_event_artist(r.get("alias", "")): normalize_event_artist(r.get("canonical", "")) for r in alias_rows if (r.get("review_status") or "").strip().lower() == "approved"}
+    except Exception as exc:
+        approved_alias_map = {}
+        errors.append(f"Cannot load artist alias registry: {exc}")
     for i, row in enumerate(matches, 2):
         if not row.get("source_url", "").strip():
             errors.append(f"pool_matches.csv row {i}: missing evidence URL")
         match_type = (row.get("match_type") or "").strip().lower()
+        event_name = (row.get("event_artist") or "").strip()
         matched_name = (row.get("matched_pool_artist") or "").strip()
         candidate_names = [x.strip() for x in (row.get("candidate_pool_artist") or "").split("|") if x.strip()]
         if match_type not in allowed_match_types:
@@ -200,12 +208,15 @@ def main() -> int:
             errors.append(f"pool_matches.csv row {i}: fuzzy_candidate must have candidate_pool_artist and no confirmed match")
         if matched_name and norm(matched_name) not in pool_name_keys:
             errors.append(f"pool_matches.csv row {i}: matched_pool_artist is not an exact normalized pool name")
+        if match_type == "exact" and normalize_event_artist(event_name) != normalize_event_artist(matched_name):
+            errors.append(f"pool_matches.csv row {i}: exact match names do not normalize to the same artist")
+        if match_type == "alias" and approved_alias_map.get(normalize_event_artist(event_name)) != normalize_event_artist(matched_name):
+            errors.append(f"pool_matches.csv row {i}: alias match is not approved in config/artist_aliases.csv")
         for candidate in candidate_names:
             if norm(candidate) not in pool_name_keys:
                 errors.append(f"pool_matches.csv row {i}: candidate is not an exact pool entry: {candidate}")
 
     # Every distinct billed event artist must appear in the match table, including non-matches.
-    normalize_event_artist = lambda s: "".join(ch for ch in norm(s) if ch.isalnum())
     expected_event_artists = {
         normalize_event_artist(r.get("artist", "")) for r in events if r.get("artist", "").strip()
     }
