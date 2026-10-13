@@ -115,6 +115,20 @@ def extract_tracklist_candidates(parser,text,episode_url,episode_title,episode_d
             if re.match(r"^(related|more episodes|you may also like|credits|about this programme|contributors)$",line,re.I):
                 break
             section.append(line)
+        # BBC's visible tracklist commonly renders as: ordinal, title,
+        # repeated title, artist. The first visible tracks are extractable even
+        # when the page's "Show more" button means the overall list is incomplete.
+        i = 0
+        while i < len(section):
+            if re.fullmatch(r"\d{1,3}\.", section[i]):
+                if i + 3 < len(section):
+                    title_a, title_b, artist = section[i + 1:i + 4]
+                    if title_a.casefold() == title_b.casefold():
+                        add(title_a, artist, "visible_text_repeated_title_artist",
+                            " | ".join(section[i:i + 4]))
+                        i += 4
+                        continue
+            i += 1
         for line in section:
             # Strongly labelled artist/title pairs on one line are safer than
             # pairing labels across adjacent HTML text nodes. Still review-only.
