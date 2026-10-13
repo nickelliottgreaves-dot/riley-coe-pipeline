@@ -114,3 +114,6 @@ Every assembled scaffold now includes `input_file_audit.csv`, which records each
 ## Regression artist checklist
 
 `config/regression_artists.csv` seeds a fixed list of artists previously missed in earlier searches (including Gallus, Long Ryders, A Certain Ratio, Bill Callahan, Robyn Hitchcock, Juni Habel, Horse, Delines and Hanging Stars). Every scaffold writes these into `regression_artist_checks.csv` as `searched=false` / `not_checked`. This makes the required follow-up visible but does not count as a completed check; each must be searched across the venue-first sweep and supported by evidence before a run can be complete.
+
+
+The assembler also emits dated copies for downstream use: `Riley_Coe_events_<start>_to_<end>.csv`, `Riley_Coe_deduplicated_event_artists_<run-date>.csv`, `Riley_Coe_pool_matches_<run-date>.csv`, `Riley_Coe_venue_coverage_<run-date>.csv`, and `Riley_Coe_regression_artist_checks_<run-date>.csv`. The exact filenames are recorded in `run_manifest.json`; these are still partial candidate outputs until the evidence gates pass.
