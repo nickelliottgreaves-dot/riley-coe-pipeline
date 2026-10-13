@@ -56,7 +56,9 @@ class MixcloudInventoryTests(unittest.TestCase):
         with patch("scripts.collect_mixcloud.urlopen", side_effect=[
             response(html_empty, "https://www.mixcloud.com/SixMusicAlternative/"),
             response(html_uploads, "https://www.mixcloud.com/SixMusicAlternative/uploads/"),
-            response(b'<a href="/help/">Help</a>', "https://www.mixcloud.com/search/?q=Riley%20%26%20Coe")
+            response(b'<a href="/help/">Help</a>', "https://www.mixcloud.com/search/?q=Riley%20%26%20Coe"),
+            response(b'<a href="/help/">Help</a>', "https://html.duckduckgo.com/html/?q=Riley"),
+            response(b'<a href="/help/">Help</a>', "https://www.google.com/search?q=Riley")
         ]):
             items, errors = fetch_cloudcasts_html("SixMusicAlternative", date(2026, 10, 6), date(2026, 10, 13))
         self.assertEqual(len(items), 1)
@@ -76,13 +78,34 @@ class MixcloudInventoryTests(unittest.TestCase):
                 "read": lambda self, n: b'<a href="/help/">Help</a>', "geturl": lambda self: "https://www.mixcloud.com/SixMusicAlternative/"})(),
             type("Response", (), {"__enter__": lambda self: self, "__exit__": lambda self, *args: None,
                 "read": lambda self, n: b'<a href="/help/">Help</a>', "geturl": lambda self: "https://www.mixcloud.com/SixMusicAlternative/uploads/"})(),
-            response
+            response,
+            type("Response", (), {"__enter__": lambda self: self, "__exit__": lambda self, *args: None,
+                "read": lambda self, n: b'<a href="/help/">Help</a>', "geturl": lambda self: "https://html.duckduckgo.com/html/?q=Riley"})(),
+            type("Response", (), {"__enter__": lambda self: self, "__exit__": lambda self, *args: None,
+                "read": lambda self, n: b'<a href="/help/">Help</a>', "geturl": lambda self: "https://www.google.com/search?q=Riley"})()
         ]):
             items, errors = fetch_cloudcasts_html("SixMusicAlternative", date(2026, 10, 6), date(2026, 10, 13))
         self.assertEqual(len(items), 1)
         self.assertIn("6th-october-2026", items[0]["url"])
         self.assertEqual(errors, [])
 
+
+    def test_html_fallback_unwraps_search_engine_result_links(self):
+        def response(html, url):
+            return type("Response", (), {"__enter__": lambda self: self, "__exit__": lambda self, *args: None,
+                "read": lambda self, n: html, "geturl": lambda self: url})()
+        result = b'<a href="/l/?uddg=https%3A%2F%2Fwww.mixcloud.com%2FSixMusicAlternative%2Friley-coe-tuesday-6th-october-2026%2F">Riley &amp; Coe Tuesday 6th October 2026</a>'
+        with patch("scripts.collect_mixcloud.urlopen", side_effect=[
+            response(b'<a href="/help/">Help</a>', "https://www.mixcloud.com/SixMusicAlternative/"),
+            response(b'<a href="/help/">Help</a>', "https://www.mixcloud.com/SixMusicAlternative/uploads/"),
+            response(b'<a href="/help/">Help</a>', "https://www.mixcloud.com/"),
+            response(result, "https://html.duckduckgo.com/html/?q=Riley"),
+            response(b'<a href="/help/">Help</a>', "https://www.google.com/search?q=Riley")
+        ]):
+            items, errors = fetch_cloudcasts_html("SixMusicAlternative", date(2026, 10, 6), date(2026, 10, 13))
+        self.assertEqual(len(items), 1)
+        self.assertIn("6th-october-2026", items[0]["url"])
+        self.assertEqual(errors, [])
 
     def test_show_page_parser_reads_numbered_creator_comment_tracklist(self):
         html = b'<div>Comments</div><div>The 6 Music Archive</div><div>Creator</div><div>Button: 00:00</div><div>1.</div><div>Threadbare</div><div>Lande Hekt</div><div>2.</div><div>New York No Wave</div><div>Ill Ease</div><div>Reply</div>'
