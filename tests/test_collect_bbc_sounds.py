@@ -20,6 +20,19 @@ class BBCCollectorTests(unittest.TestCase):
         self.assertEqual(candidates[0]["artist_candidate"],"Artist One")
         self.assertEqual(candidates[0]["track_title"],"Song One")
         self.assertTrue(all(row["review_status"]=="needs_manual_review" for row in candidates))
+    def test_extracts_explicitly_labelled_track_artist_pairs(self):
+        p=TextParser()
+        line_one="Track: Song One | Artist: Artist One"
+        line_two="Artist: Artist Two; Title: Song Two"
+        p.feed("<h2>Tracklist</h2><p>"+line_one+"</p><p>"+line_two+"</p>")
+        candidates=extract_tracklist_candidates(p,"Tracklist\\n"+line_one+"\\n"+line_two,
+            "https://www.bbc.co.uk/programmes/m0031tk4","Test episode","2026-10-01")
+        self.assertEqual(len(candidates),2)
+        by_artist={row["artist_candidate"]:row for row in candidates}
+        self.assertEqual(by_artist["Artist One"]["track_title"],"Song One")
+        self.assertEqual(by_artist["Artist Two"]["track_title"],"Song Two")
+        self.assertTrue(all(row["review_status"]=="needs_manual_review" for row in candidates))
+
     def test_extracts_jsonld_recording_candidates(self):
         p=TextParser()
         p.feed('<script type="application/ld+json">{"@type":"MusicRecording","name":"Track Name","byArtist":{"@type":"MusicGroup","name":"Artist Name"}}</script>')
