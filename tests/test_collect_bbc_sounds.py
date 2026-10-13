@@ -35,7 +35,7 @@ class BBCCollectorTests(unittest.TestCase):
 
     def test_extracts_visible_bbc_tracklist_rows_with_repeated_title_nodes(self):
         p=TextParser()
-        text="Tracklist\\nTrack\\nArtist\\n1.\\nFree Way\\nFree Way\\nLafayette And The Lasabres\\n2.\\nThe Swim Thing\\nThe Swim Thing\\nDave Lewis\\nShow more"
+        text="Tracklist\nTrack\nArtist\n1.\nFree Way\nFree Way\nLafayette And The Lasabres\n2.\nThe Swim Thing\nThe Swim Thing\nDave Lewis\nShow more"
         candidates=extract_tracklist_candidates(p,text,"https://www.bbc.co.uk/sounds/play/m0032d2m","Test episode","2026-10-12")
         self.assertEqual(len(candidates),2)
         self.assertEqual(candidates[0]["track_title"],"Free Way")
