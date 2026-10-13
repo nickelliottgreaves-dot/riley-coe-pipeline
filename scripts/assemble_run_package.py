@@ -73,9 +73,13 @@ def main():
     episode_rows=[{k:r.get(k,"") for k in EPISODE_FIELDS} for r in episode_rows]
     bbc_rows=read_csv(args.bbc_episodes,["episode_date","episode_title","episode_url","tracklist_status","notes"]) if args.bbc_episodes else []
     for r in bbc_rows:
+        source_state=(r.get("tracklist_status") or "needs_review").strip()
+        # Map collector-specific states to the validator's controlled vocabulary.
+        # A detected heading is not proof that the complete list was extracted.
+        normalized_state="complete" if source_state=="complete" else "not_yet_checked"
         episode_rows.append({"episode_date":r.get("episode_date",""),"source":"BBC Sounds official episode page",
-            "url":r.get("episode_url",""),"tracklist_status":r.get("tracklist_status","needs_review"),
-            "tracks_extracted":"0","notes":((r.get("notes") or "")+" BBC inventory only; visible tracklist completeness and all artists remain to be verified.").strip()})
+            "url":r.get("episode_url",""),"tracklist_status":normalized_state,
+            "tracks_extracted":"0","notes":((r.get("notes") or "")+f" Original BBC collector state: {source_state}. BBC inventory/candidates only; visible tracklist completeness and all artists remain to be verified.").strip()})
     event_rows=read_csv(args.events,["event_date","venue","event_title","artist","artist_role","source_url","verified","notes"]) if args.events else []
     # Preserve only event rows inside the requested window; every candidate remains unverified.
     events=[]; unresolved=[]
