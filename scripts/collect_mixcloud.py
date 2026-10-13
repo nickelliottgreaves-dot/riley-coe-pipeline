@@ -48,6 +48,20 @@ def fetch_cloudcasts(username: str, since: date, until: date) -> tuple[list[dict
             payload = get_json(url)
         except (HTTPError, URLError, TimeoutError, OSError, json.JSONDecodeError) as exc:
             errors.append(f"Mixcloud API request failed for {url}: {exc}")
+            # Ask the public profile for its declared cloudcasts connection;
+            # this avoids hard-coding a connection path if Mixcloud changes it.
+            if pages == 1 and isinstance(exc, HTTPError) and exc.code == 404:
+                profile_url = f"{API_ROOT}/{username.strip('/')}/?metadata=1"
+                try:
+                    profile = get_json(profile_url)
+                    connection = str(profile.get("metadata", {}).get("connections", {}).get("cloudcasts") or "")
+                    if connection and connection not in visited:
+                        errors.pop()
+                        url = connection
+                        continue
+                    errors.append(f"Mixcloud profile metadata did not expose a cloudcasts connection: {profile_url}")
+                except (HTTPError, URLError, TimeoutError, OSError, json.JSONDecodeError) as profile_exc:
+                    errors.append(f"Mixcloud profile metadata request failed for {profile_url}: {profile_exc}")
             break
         data = payload.get("data", [])
         if not isinstance(data, list):
