@@ -1,0 +1,63 @@
+{
+  "episodes": [
+    "episode_date",
+    "source",
+    "url",
+    "tracklist_status",
+    "tracks_extracted",
+    "notes"
+  ],
+  "venue_coverage": [
+    "venue",
+    "checked",
+    "source_url",
+    "status",
+    "notes"
+  ],
+  "events": [
+    "event_date",
+    "venue",
+    "event_title",
+    "artist",
+    "artist_role",
+    "source_url",
+    "verified",
+    "notes"
+  ],
+  "pool_matches": [
+    "event_date",
+    "venue",
+    "event_title",
+    "event_artist",
+    "matched_pool_artist",
+    "match_type",
+    "source_url",
+    "verified"
+  ],
+  "regression_artist_checks": [
+    "artist",
+    "searched",
+    "result",
+    "evidence_url",
+    "notes"
+  ],
+  "allowed_tracklist_status": [
+    "complete",
+    "incomplete",
+    "unavailable",
+    "not_yet_checked"
+  ],
+  "allowed_venue_status": [
+    "checked_events_found",
+    "checked_no_relevant_events",
+    "inaccessible",
+    "not_checked"
+  ],
+  "allowed_match_type": [
+    "exact",
+    "alias",
+    "fuzzy_reviewed",
+    "unmatched",
+    "false_positive_rejected"
+  ]
+}
