@@ -32,9 +32,13 @@ def main():
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--fuzzy-cutoff", type=float, default=0.84)
     args=ap.parse_args()
-    events=read_csv(args.events); pool=read_csv(args.pool); aliases=read_csv(args.aliases)
-    if not events or "artist" not in events[0]:
-        raise SystemExit("events CSV must contain at least one row and an artist column")
+    with args.events.open(encoding="utf-8-sig", newline="") as f:
+        event_reader = csv.DictReader(f)
+        event_fields = event_reader.fieldnames or []
+        events = list(event_reader)
+    pool=read_csv(args.pool); aliases=read_csv(args.aliases)
+    if "artist" not in event_fields:
+        raise SystemExit("events CSV must contain an artist column (header-only file is allowed)")
     if not pool or "artist" not in pool[0]:
         raise SystemExit("artist pool must contain artist rows")
     pool_by_norm={}
