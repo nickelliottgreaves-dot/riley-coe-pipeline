@@ -24,7 +24,7 @@ class ValidatorTests(unittest.TestCase):
         import csv, re
         required_path = ROOT / "config" / "required_venues.csv"
         source_path = ROOT / "config" / "venue_sources.csv"
-        norm = lambda s: "".join(ch for ch in re.sub(r"\\s+", " ", s.casefold()) if ch.isalnum())
+        norm = lambda s: "".join(ch for ch in re.sub(r"\s+", " ", s.casefold()) if ch.isalnum())
         with required_path.open(encoding="utf-8-sig", newline="") as f:
             required = [r["venue"] for r in csv.DictReader(f) if r["mandatory"].strip().lower() == "true"]
         with source_path.open(encoding="utf-8-sig", newline="") as f:
