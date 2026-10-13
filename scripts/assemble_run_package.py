@@ -18,6 +18,7 @@ UNRESOLVED_FIELDS=["event_date","venue","event_title","artist_candidate","artist
 MATCH_FIELDS=["event_artist","matched_pool_artist","candidate_pool_artist","match_type","source_url","verified","notes"]
 REGRESSION_FIELDS=["artist","searched","result","evidence_url","notes"]
 INPUT_AUDIT_FIELDS=["input_name","path","status","size_bytes","notes"]
+DISCOVERY_COVERAGE_FIELDS=["venue","source_url","homepage_fetch_status","http_status","structured_event_count","candidate_link_count","detail_pages_fetched","detail_pages_failed","crawl_cap_reached","calendar_coverage_verified","notes"]
 
 def read_csv(path, fields):
     if not path or not Path(path).exists(): return []
@@ -154,10 +155,33 @@ def main():
         events.append({**{k:r.get(k,"") for k in EVENT_FIELDS},"event_date":dt,"verified":"false",
                        "notes":((r.get("notes") or "")+" Candidate imported; independently verify the event detail page and support bill.").strip()})
     venue_audit=read_csv(args.venue_audit,["venue","source_url","status","notes"]) if args.venue_audit else []
+    detail_audit=read_csv(args.event_page_audit,["venue","seed_candidate_links","pages_fetched","pages_failed","same_host_links_added","crawl_cap_reached","status","notes"]) if args.event_page_audit else []
     audit_by_venue={''.join(c.casefold() for c in r.get("venue","") if c.isalnum()):r for r in venue_audit}
+    detail_by_venue={''.join(c.casefold() for c in r.get("venue","") if c.isalnum()):r for r in detail_audit}
     with (ROOT/"config/required_venues.csv").open(encoding="utf-8-sig",newline="") as f: required=list(csv.DictReader(f))
     with (ROOT/"config/venue_sources.csv").open(encoding="utf-8-sig",newline="") as f: sources=list(csv.DictReader(f))
     source_by_venue={''.join(c.casefold() for c in r.get("venue","") if c.isalnum()):r for r in sources}
+    discovery_coverage_rows=[]
+    for v in required:
+        if (v.get("mandatory") or "").casefold()!="true": continue
+        name=v["venue"].strip(); key=''.join(c.casefold() for c in name if c.isalnum())
+        src=source_by_venue.get(key,{})
+        homepage=audit_by_venue.get(key,{})
+        detail=detail_by_venue.get(key,{})
+        discovery_coverage_rows.append({
+            "venue":name,"source_url":homepage.get("source_url") or src.get("source_url",""),
+            "homepage_fetch_status":homepage.get("status","not_run"),
+            "http_status":homepage.get("http_status",""),
+            "structured_event_count":homepage.get("structured_events_found",""),
+            "candidate_link_count":homepage.get("candidate_links_found",""),
+            "detail_pages_fetched":detail.get("pages_fetched","0" if not detail else ""),
+            "detail_pages_failed":detail.get("pages_failed","0" if not detail else ""),
+            "crawl_cap_reached":detail.get("crawl_cap_reached","false" if not detail else ""),
+            "calendar_coverage_verified":"false",
+            "notes":"Discovery metrics only. Homepage/link/detail-page fetches do not prove the complete venue calendar was searched. "+
+                (homepage.get("notes","") or "")+" "+(detail.get("notes","") or "")
+        })
+    write_csv(out/"venue_discovery_coverage.csv",DISCOVERY_COVERAGE_FIELDS,discovery_coverage_rows)
     venue_rows=[]
     for v in required:
         if (v.get("mandatory") or "").casefold()!="true": continue
@@ -186,6 +210,7 @@ def main():
         f"Riley_Coe_events_{start.isoformat()}_to_{end.isoformat()}.csv":"events.csv",
         f"Riley_Coe_pool_matches_{run_day}.csv":"pool_matches.csv",
         f"Riley_Coe_venue_coverage_{run_day}.csv":"venue_coverage.csv",
+        f"Riley_Coe_venue_discovery_coverage_{run_day}.csv":"venue_discovery_coverage.csv",
         f"Riley_Coe_regression_artist_checks_{run_day}.csv":"regression_artist_checks.csv",
         f"Riley_Coe_tracklist_candidate_review_{run_day}.csv":"tracklist_candidate_review.csv",
     }
@@ -214,7 +239,7 @@ def main():
               "researcher_notes":"Automatically assembled evidence scaffold. Not a completed research run. BBC Sounds/visible tracklists, event detail pages, supports, prices/ticket status, regression checks, full venue coverage and safety-net searches still require verification.",
               "package_kind":"candidate_scaffold","source_episode_rows":len(episode_rows),"candidate_event_rows":len(events),"unresolved_event_candidates":len(unresolved),
               "mandatory_venue_rows":len(venue_rows),"venue_calendar_checks_completed":0,"regression_artists_seeded":len(regression_rows),"regression_artist_checks_completed":0,
-              "input_file_audit":"input_file_audit.csv","tracklist_candidate_review":"tracklist_candidate_review.csv","dated_exports":list(dated_exports)+[dedup_path.name],"missing_or_unsupplied_inputs":missing_inputs,"input_files_present":sum(r["status"]=="present" for r in input_audit)}
+              "input_file_audit":"input_file_audit.csv","venue_discovery_coverage":"venue_discovery_coverage.csv","tracklist_candidate_review":"tracklist_candidate_review.csv","dated_exports":list(dated_exports)+[dedup_path.name],"missing_or_unsupplied_inputs":missing_inputs,"input_files_present":sum(r["status"]=="present" for r in input_audit)}
     (out/"run_manifest.json").write_text(json.dumps(manifest,indent=2)+"\n",encoding="utf-8")
     summary={"output_directory":str(out),"status":"PARTIAL","episode_rows":len(episode_rows),"event_candidate_rows":len(events),"unresolved_event_candidates":len(unresolved),"mandatory_venue_rows":len(venue_rows),"regression_artists_seeded":len(regression_rows),"regression_artist_checks_completed":0,"complete_claimed":False,"missing_or_unsupplied_inputs":missing_inputs}
     (out/"package_assembly_summary.json").write_text(json.dumps(summary,indent=2)+"\n",encoding="utf-8")
