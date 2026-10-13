@@ -35,7 +35,7 @@ def main():
     ap=argparse.ArgumentParser()
     ap.add_argument("--start",required=True); ap.add_argument("--end",required=True)
     ap.add_argument("--previous-successful-run",default="unknown/not yet established")
-    ap.add_argument("--episodes",type=Path); ap.add_argument("--bbc-episodes",type=Path); ap.add_argument("--events",type=Path)
+    ap.add_argument("--episodes",type=Path); ap.add_argument("--bbc-episodes",type=Path); ap.add_argument("--bbc-track-candidates",type=Path); ap.add_argument("--events",type=Path)
     ap.add_argument("--venue-audit",type=Path); ap.add_argument("--event-page-inspection",type=Path); ap.add_argument("--event-page-audit",type=Path); ap.add_argument("--out-dir",type=Path,required=True)
     ap.add_argument("--pool",type=Path,default=ROOT/"data/artist_pool.csv")
     args=ap.parse_args()
@@ -47,6 +47,7 @@ def main():
     input_specs=[
         ("mixcloud_episode_inventory",args.episodes,True),
         ("bbc_episode_inventory",args.bbc_episodes,True),
+        ("bbc_track_candidates",args.bbc_track_candidates,True),
         ("event_candidates",args.events,True),
         ("event_discovery_audit",args.venue_audit,True),
         ("event_page_inspection",args.event_page_inspection,True),
@@ -65,7 +66,7 @@ def main():
         else:
             input_audit.append({"input_name":name,"path":str(path),"status":"present","size_bytes":Path(path).stat().st_size,"notes":"File exists; presence does not certify content completeness."})
     write_csv(out/"input_file_audit.csv",INPUT_AUDIT_FIELDS,input_audit)
-    for source, dest in [(args.event_page_inspection,"event_page_inspection.csv"),(args.event_page_audit,"event_page_crawl_audit.csv")]:
+    for source, dest in [(args.event_page_inspection,"event_page_inspection.csv"),(args.event_page_audit,"event_page_crawl_audit.csv"),(args.bbc_track_candidates,"bbc_track_candidates.csv")]:
         if source and Path(source).exists():
             shutil.copy2(source,out/dest)
     episode_rows=read_csv(args.episodes,["episode_date","source","url","tracklist_status","tracks_extracted","notes"])
