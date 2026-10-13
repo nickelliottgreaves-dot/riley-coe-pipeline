@@ -270,21 +270,35 @@ def main() -> int:
         ap.error("--until must be on or after --since")
 
     errors: list[str] = []
+    warnings: list[str] = []
     try:
         items, errors = fetch_cloudcasts(args.username, since, until)
     except Exception as exc:  # final defensive guard; retain an audit even on unexpected API failures
         items = []
         errors.append(f"Unexpected collector error: {type(exc).__name__}: {exc}")
 
+    if not items and errors:
+        api_errors = list(errors)
+        html_items, html_errors = fetch_cloudcasts_html(args.username, since, until)
+        if html_items:
+            items = html_items
+            warnings.extend(api_errors)
+            errors = html_errors
+        else:
+            errors = api_errors + html_errors
+
     episodes, tracks = [], []
     for item in items:
         try:
-            detail = fetch_show_detail(item) if not sections_from(item) else item
-            episode, item_tracks = inventory_item(detail)
+            if item.get("_html_fallback"):
+                episode, item_tracks = fetch_show_page_tracks(item)
+            else:
+                detail = fetch_show_detail(item) if not sections_from(item) else item
+                episode, item_tracks = inventory_item(detail)
         except (HTTPError, URLError, TimeoutError, OSError, json.JSONDecodeError) as exc:
             episode, item_tracks = inventory_item(item)
-            episode["notes"] += f" Individual show API request also failed: {type(exc).__name__}: {exc}"
-            errors.append(f"{episode['episode_title'] or episode['url']}: show-detail fetch failed: {exc}")
+            episode["notes"] += f" Individual show-page/detail fetch also failed: {type(exc).__name__}: {exc}"
+            errors.append(f"{episode['episode_title'] or episode['url']}: show detail fetch failed: {exc}")
         episodes.append(episode)
         tracks.extend(item_tracks)
         time.sleep(0.15)
