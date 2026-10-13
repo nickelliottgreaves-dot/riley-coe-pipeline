@@ -33,6 +33,17 @@ class BBCCollectorTests(unittest.TestCase):
         self.assertEqual(by_artist["Artist Two"]["track_title"],"Song Two")
         self.assertTrue(all(row["review_status"]=="needs_manual_review" for row in candidates))
 
+    def test_extracts_visible_bbc_tracklist_rows_with_repeated_title_nodes(self):
+        p=TextParser()
+        text="Tracklist\\nTrack\\nArtist\\n1.\\nFree Way\\nFree Way\\nLafayette And The Lasabres\\n2.\\nThe Swim Thing\\nThe Swim Thing\\nDave Lewis\\nShow more"
+        candidates=extract_tracklist_candidates(p,text,"https://www.bbc.co.uk/sounds/play/m0032d2m","Test episode","2026-10-12")
+        self.assertEqual(len(candidates),2)
+        self.assertEqual(candidates[0]["track_title"],"Free Way")
+        self.assertEqual(candidates[0]["artist_candidate"],"Lafayette And The Lasabres")
+        self.assertEqual(candidates[1]["track_title"],"The Swim Thing")
+        self.assertEqual(candidates[1]["artist_candidate"],"Dave Lewis")
+        self.assertTrue(all(row["review_status"]=="needs_manual_review" for row in candidates))
+
     def test_extracts_jsonld_recording_candidates(self):
         p=TextParser()
         p.feed('<script type="application/ld+json">{"@type":"MusicRecording","name":"Track Name","byArtist":{"@type":"MusicGroup","name":"Artist Name"}}</script>')
