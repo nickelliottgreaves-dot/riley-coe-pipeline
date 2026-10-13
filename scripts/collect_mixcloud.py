@@ -169,10 +169,11 @@ def fetch_cloudcasts_search(username: str, since: date, until: date) -> tuple[li
 def fetch_cloudcasts_html(username: str, since: date, until: date) -> tuple[list[dict], list[str]]:
     """Fallback when the legacy Mixcloud API endpoint is unavailable."""
     profile = f"https://www.mixcloud.com/{username.strip('/')}/"
-    req = Request(profile, headers={"User-Agent": USER_AGENT, "Accept": "text/html,application/xhtml+xml"})
+    req = Request(profile, headers={"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36", "Accept": "text/html,application/xhtml+xml"})
     errors = []
     try:
         with urlopen(req, timeout=25) as response:
+            final_profile_url = response.geturl()
             html = response.read(5_000_001).decode("utf-8", errors="replace")
     except (HTTPError, URLError, TimeoutError, OSError) as exc:
         return [], [f"Mixcloud public profile HTML fallback failed for {profile}: {type(exc).__name__}: {exc}"]
@@ -212,7 +213,7 @@ def fetch_cloudcasts_html(username: str, since: date, until: date) -> tuple[list
         seen.add(url)
         items.append({"name": title, "title": title, "url": url, "created_time": published.isoformat(), "_html_fallback": True})
     if not items:
-        errors.append(f"Mixcloud profile HTML loaded ({len(html)} chars, {len(parser.links)} anchor links, {len(links)} anchor/raw URL candidates) but no dated show links were extracted from {profile}; sample links: {links[:8]}.")
+        errors.append(f"Mixcloud profile HTML loaded ({len(html)} chars, {len(parser.links)} anchor links, {len(links)} anchor/raw URL candidates) but no dated show links were extracted from {profile}; final URL: {final_profile_url}; sample links: {links[:8]}.")
     return items, errors
 
 def fetch_show_page_tracks(item: dict) -> tuple[dict, list[dict]]:
