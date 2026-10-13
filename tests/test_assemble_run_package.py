@@ -39,6 +39,8 @@ class EvidencePackageTests(unittest.TestCase):
             manifest=json.loads((out/"run_manifest.json").read_text())
             self.assertEqual(manifest["claimed_status"],"PARTIAL")
             self.assertEqual(manifest["venue_calendar_checks_completed"],0)
+            self.assertEqual(manifest["regression_artists_seeded"],9)
+            self.assertEqual(manifest["regression_artist_checks_completed"],0)
             self.assertIn("missing_or_unsupplied_inputs",manifest)
             with (out/"input_file_audit.csv").open(newline="") as f:
                 inputs=list(csv.DictReader(f))
@@ -49,6 +51,10 @@ class EvidencePackageTests(unittest.TestCase):
             self.assertTrue(rows)
             self.assertTrue(all(r["status"]=="not_checked" for r in rows))
             self.assertTrue((out/"pool_matches.csv").exists())
+            with (out/"regression_artist_checks.csv").open(newline="") as f:
+                regression=list(csv.DictReader(f))
+            self.assertEqual(len(regression),9)
+            self.assertTrue(all(row["searched"]=="false" and row["result"]=="not_checked" for row in regression))
             again=subprocess.run([sys.executable,str(ROOT/"scripts/assemble_run_package.py"),
                 "--start","2026-10-13","--end","2026-10-26","--out-dir",str(out)],capture_output=True,text=True)
             self.assertNotEqual(again.returncode,0)
