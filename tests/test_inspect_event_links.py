@@ -8,13 +8,24 @@ class EventPageCrawlerTests(unittest.TestCase):
             d=Path(tmp); links=d/"links.csv"
             with links.open("w",newline="") as f:
                 w=csv.DictWriter(f,fieldnames=["venue","candidate_url"]);w.writeheader();w.writerow({"venue":"Test","candidate_url":"https://example.invalid/event"})
+            sources=d/"sources.csv"
+            with sources.open("w",newline="") as f:
+                w=csv.DictWriter(f,fieldnames=["venue","source_url"]);w.writeheader()
+                w.writerow({"venue":"Test","source_url":"https://example.invalid"})
+                w.writerow({"venue":"Empty venue","source_url":"https://example.org"})
             # Invalid domain proves errors are captured rather than silently treated as a successful sweep.
-            p=subprocess.run([sys.executable,str(ROOT/"scripts/inspect_event_links.py"),"--links",str(links),"--out-dir",str(d/"out"),"--max-pages-per-venue","1"],capture_output=True,text=True)
+            p=subprocess.run([sys.executable,str(ROOT/"scripts/inspect_event_links.py"),"--links",str(links),"--sources",str(sources),"--out-dir",str(d/"out"),"--max-pages-per-venue","1"],capture_output=True,text=True)
             self.assertNotEqual(p.returncode,0)
             audit=json.loads((d/"out/event_page_crawl_summary.json").read_text())
             self.assertEqual(audit["status"],"PARTIAL")
             with (d/"out/event_page_inspection.csv").open(newline="") as f: rows=list(csv.DictReader(f))
             self.assertTrue(rows)
             self.assertTrue(all(r["verified"]=="false" for r in rows))
+            with (d/"out/event_page_crawl_audit.csv").open(newline="") as f: venue_audit=list(csv.DictReader(f))
+            self.assertEqual({r["venue"] for r in venue_audit},{"Test","Empty venue"})
+            empty=next(r for r in venue_audit if r["venue"]=="Empty venue")
+            self.assertEqual(empty["status"],"NO_SEED_LINKS")
+            self.assertEqual(empty["seed_candidate_links"],"0")
+            self.assertIn("discovery gap",empty["notes"])
 
 if __name__=="__main__": unittest.main()
