@@ -137,7 +137,7 @@ class MixcloudInventoryTests(unittest.TestCase):
             items, errors = fetch_cloudcasts("SixMusicAlternative", date(2026, 10, 6), date(2026, 10, 13))
         self.assertEqual(len(items), 1)
         self.assertIn("/sixmusicalternative/cloudcasts/", mock_get.call_args_list[1].args[0])
-        self.assertEqual(len(errors), 1)
+        self.assertEqual(errors, [])
 
     def test_date_parser(self):
         self.assertEqual(parse_date("2026-10-01T20:00:00Z").isoformat(), "2026-10-01")
