@@ -60,6 +60,29 @@ jobs:
           if-no-files-found: warn
           retention-days: 30
 
+  bbc-sounds-inventory:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Inventory official BBC Riley & Coe episode pages
+        run: |
+          mkdir -p artifacts/bbc-sounds
+          START=$(python -c "from datetime import date,timedelta; print((date.today()-timedelta(days=7)).isoformat())")
+          END=$(python -c "from datetime import date; print(date.today().isoformat())")
+          python scripts/collect_bbc_sounds.py --start "$START" --end "$END" --out-dir artifacts/bbc-sounds
+      - name: Preserve BBC episode inventory, snapshots and audit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: riley-coe-bbc-sounds-inventory-${{ github.run_id }}
+          path: artifacts/bbc-sounds/
+          if-no-files-found: warn
+          retention-days: 30
+
   venue-page-inventory:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
@@ -116,7 +139,7 @@ jobs:
 
   assemble-evidence-scaffold:
     if: always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
-    needs: [mixcloud-inventory, venue-page-inventory, event-candidate-discovery]
+    needs: [mixcloud-inventory, bbc-sounds-inventory, venue-page-inventory, event-candidate-discovery]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -136,7 +159,8 @@ jobs:
           END=$(python -c "from datetime import date,timedelta; print((date.today()+timedelta(days=13)).isoformat())")
           python scripts/assemble_run_package.py \
             --start "$START" --end "$END" \
-            --episodes "artifacts/riley-coe-mixcloud-inventory-${{ github.run_id }}/mixcloud_episode_inventory.csv" \
+            --episodes "artifacts/riley-coe-mixcloud-inventory-${{ github.run_id }}/mixcloud_episode_inventory.csv" \\
+            --bbc-episodes "artifacts/riley-coe-bbc-sounds-inventory-${{ github.run_id }}/bbc_episode_inventory.csv" \\
             --events "artifacts/riley-coe-event-candidates-${{ github.run_id }}/event_candidates.csv" \
             --venue-audit "artifacts/riley-coe-event-candidates-${{ github.run_id }}/event_discovery_audit.csv" \
             --out-dir artifacts/evidence-package
