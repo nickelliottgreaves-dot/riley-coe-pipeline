@@ -162,9 +162,12 @@ def main():
     with (ROOT/"config/venue_sources.csv").open(encoding="utf-8-sig",newline="") as f: sources=list(csv.DictReader(f))
     source_by_venue={''.join(c.casefold() for c in r.get("venue","") if c.isalnum()):r for r in sources}
     discovery_coverage_rows=[]
-    for v in required:
-        if (v.get("mandatory") or "").casefold()!="true": continue
-        name=v["venue"].strip(); key=''.join(c.casefold() for c in name if c.isalnum())
+    # Report every configured venue, including optional safety-net venues.
+    # Only required_venues.csv determines which rows block COMPLETE.
+    for v in sources:
+        name=(v.get("venue") or "").strip()
+        if not name: continue
+        key=''.join(c.casefold() for c in name if c.isalnum())
         src=source_by_venue.get(key,{})
         homepage=audit_by_venue.get(key,{})
         detail=detail_by_venue.get(key,{})
