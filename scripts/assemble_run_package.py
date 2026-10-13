@@ -56,6 +56,7 @@ def main():
         ("required_venues",ROOT/"config/required_venues.csv",True),
         ("venue_sources",ROOT/"config/venue_sources.csv",True),
         ("artist_aliases",ROOT/"config/artist_aliases.csv",True),
+        ("regression_artists",ROOT/"config/regression_artists.csv",True),
     ]
     input_audit=[]
     for name,path,required_input in input_specs:
@@ -109,7 +110,12 @@ def main():
     write_csv(out/"venue_coverage.csv",VENUE_FIELDS,venue_rows)
     write_csv(out/"events.csv",EVENT_FIELDS,events)
     write_csv(out/"unresolved_event_candidates.csv",UNRESOLVED_FIELDS,unresolved)
-    write_csv(out/"regression_artist_checks.csv",REGRESSION_FIELDS,[])
+    with (ROOT/"config/regression_artists.csv").open(encoding="utf-8-sig",newline="") as f:
+        regression_seed=list(csv.DictReader(f))
+    regression_rows=[{"artist":r.get("artist",""),"searched":"false","result":"not_checked","evidence_url":"",
+        "notes":(r.get("reason","")+"; required venue-first search not yet performed in this scaffold.").strip("; ")}
+        for r in regression_seed]
+    write_csv(out/"regression_artist_checks.csv",REGRESSION_FIELDS,regression_rows)
     write_csv(out/"pool_matches.csv",MATCH_FIELDS,[])
     # Run matcher to ensure every candidate artist has a corresponding pool comparison.
     subprocess.run([sys.executable,str(ROOT/"scripts/match_event_artists.py"),"--events",str(out/"events.csv"),"--pool",str(args.pool),"--aliases",str(ROOT/"config/artist_aliases.csv"),"--out",str(out/"pool_matches.csv")],check=True)
@@ -118,10 +124,10 @@ def main():
               "previous_successful_run":args.previous_successful_run,"claimed_status":"PARTIAL",
               "researcher_notes":"Automatically assembled evidence scaffold. Not a completed research run. BBC Sounds/visible tracklists, event detail pages, supports, prices/ticket status, regression checks, full venue coverage and safety-net searches still require verification.",
               "package_kind":"candidate_scaffold","source_episode_rows":len(episode_rows),"candidate_event_rows":len(events),"unresolved_event_candidates":len(unresolved),
-              "mandatory_venue_rows":len(venue_rows),"venue_calendar_checks_completed":0,
+              "mandatory_venue_rows":len(venue_rows),"venue_calendar_checks_completed":0,"regression_artists_seeded":len(regression_rows),"regression_artist_checks_completed":0,
               "input_file_audit":"input_file_audit.csv","missing_or_unsupplied_inputs":missing_inputs,"input_files_present":sum(r["status"]=="present" for r in input_audit)}
     (out/"run_manifest.json").write_text(json.dumps(manifest,indent=2)+"\n",encoding="utf-8")
-    summary={"output_directory":str(out),"status":"PARTIAL","episode_rows":len(episode_rows),"event_candidate_rows":len(events),"unresolved_event_candidates":len(unresolved),"mandatory_venue_rows":len(venue_rows),"complete_claimed":False,"missing_or_unsupplied_inputs":missing_inputs}
+    summary={"output_directory":str(out),"status":"PARTIAL","episode_rows":len(episode_rows),"event_candidate_rows":len(events),"unresolved_event_candidates":len(unresolved),"mandatory_venue_rows":len(venue_rows),"regression_artists_seeded":len(regression_rows),"regression_artist_checks_completed":0,"complete_claimed":False,"missing_or_unsupplied_inputs":missing_inputs}
     (out/"package_assembly_summary.json").write_text(json.dumps(summary,indent=2)+"\n",encoding="utf-8")
     print(json.dumps(summary,indent=2))
     return 0
