@@ -163,6 +163,26 @@ def main() -> int:
         if row.get("matched_pool_artist", "").strip() and norm(row["matched_pool_artist"]) not in {norm(n) for n in pool_names}:
             warnings.append(f"Match row {i}: matched_pool_artist is not an exact normalized pool name; alias resolution needs review")
 
+    # Every distinct billed event artist must appear in the match table, including non-matches.
+    expected_event_artists = {
+        norm(r.get("artist", "")) for r in events if r.get("artist", "").strip()
+    }
+    compared_event_artists = {
+        norm(r.get("event_artist", "")) for r in matches if r.get("event_artist", "").strip()
+    }
+    missing_comparisons = sorted(expected_event_artists - compared_event_artists)
+    extra_comparisons = sorted(compared_event_artists - expected_event_artists)
+    if missing_comparisons:
+        errors.append(
+            f"{len(missing_comparisons)} distinct event artist(s) missing from pool_matches.csv: "
+            + ", ".join(missing_comparisons[:15])
+        )
+    if extra_comparisons:
+        warnings.append(
+            f"{len(extra_comparisons)} pool-match artist(s) are not present in events.csv: "
+            + ", ".join(extra_comparisons[:15])
+        )
+
     regressions = tables.get("regression_artist_checks.csv", [])
     for i, row in enumerate(regressions, 2):
         if not row.get("artist", "").strip():
