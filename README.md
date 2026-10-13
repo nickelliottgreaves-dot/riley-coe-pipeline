@@ -38,3 +38,14 @@ The second command is expected to fail until a genuine evidence package exists.
 ## Safety against false completion
 
 The validator checks submitted evidence; it cannot prove that the internet was searched exhaustively. Research coverage must therefore include source URLs and explicit per-venue/per-episode outcomes. The collector phase will need to record collection failures and use independent source coverage, not merely set booleans to true.
+
+## First collector milestone: Mixcloud inventory
+
+The scheduled/manual workflow now runs `scripts/collect_mixcloud.py` against the public Mixcloud API account `SixMusicAlternative` for the preceding seven days and stores a downloadable Actions artifact containing:
+- `mixcloud_episode_inventory.csv`
+- `mixcloud_api_track_candidates.csv`
+- `mixcloud_collection_audit.json`
+
+This is deliberately a discovery inventory, not a claim that tracklists are complete. API sections are labelled as candidates requiring visible-page verification; absent sections are marked unavailable. The collector does not yet cover BBC Sounds and does not perform venue research. The full-run validator remains a separate fail-closed gate.
+
+After a scheduled run, open the repository's **Actions** tab, open the latest **Riley & Coe evidence validation** run, and download the artifact named `riley-coe-mixcloud-inventory-...`. GitHub scheduled workflows run on the default branch and may be delayed, so the Actions history is the source of truth for whether a run actually happened.
