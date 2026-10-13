@@ -107,15 +107,28 @@ def main():
             event_rows.append({**base,"artist":"","artist_role":"unknown",
                 "notes":"Unresolved inspected-page JSON-LD candidate; performer not exposed. "+(item.get("notes") or "")})
     # Preserve only event rows inside the requested window; every candidate remains unverified.
-    events=[]; unresolved=[]
+    events=[]; unresolved=[]; seen_event_keys=set()
     for r in event_rows:
-        dt=(r.get("event_date") or "").strip()
-        if dt and start.isoformat()<=dt<=end.isoformat():
-            if not (r.get("artist") or "").strip():
-                unresolved.append({k:r.get(k,"") for k in UNRESOLVED_FIELDS})
-                continue
-            events.append({**{k:r.get(k,"") for k in EVENT_FIELDS},"verified":"false",
-                           "notes":((r.get("notes") or "")+" Candidate imported; independently verify the event detail page and support bill.").strip()})
+        raw_date=(r.get("event_date") or "").strip()
+        dt=raw_date[:10] if len(raw_date)>=10 else ""
+        try:
+            event_day=date.fromisoformat(dt)
+        except ValueError:
+            continue
+        if not (start <= event_day <= end):
+            continue
+        if not (r.get("artist") or "").strip():
+            unresolved.append({k:r.get(k,"") for k in UNRESOLVED_FIELDS})
+            continue
+        key=(dt,"".join(ch.casefold() for ch in (r.get("venue") or "") if ch.isalnum()),
+             " ".join((r.get("event_title") or "").casefold().split()),
+             " ".join((r.get("artist") or "").casefold().split()),
+             (r.get("source_url") or "").strip())
+        if key in seen_event_keys:
+            continue
+        seen_event_keys.add(key)
+        events.append({**{k:r.get(k,"") for k in EVENT_FIELDS},"event_date":dt,"verified":"false",
+                       "notes":((r.get("notes") or "")+" Candidate imported; independently verify the event detail page and support bill.").strip()})
     venue_audit=read_csv(args.venue_audit,["venue","source_url","status","notes"]) if args.venue_audit else []
     audit_by_venue={''.join(c.casefold() for c in r.get("venue","") if c.isalnum()):r for r in venue_audit}
     with (ROOT/"config/required_venues.csv").open(encoding="utf-8-sig",newline="") as f: required=list(csv.DictReader(f))
