@@ -10,7 +10,7 @@ from __future__ import annotations
 import argparse, csv, json, re, sys, time
 from datetime import date, datetime, timezone
 from html.parser import HTMLParser
-from urllib.parse import urljoin, urlparse
+from urllib.parse import urljoin, urlparse, parse_qs
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
@@ -176,6 +176,17 @@ def fetch_cloudcasts_html(username: str, since: date, until: date) -> tuple[list
     """Discover dated show links from profile, uploads, and internal search pages."""
     profile = f"https://www.mixcloud.com/{username.strip('/')}/"
     urls = [profile, urljoin(profile, "uploads/"), "https://www.mixcloud.com/search/?q=Riley%20%26%20Coe"]
+    # Mixcloud's own API and profile routes can return 404/generic shells.
+    # Search-engine result pages are an independent way to discover dated public show URLs.
+    month_cursor = since.replace(day=1)
+    months = []
+    while month_cursor <= until:
+        months.append(month_cursor)
+        month_cursor = date(month_cursor.year + (month_cursor.month == 12), 1 if month_cursor.month == 12 else month_cursor.month + 1, 1)
+    for month in months:
+        query = f'site:mixcloud.com/{username.strip("/")} "Riley & Coe" "{month.strftime("%B %Y")}"'
+        urls.append("https://html.duckduckgo.com/html/?" + urlencode({"q": query}))
+        urls.append("https://www.google.com/search?" + urlencode({"q": query}))
     errors: list[str] = []
     items: list[dict] = []
     seen: set[str] = set()
@@ -205,6 +216,12 @@ def fetch_cloudcasts_html(username: str, since: date, until: date) -> tuple[list
         for href, anchor_title in links:
             absolute = urljoin(final_url or profile, href)
             parsed = urlparse(absolute)
+            if parsed.netloc.lower().endswith(("duckduckgo.com", "google.com")):
+                params = parse_qs(parsed.query)
+                redirect_target = next((values[0] for key in ("uddg", "q", "url") for values in [params.get(key, [])] if values and values[0].startswith("http")), "")
+                if redirect_target:
+                    absolute = redirect_target
+                    parsed = urlparse(absolute)
             parts = [part for part in parsed.path.split("/") if part]
             if parsed.netloc.lower() not in {"www.mixcloud.com", "mixcloud.com"} or len(parts) < 2:
                 continue
