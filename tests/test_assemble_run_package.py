@@ -38,6 +38,7 @@ class EvidencePackageTests(unittest.TestCase):
             self.assertEqual({row["artist_candidate"] for row in review},{"Example Artist","Mix Artist"})
             self.assertTrue(all(row["review_status"]=="needs_manual_review" for row in review))
             self.assertTrue((out/"mixcloud_api_track_candidates.csv").exists())
+            self.assertTrue(any(name.startswith("Riley_Coe_tracklist_candidate_review_") for name in json.loads((out/"run_manifest.json").read_text())["dated_exports"]))
             with (out/"input_file_audit.csv").open(newline="",encoding="utf-8") as f:
                 audit=list(csv.DictReader(f))
             self.assertTrue(any(r["input_name"]=="bbc_track_candidates" and r["status"]=="present" for r in audit))
