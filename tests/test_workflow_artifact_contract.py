@@ -29,5 +29,7 @@ class WorkflowArtifactContractTests(unittest.TestCase):
         self.assertIn("bbc_track_candidates", ASSEMBLER)
         self.assertIn("config/regression_artists.csv", ASSEMBLER)
         self.assertIn("Missing required regression artist checks", (ROOT / "scripts/validate_run.py").read_text(encoding="utf-8"))
+        self.assertIn("Riley_Coe_deduplicated_event_artists_", ASSEMBLER)
+        self.assertIn("Riley_Coe_venue_coverage_", ASSEMBLER)
 
 if __name__ == "__main__": unittest.main()
