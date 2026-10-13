@@ -106,7 +106,7 @@ class MixcloudHTMLParser(HTMLParser):
 
 def parse_mixcloud_title_date(title: str) -> date | None:
     # Public show titles usually include weekday + ordinal day + month + year.
-    match = __import__("re").search(r"\\b(\\d{1,2})(?:st|nd|rd|th)?\\s+([A-Za-z]+)\\s+(20\\d{2})\\b", title or "", __import__("re").I)
+    match = __import__("re").search(r"\b(\d{1,2})(?:st|nd|rd|th)?\s+([A-Za-z]+)\s+(20\d{2})\b", title or "", __import__("re").I)
     if not match:
         return None
     from datetime import datetime
@@ -168,7 +168,7 @@ def fetch_show_page_tracks(item: dict) -> tuple[dict, list[dict]]:
         i = start + 1
         position = 0
         while i < len(lines):
-            if re.fullmatch(r"\\d{1,3}\\.", lines[i]):
+            if re.fullmatch(r"\d{1,3}\.", lines[i]):
                 if i + 2 < len(lines):
                     title = lines[i + 1]
                     artist = lines[i + 2]
