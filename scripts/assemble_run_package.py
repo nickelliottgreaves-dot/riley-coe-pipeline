@@ -103,11 +103,12 @@ def main():
             continue
         raw=(item.get("event_date") or "").strip()
         dt=raw[:10] if len(raw)>=10 else ""
-        try:
-            if not dt or not (start <= date.fromisoformat(dt) <= end):
-                continue
-        except ValueError:
-            continue
+        if dt:
+            try:
+                if not (start <= date.fromisoformat(dt) <= end):
+                    continue
+            except ValueError:
+                dt=""  # Preserve malformed dates in unresolved review output.
         base={"event_date":dt,"venue":item.get("venue",""),"event_title":item.get("event_title",""),
               "source_url":item.get("page_url",""),"verified":"false",
               "price":(item.get("price","") + ((" "+item.get("currency","")) if item.get("currency") else "")).strip(),
@@ -128,11 +129,16 @@ def main():
         try:
             event_day=date.fromisoformat(dt)
         except ValueError:
+            unresolved_row={k:r.get(k,"") for k in UNRESOLVED_FIELDS}
+            unresolved_row["notes"]=((r.get("notes") or "")+" Date missing or invalid; retained for manual triage, not counted as an in-window event.").strip()
+            unresolved.append(unresolved_row)
             continue
         if not (start <= event_day <= end):
             continue
         if not (r.get("artist") or "").strip():
-            unresolved.append({k:r.get(k,"") for k in UNRESOLVED_FIELDS})
+            unresolved_row={k:r.get(k,"") for k in UNRESOLVED_FIELDS}
+            unresolved_row["notes"]=((r.get("notes") or "")+" Performer missing; retained for manual triage.").strip()
+            unresolved.append(unresolved_row)
             continue
         key=(dt,"".join(ch.casefold() for ch in (r.get("venue") or "") if ch.isalnum()),
              " ".join((r.get("event_title") or "").casefold().split()),
