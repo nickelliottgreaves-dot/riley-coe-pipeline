@@ -27,7 +27,7 @@ python -m unittest discover -s tests -v
 python scripts/validate_run.py --run-dir data/runs/current --pool data/artist_pool.csv
 ```
 
-The second command is expected to fail until a genuine evidence package exists.
+The second command is expected to fail until a genuine evidence package exists. In scheduled/manual Actions runs, the gate now validates that same run's downloaded `artifacts/evidence-package` after assembly, rather than relying on a stale checked-in `data/runs/current` folder.
 
 ## Safety against false completion
 
