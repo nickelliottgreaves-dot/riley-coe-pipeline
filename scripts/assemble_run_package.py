@@ -35,7 +35,7 @@ def main():
     ap=argparse.ArgumentParser()
     ap.add_argument("--start",required=True); ap.add_argument("--end",required=True)
     ap.add_argument("--previous-successful-run",default="unknown/not yet established")
-    ap.add_argument("--episodes",type=Path); ap.add_argument("--bbc-episodes",type=Path); ap.add_argument("--bbc-track-candidates",type=Path); ap.add_argument("--events",type=Path)
+    ap.add_argument("--episodes",type=Path); ap.add_argument("--bbc-episodes",type=Path); ap.add_argument("--bbc-track-candidates",type=Path); ap.add_argument("--mixcloud-track-candidates",type=Path); ap.add_argument("--events",type=Path)
     ap.add_argument("--venue-audit",type=Path); ap.add_argument("--event-page-inspection",type=Path); ap.add_argument("--event-page-audit",type=Path); ap.add_argument("--out-dir",type=Path,required=True)
     ap.add_argument("--pool",type=Path,default=ROOT/"data/artist_pool.csv")
     args=ap.parse_args()
@@ -48,6 +48,7 @@ def main():
         ("mixcloud_episode_inventory",args.episodes,True),
         ("bbc_episode_inventory",args.bbc_episodes,True),
         ("bbc_track_candidates",args.bbc_track_candidates,True),
+        ("mixcloud_track_candidates",args.mixcloud_track_candidates,True),
         ("event_candidates",args.events,True),
         ("event_discovery_audit",args.venue_audit,True),
         ("event_page_inspection",args.event_page_inspection,True),
@@ -67,7 +68,7 @@ def main():
         else:
             input_audit.append({"input_name":name,"path":str(path),"status":"present","size_bytes":Path(path).stat().st_size,"notes":"File exists; presence does not certify content completeness."})
     write_csv(out/"input_file_audit.csv",INPUT_AUDIT_FIELDS,input_audit)
-    for source, dest in [(args.event_page_inspection,"event_page_inspection.csv"),(args.event_page_audit,"event_page_crawl_audit.csv"),(args.bbc_track_candidates,"bbc_track_candidates.csv")]:
+    for source, dest in [(args.event_page_inspection,"event_page_inspection.csv"),(args.event_page_audit,"event_page_crawl_audit.csv"),(args.bbc_track_candidates,"bbc_track_candidates.csv"),(args.mixcloud_track_candidates,"mixcloud_api_track_candidates.csv")]:
         if source and Path(source).exists():
             shutil.copy2(source,out/dest)
     episode_rows=read_csv(args.episodes,["episode_date","source","url","tracklist_status","tracks_extracted","notes"])
@@ -81,6 +82,19 @@ def main():
         episode_rows.append({"episode_date":r.get("episode_date",""),"source":"BBC Sounds official episode page",
             "url":r.get("episode_url",""),"tracklist_status":normalized_state,
             "tracks_extracted":"0","notes":((r.get("notes") or "")+f" Original BBC collector state: {source_state}. BBC inventory/candidates only; visible tracklist completeness and all artists remain to be verified.").strip()})
+    # Consolidate machine-extracted track candidates from both services into one review queue.
+    track_review_fields=["episode_date","episode_title","episode_url","artist_candidate","track_title","track_position","extraction_method","review_status","evidence_text","notes"]
+    track_review_rows=[]
+    mixcloud_tracks=read_csv(args.mixcloud_track_candidates,["episode_date","episode_title","episode_url","artist","track_title","track_position","source","verification_status"]) if args.mixcloud_track_candidates else []
+    for track in mixcloud_tracks:
+        track_review_rows.append({"episode_date":track.get("episode_date",""),"episode_title":track.get("episode_title",""),
+            "episode_url":track.get("episode_url",""),"artist_candidate":track.get("artist",""),"track_title":track.get("track_title",""),
+            "track_position":track.get("track_position",""),"extraction_method":"mixcloud_api_candidate",
+            "review_status":"needs_manual_review","evidence_text":"","notes":"Mixcloud API candidate only; compare against complete visible show tracklist."})
+    bbc_tracks=read_csv(args.bbc_track_candidates,["episode_date","episode_title","episode_url","artist_candidate","track_title","extraction_method","review_status","evidence_text","notes"]) if args.bbc_track_candidates else []
+    for track in bbc_tracks:
+        track_review_rows.append({k:track.get(k,"") for k in track_review_fields})
+    write_csv(out/"tracklist_candidate_review.csv",track_review_fields,track_review_rows)
     event_rows=read_csv(args.events,["event_date","venue","event_title","artist","artist_role","source_url","verified","notes"]) if args.events else []
     # Add Event JSON-LD candidates from inspected detail pages; they remain unverified.
     inspected_rows=read_csv(args.event_page_inspection,["venue","page_url","event_title","event_date","performer_names","price","currency","availability","event_jsonld_found","notes"]) if args.event_page_inspection else []
@@ -189,7 +203,7 @@ def main():
               "researcher_notes":"Automatically assembled evidence scaffold. Not a completed research run. BBC Sounds/visible tracklists, event detail pages, supports, prices/ticket status, regression checks, full venue coverage and safety-net searches still require verification.",
               "package_kind":"candidate_scaffold","source_episode_rows":len(episode_rows),"candidate_event_rows":len(events),"unresolved_event_candidates":len(unresolved),
               "mandatory_venue_rows":len(venue_rows),"venue_calendar_checks_completed":0,"regression_artists_seeded":len(regression_rows),"regression_artist_checks_completed":0,
-              "input_file_audit":"input_file_audit.csv","dated_exports":list(dated_exports)+[dedup_path.name],"missing_or_unsupplied_inputs":missing_inputs,"input_files_present":sum(r["status"]=="present" for r in input_audit)}
+              "input_file_audit":"input_file_audit.csv","tracklist_candidate_review":"tracklist_candidate_review.csv","dated_exports":list(dated_exports)+[dedup_path.name],"missing_or_unsupplied_inputs":missing_inputs,"input_files_present":sum(r["status"]=="present" for r in input_audit)}
     (out/"run_manifest.json").write_text(json.dumps(manifest,indent=2)+"\n",encoding="utf-8")
     summary={"output_directory":str(out),"status":"PARTIAL","episode_rows":len(episode_rows),"event_candidate_rows":len(events),"unresolved_event_candidates":len(unresolved),"mandatory_venue_rows":len(venue_rows),"regression_artists_seeded":len(regression_rows),"regression_artist_checks_completed":0,"complete_claimed":False,"missing_or_unsupplied_inputs":missing_inputs}
     (out/"package_assembly_summary.json").write_text(json.dumps(summary,indent=2)+"\n",encoding="utf-8")
