@@ -56,18 +56,20 @@ def fetch(url):
         return r.status,ctype,raw.decode("utf-8",errors="replace")
 
 class ProgrammeTrackParser(HTMLParser):
-    """Extract BBC programme-page h3 artist headings and their following track-title paragraph."""
+    """Extract artist headings and first following title paragraph only inside Music Played."""
     def __init__(self):
         super().__init__()
         self.heading_buf = None
         self.paragraph_buf = None
         self.artist = ""
         self.pending_artist = False
+        self.in_tracklist = False
         self.pairs = []
     def handle_starttag(self, tag, attrs):
-        if tag.lower() == "h3":
+        tag=tag.lower()
+        if tag in {"h2","h3"}:
             self.heading_buf = []
-        elif tag.lower() == "p" and self.artist and self.pending_artist and self.paragraph_buf is None:
+        elif tag == "p" and self.in_tracklist and self.artist and self.pending_artist and self.paragraph_buf is None:
             self.paragraph_buf = []
     def handle_data(self, data):
         if self.heading_buf is not None:
@@ -75,23 +77,49 @@ class ProgrammeTrackParser(HTMLParser):
         if self.paragraph_buf is not None:
             self.paragraph_buf.append(data)
     def handle_endtag(self, tag):
-        if tag.lower() == "h3" and self.heading_buf is not None:
+        tag=tag.lower()
+        if tag in {"h2","h3"} and self.heading_buf is not None:
             heading = " ".join(" ".join(self.heading_buf).split()).strip()
             self.heading_buf = None
-            if heading and heading.casefold() not in {"music played", "similar programmes", "related programmes"}:
-                self.artist = heading
-                self.pending_artist = True
-        elif tag.lower() == "p" and self.paragraph_buf is not None:
-            title = " ".join(" ".join(self.paragraph_buf).split()).strip()
-            self.paragraph_buf = None
-            if self.artist and self.pending_artist and title:
-                self.pairs.append((self.artist, title))
-                self.pending_artist = False
+            if heading.casefold()=="music played":
+                self.in_tracklist=True
+                self.artist=""
+                self.pending_artist=False
+            elif heading.casefold() in {"broadcast","similar programmes","related programmes"}:
+                self.in_tracklist=False
+                self.artist=""
+                self.pending_artist=False
+            elif tag=="h3" and self.in_tracklist and heading:
+                self.artist=heading
+                self.pending_artist=True
+        elif tag=="p" and self.paragraph_buf is not None:
+            title=" ".join(" ".join(self.paragraph_buf).split()).strip()
+            self.paragraph_buf=None
+            if self.in_tracklist and self.artist and self.pending_artist and title:
+                self.pairs.append((self.artist,title))
+                self.pending_artist=False
 
 def parse_date(text):
-    m=re.search(r"\b(\d{1,2})\s+([A-Za-z]{3,9})\s+(20\d{2})\b",text or "")
-    if not m: return ""
+    """Prefer the episode's own numeric title date over dates inside track titles."""
     from datetime import datetime
+    value=text or ""
+    head=value[:1800]
+    numeric=re.search(r"\b(\d{1,2})/(\d{1,2})/(20\d{2})\b",head)
+    if numeric:
+        try: return datetime.strptime("/".join(numeric.groups()),"%d/%m/%Y").date().isoformat()
+        except ValueError: pass
+    lines=[line.strip() for line in value.splitlines() if line.strip()]
+    # BBC programme pages put the broadcast date after the explicit "Last on" label.
+    for i,line in enumerate(lines):
+        if line.casefold()=="last on":
+            for candidate in lines[i+1:i+4]:
+                m=re.search(r"\b(\d{1,2})\s+([A-Za-z]{3,9})\s+(20\d{2})\b",candidate)
+                if m:
+                    for fmt in ("%d %B %Y","%d %b %Y"):
+                        try: return datetime.strptime(" ".join(m.groups()),fmt).date().isoformat()
+                        except ValueError: pass
+    m=re.search(r"\b(\d{1,2})\s+([A-Za-z]{3,9})\s+(20\d{2})\b",head)
+    if not m: return ""
     for fmt in ("%d %B %Y","%d %b %Y"):
         try: return datetime.strptime(" ".join(m.groups()),fmt).date().isoformat()
         except ValueError: pass
@@ -255,16 +283,16 @@ def main():
             snap=snaps/(episode_id(url)+".txt")
             snap.write_text("SOURCE: "+url+"\nTRACKLIST_CONTENT_SOURCE: "+content_url+"\nLISTING: "+ep["listing_source_url"]+"\n\n"+text+"\n",encoding="utf-8")
             state="visible_tracklist_heading_detected_needs_review" if has_heading else "tracklist_not_detected_needs_review"
-            candidates_found=extract_tracklist_candidates(p,text,url,ep["title"],dt)
+            candidates_found=[]
+            if content_url==url:
+                # Sounds SPA fallback only: use conservative text extraction if the canonical programme page failed.
+                candidates_found=extract_tracklist_candidates(p,text,url,ep["title"],dt)
             heading_parser=ProgrammeTrackParser(); heading_parser.feed(html)
             for artist, title in heading_parser.pairs:
-                # The artist/title pair is visible on the official BBC programme page;
-                # still keep it in the review queue until the complete episode is audited.
-                before=len(candidates_found)
                 candidates_found.append({"episode_date":dt,"episode_title":ep["title"],"episode_url":url,
                     "track_title":title,"artist_candidate":artist,"extraction_method":"bbc_programme_heading_artist_followed_by_track_title",
                     "review_status":"needs_manual_review","evidence_text":f"{artist} | {title}",
-                    "notes":"Extracted from server-rendered BBC programme page. Review against the full visible Music Played list; not automatically certified complete."})
+                    "notes":"Extracted from server-rendered BBC programme Music Played section. Review against the full visible list; not automatically certified complete."})
             # Deduplicate candidates by artist/title pair across extraction methods.
             unique=[]; seen_pairs=set()
             for candidate in candidates_found:
