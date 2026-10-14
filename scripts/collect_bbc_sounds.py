@@ -24,15 +24,17 @@ TRACK_FIELDS=["episode_date","episode_title","episode_url","track_title","artist
 
 class TextParser(HTMLParser):
     def __init__(self):
-        super().__init__(); self.text=[]; self.links=[]; self._a=None; self._skip=0; self._jsonld=[]; self._script=False; self._script_type=""
+        super().__init__(); self.text=[]; self.links=[]; self._a=None; self._skip=0; self._jsonld=[]; self._script=False; self._script_type=""; self.title=[]; self._title=False
     def handle_starttag(self,tag,attrs):
         a=dict(attrs)
+        if tag=="title": self._title=True
         if tag in {"script","style","noscript"}:
             self._skip+=1
             if tag=="script":
                 self._script=True; self._script_type=a.get("type","").lower(); self._buf=[]
         if tag=="a" and a.get("href"): self._a={"href":a["href"],"text":[]}
     def handle_endtag(self,tag):
+        if tag=="title": self._title=False
         if tag=="a" and self._a:
             self.links.append((self._a["href"]," ".join(" ".join(self._a["text"]).split()))); self._a=None
         if tag=="script" and self._script:
@@ -45,6 +47,7 @@ class TextParser(HTMLParser):
         clean=" ".join(data.split())
         if clean:
             self.text.append(clean)
+            if self._title: self.title.append(clean)
             if self._a is not None: self._a["text"].append(clean)
 
 def fetch(url):
