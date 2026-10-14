@@ -139,6 +139,11 @@ def fetch_cloudcasts(username: str, since: date, until: date) -> tuple[list[dict
             )
         else:
             errors.extend(fallback_errors)
+            if not fallback_found and not fallback_errors:
+                errors.append(
+                    f"Mixcloud public search returned no dated shows matching account {username!r} "
+                    f"for {since.isoformat()} through {until.isoformat()}."
+                )
     return found, errors, warnings
 
 def fetch_search_cloudcasts(username: str, since: date, until: date) -> tuple[list[dict], list[str]]:
@@ -148,7 +153,7 @@ def fetch_search_cloudcasts(username: str, since: date, until: date) -> tuple[li
     retain an explicit warning and never interpret it as a complete archive.
     """
     query = urlencode({
-        "q": "Riley & Coe",
+        "q": "Riley",
         "type": "cloudcast",
         "limit": 100,
         "offset": 0,
