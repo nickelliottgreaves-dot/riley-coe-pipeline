@@ -117,9 +117,13 @@ class MixcloudInventoryTests(unittest.TestCase):
             [("Wrecked (6 Music Session, 13 April 2026)", "HOUSE Of ALL"), ("Perfect Skin", "Lloyd Cole & The Commotions")])
 
     def test_public_comment_api_extracts_numbered_tracklist(self):
-        payload = {"cloudcastLookup": {"owner": {"username": "SixMusicAlternative"}, "comments": {"edges": [
-            {"node": {"comment": "1.\nThreadbare\nLande Hekt\n2.\nNew York No Wave\nIll Ease", "user": {"username": "SixMusicAlternative"}}}
-        ]}}}
+        payload = {"cloudcastLookup": {
+            "owner": {"username": "SixMusicAlternative"},
+            "comments": {"edges": [{"node": {
+                "comment": "1.\\nThreadbare\\nLande Hekt\\n2.\\nNew York No Wave\\nIll Ease",
+                "user": {"username": "SixMusicAlternative"}
+            }}], "totalCount": 1}
+        }}
         item = {"name": "Riley & Coe Wednesday 30th September 2026",
             "url": "https://www.mixcloud.com/SixMusicAlternative/riley-coe-wednesday-30th-september-2026/",
             "created_time": "2026-09-30"}
@@ -127,6 +131,7 @@ class MixcloudInventoryTests(unittest.TestCase):
             tracks = fetch_show_comment_tracks(item)
         self.assertEqual([(x["track_title"], x["artist"]) for x in tracks],
             [("Threadbare", "Lande Hekt"), ("New York No Wave", "Ill Ease")])
+
 
     def test_show_page_parser_reads_numbered_creator_comment_tracklist(self):
         html = b'<div>Comments</div><div>The 6 Music Archive</div><div>Creator</div><div>Button: 00:00</div><div>1.</div><div>Threadbare</div><div>Lande Hekt</div><div>2.</div><div>New York No Wave</div><div>Ill Ease</div><div>Reply</div>'
