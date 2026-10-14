@@ -71,6 +71,7 @@ def main() -> int:
                     for endpoint in (
                         "https://radiofiles.io/tracklist?pid=m0032d2m",
                         "https://radiofiles.io/episodes?show=m001mf2c&dest=",
+                        "https://rms.api.bbc.co.uk/v2/my/programmes/playable?container=m001mf2c&sort=sequential&type=episode&experience=domestic&limit=30",
                         "https://rms.api.bbc.co.uk/v2/my/experience/playable/urn:bbc:radio:episode:m0032d2m?show_tracklist=true&experience=domestic",
                         "https://rms.api.bbc.co.uk/v2/my/experience/playable/urn:bbc:radio:episode:m0032d2m?show_tracklist=true&experience=international",
                     ):
