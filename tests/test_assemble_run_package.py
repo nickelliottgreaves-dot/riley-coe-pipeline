@@ -146,7 +146,7 @@ class EvidencePackageTests(unittest.TestCase):
             self.assertEqual(len(events),1)
             self.assertEqual(events[0]["artist"],"Bitchin Bajas")
             self.assertEqual(events[0]["artist_role"],"headliner")
-            self.assertEqual(events[0]["price"],"12.00")
+            self.assertEqual(events[0]["price"],"12.00 GBP")
             self.assertEqual(events[0]["ticket_status"],"InStock")
             self.assertEqual(events[0]["verified"],"false")
             self.assertIn("https://www.songkick.com/venues/4426128-lubber-fiend/calendar",events[0]["notes"])
