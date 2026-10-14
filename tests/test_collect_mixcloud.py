@@ -149,6 +149,20 @@ class MixcloudInventoryTests(unittest.TestCase):
         self.assertEqual(episode["tracklist_status"], "unavailable")
         self.assertIn("HTTP 404", episode["notes"])
 
+    def test_show_rest_sections_are_extracted_as_unverified_candidates(self):
+        item = {"name": "Riley & Coe Tuesday 6th October 2026",
+            "url": "https://www.mixcloud.com/SixMusicAlternative/riley-coe-tuesday-6th-october-2026/",
+            "created_time": "2026-10-06"}
+        detail = {"name": item["name"], "url": item["url"], "created_time": item["created_time"],
+            "sections": [{"artist": "The Fall", "song": "Rebellious Jukebox"}]}
+        with patch("scripts.collect_mixcloud.fetch_show_detail", return_value=detail), \
+             patch("scripts.collect_mixcloud.fetch_show_comment_tracks", side_effect=AssertionError("REST sections should be used first")):
+            episode, tracks = fetch_show_page_tracks(item)
+        self.assertEqual(episode["source"], "Mixcloud official REST show object")
+        self.assertEqual(episode["tracklist_status"], "incomplete")
+        self.assertEqual([(x["artist"], x["track_title"]) for x in tracks], [("The Fall", "Rebellious Jukebox")])
+        self.assertEqual(tracks[0]["verification_status"], "needs_complete_visible_page_verification")
+
     def test_show_page_parser_reads_numbered_creator_comment_tracklist(self):
         html = b'<div>Comments</div><div>The 6 Music Archive</div><div>Creator</div><div>Button: 00:00</div><div>1.</div><div>Threadbare</div><div>Lande Hekt</div><div>2.</div><div>New York No Wave</div><div>Ill Ease</div><div>Reply</div>'
         response = type("Response", (), {"__enter__": lambda self: self, "__exit__": lambda self, *args: None,
