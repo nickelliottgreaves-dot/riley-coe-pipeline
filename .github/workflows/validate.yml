@@ -197,11 +197,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Install browser for expanded BBC Sounds tracklists
-        run: |
-          python -m pip install --disable-pip-version-check playwright
-          python -m playwright install chromium
-      - name: Inventory official BBC Riley & Coe episode pages and expand tracklists
+      - name: Inventory official BBC Riley & Coe programme pages and extract tracklist candidates
         run: |
           mkdir -p artifacts/bbc-sounds
           START=$(python -c "from datetime import date,timedelta; print((date.today()-timedelta(days=7)).isoformat())")
