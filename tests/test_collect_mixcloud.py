@@ -152,7 +152,7 @@ class MixcloudInventoryTests(unittest.TestCase):
                 "publishDate": "2026-10-06T20:00:00Z",
                 "owner": {"username": "SixMusicAlternative", "displayName": "The 6 Music Archive"}}}],
             "pageInfo": {"endCursor": None, "hasNextPage": False}}}}
-        with patch("scripts.collect_mixcloud.get_graphql", return_value=payload):
+        with patch("scripts.collect_mixcloud.get_graphql", side_effect=[{"userLookup": None}, payload]):
             items, errors = fetch_cloudcasts("SixMusicAlternative", date(2026, 10, 6), date(2026, 10, 13))
         self.assertEqual(len(items), 1)
         self.assertEqual(items[0]["created_time"], "2026-10-06")
