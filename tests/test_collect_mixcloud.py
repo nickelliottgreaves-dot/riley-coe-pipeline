@@ -1,7 +1,8 @@
 import unittest
 from urllib.error import HTTPError
 from unittest.mock import patch
-from scripts.collect_mixcloud import episode_date_from_text, inventory_item, parse_date, resolve_cloudcasts_endpoint
+from datetime import date
+from scripts.collect_mixcloud import episode_date_from_text, fetch_html_cloudcasts, inventory_item, parse_date, resolve_cloudcasts_endpoint
 
 class MixcloudInventoryTests(unittest.TestCase):
     def test_no_sections_is_unavailable_not_complete(self):
@@ -45,6 +46,20 @@ class MixcloudInventoryTests(unittest.TestCase):
         self.assertEqual(episode_date_from_text("riley-coe-2026-10-06").isoformat(), "2026-10-06")
         self.assertEqual(episode_date_from_text("Riley & Coe October 6, 2026").isoformat(), "2026-10-06")
         self.assertIsNone(episode_date_from_text("Riley & Coe - no date"))
+
+    def test_html_fallback_finds_show_urls_embedded_outside_anchor_tags(self):
+        class FakeResponse:
+            status = 200
+            def __enter__(self): return self
+            def __exit__(self, *args): return False
+            def read(self, limit):
+                return b'<script>window.__DATA__={"url":"/SixMusicAlternative/riley-coe-tuesday-6th-october-2026/"}</script>'
+
+        with patch("scripts.collect_mixcloud.urlopen", return_value=FakeResponse()):
+            items, errors = fetch_html_cloudcasts("SixMusicAlternative", date(2026, 10, 1), date(2026, 10, 21))
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]["created_time"][:10], "2026-10-06")
+        self.assertFalse(any("yielded no dated" in error for error in errors))
 
     def test_date_parser(self):
         self.assertEqual(parse_date("2026-10-01T20:00:00Z").isoformat(), "2026-10-01")
