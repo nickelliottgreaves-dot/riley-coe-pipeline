@@ -11,7 +11,8 @@ import argparse, csv, json, sys, time
 from datetime import date, datetime, timezone
 from pathlib import Path
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlparse
+import re
 from urllib.request import Request, urlopen
 
 API_ROOT = "https://api.mixcloud.com"
@@ -33,6 +34,88 @@ def parse_date(value: str | None) -> date | None:
     except (ValueError, TypeError):
         return None
 
+def parse_title_date(title: str) -> date | None:
+    """Extract the broadcast date from the visible Riley & Coe Mixcloud title."""
+    if not re.search(r"riley\\s*&\\s*coe", title, re.IGNORECASE):
+        return None
+    match = re.search(r"\\b(\\d{1,2})(?:st|nd|rd|th)?\\s+([A-Za-z]+)\\s+(\\d{4})\\b", title, re.IGNORECASE)
+    if match:
+        day, month, year = match.groups()
+        for fmt in ("%d %B %Y", "%d %b %Y"):
+            try:
+                return datetime.strptime(f"{day} {month} {year}", fmt).date()
+            except ValueError:
+                continue
+    numeric = re.search(r"\\b(\\d{1,2})[/-](\\d{1,2})[/-](\\d{4})\\b", title)
+    if numeric:
+        day, month, year = numeric.groups()
+        try:
+            return date(int(year), int(month), int(day))
+        except ValueError:
+            return None
+    return None
+
+
+def _episode_date_for(item: dict) -> date | None:
+    title = str(item.get("name") or item.get("title") or "")
+    return parse_title_date(title) or parse_date(item.get("created_time") or item.get("updated_time"))
+
+
+def _in_window(item: dict, since: date, until: date) -> bool:
+    episode_day = _episode_date_for(item)
+    if not episode_day or not (since <= episode_day <= until):
+        return False
+    item["episode_date"] = episode_day.isoformat()
+    return True
+
+
+def _fetch_search_fallback(username: str, since: date, until: date) -> tuple[list[dict], list[str]]:
+    """Use Mixcloud's documented public search endpoint when the account feed is 404."""
+    url = f"{API_ROOT}/search/?{urlencode({'q': 'Riley & Coe', 'type': 'cloudcast', 'limit': 100, 'offset': 0})}"
+    found: list[dict] = []
+    errors: list[str] = []
+    visited: set[str] = set()
+    pages = 0
+    expected_prefix = f"https://www.mixcloud.com/{username.strip('/')}/".casefold()
+    while url and url not in visited and pages < 30:
+        visited.add(url)
+        pages += 1
+        try:
+            payload = get_json(url)
+        except (HTTPError, URLError, TimeoutError, OSError, json.JSONDecodeError) as exc:
+            errors.append(f"Mixcloud search fallback failed for {url}: {exc}")
+            break
+        data = payload.get("data", [])
+        if not isinstance(data, list):
+            errors.append(f"Unexpected Mixcloud search response shape at {url}")
+            break
+        for item in data:
+            if not isinstance(item, dict):
+                continue
+            title = str(item.get("name") or item.get("title") or "").strip()
+            show_url = str(item.get("url") or "").strip()
+            if not re.search(r"riley\\s*&\\s*coe", title, re.IGNORECASE):
+                continue
+            if not show_url.casefold().startswith(expected_prefix):
+                continue
+            if not _in_window(item, since, until):
+                continue
+            item["_search_fallback"] = True
+            found.append(item)
+        next_url = payload.get("paging", {}).get("next")
+        if not next_url:
+            break
+        url = next_url
+        time.sleep(0.15)
+    if pages >= 30 and url and url not in visited:
+        errors.append("Mixcloud search fallback stopped after 30 pages; inventory may be incomplete.")
+    # Deduplicate by public show URL in case search pagination overlaps.
+    deduped: dict[str, dict] = {}
+    for item in found:
+        deduped[str(item.get("url") or "")] = item
+    return list(deduped.values()), errors
+
+
 def fetch_cloudcasts(username: str, since: date, until: date) -> tuple[list[dict], list[str]]:
     url = f"{API_ROOT}/{username.strip('/')}/cloudcasts/?{urlencode({'limit': 100, 'offset': 0})}"
     found: list[dict] = []
@@ -51,19 +134,9 @@ def fetch_cloudcasts(username: str, since: date, until: date) -> tuple[list[dict
         if not isinstance(data, list):
             errors.append(f"Unexpected Mixcloud API response shape at {url}")
             break
-        should_stop = False
         for item in data:
-            if not isinstance(item, dict):
-                continue
-            published = parse_date(item.get("created_time") or item.get("updated_time"))
-            if published and since <= published <= until:
+            if isinstance(item, dict) and _in_window(item, since, until):
                 found.append(item)
-            elif published and published < since:
-                # Lists are usually newest-first; stop only after the page has
-                # no in-window results and its oldest dated item predates since.
-                should_stop = True
-        if should_stop:
-            break
         next_url = payload.get("paging", {}).get("next")
         if not next_url:
             break
@@ -71,7 +144,15 @@ def fetch_cloudcasts(username: str, since: date, until: date) -> tuple[list[dict
         time.sleep(0.15)
     if pages >= 30 and url and url not in visited:
         errors.append("Stopped after 30 pages as a safety limit; inventory may be incomplete.")
-    return found, errors
+    if found:
+        return found, errors
+
+    # The observed account-feed endpoint currently returns HTTP 404, while the
+    # documented /search/ endpoint returns HTTP 200. Use it as a discovery
+    # fallback, preserving the primary failure in the audit instead of silently
+    # presenting search results as a complete inventory.
+    fallback, fallback_errors = _fetch_search_fallback(username, since, until)
+    return fallback, errors + fallback_errors
 
 def fetch_show_detail(item: dict) -> dict:
     # The user cloudcasts endpoint may omit per-show tracklist sections. Fetch
@@ -105,7 +186,7 @@ def inventory_item(item: dict) -> tuple[dict, list[dict]]:
     title = str(item.get("name") or item.get("title") or "").strip()
     url = str(item.get("url") or "").strip()
     published = item.get("created_time") or item.get("updated_time") or ""
-    parsed = parse_date(published)
+    parsed = parse_title_date(title) or parse_date(item.get("episode_date") or published)
     episode_date = parsed.isoformat() if parsed else ""
     sections = sections_from(item)
     tracks = []
@@ -163,7 +244,7 @@ def main() -> int:
     episodes, tracks = [], []
     for item in items:
         try:
-            detail = fetch_show_detail(item) if not sections_from(item) else item
+            detail = fetch_show_detail(item) if not sections_from(item) and not item.get("_search_fallback") else item
             episode, item_tracks = inventory_item(detail)
         except (HTTPError, URLError, TimeoutError, OSError, json.JSONDecodeError) as exc:
             episode, item_tracks = inventory_item(item)
@@ -184,6 +265,8 @@ def main() -> int:
         "window_end": until.isoformat(),
         "source_status": ("unavailable" if not items and any("404" in e or "inactive" in e.casefold() for e in errors) else ("ok" if not errors else "partial")),
         "fallback_required": bool(not items and any("404" in e or "inactive" in e.casefold() for e in errors)),
+        "discovery_method": "documented_search_fallback" if any(item.get("_search_fallback") for item in items) else "account_cloudcasts_endpoint",
+        "search_fallback_used": any(item.get("_search_fallback") for item in items),
         "episodes_found": len(episodes),
         "candidate_artist_rows": len(tracks),
         "episodes_marked_complete": sum(r["tracklist_status"] == "complete" for r in episodes),
