@@ -18,7 +18,7 @@ SHOWS = [
 ]
 FIELDS = ["url", "http_status", "content_type", "bytes_read", "html_title",
           "contains_tracklist_word", "contains_comments_word", "contains_creator_word",
-          "embedded_json_markers", "sample", "error"]
+          "embedded_json_markers", "known_tracklist_marker_hits", "tracklist_snippet", "sample", "error"]
 UA = "Mozilla/5.0 (compatible; riley-coe-pipeline/0.5; public page diagnostics)"
 
 
@@ -34,13 +34,21 @@ def inspect_page(url: str, timeout: int = 20) -> dict:
         title_match = re.search(r"<title[^>]*>(.*?)</title>", html, re.I | re.S)
         title = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", "", title_match.group(1))).strip()[:250] if title_match else ""
         markers = [m for m in ("__NEXT_DATA__", "application/ld+json", "comment", "cloudcast", "tracklist", "sections") if m.casefold() in html.casefold()]
+        known = ["Lande Hekt", "Ill Ease", "Juni Habel", "The Cutter", "Echo & the Bunnymen"]
+        hits = [term for term in known if term.casefold() in html.casefold()]
+        snippet = ""
+        for term in hits:
+            pos = html.casefold().find(term.casefold())
+            if pos >= 0:
+                snippet = re.sub(r"\\s+", " ", html[max(0, pos-180):pos+len(term)+180])[:450]
+                break
         return {
             "url": url, "http_status": str(status), "content_type": ctype,
             "bytes_read": str(len(raw)), "html_title": title,
             "contains_tracklist_word": str("tracklist" in html.casefold()).lower(),
             "contains_comments_word": str("comment" in html.casefold()).lower(),
             "contains_creator_word": str("creator" in html.casefold()).lower(),
-            "embedded_json_markers": ";".join(markers),
+            "embedded_json_markers": ";".join(markers), "known_tracklist_marker_hits": ";".join(hits), "tracklist_snippet": snippet,
             "sample": re.sub(r"\s+", " ", html[:350])[:350], "error": ""
         }
     except HTTPError as exc:
@@ -49,7 +57,7 @@ def inspect_page(url: str, timeout: int = 20) -> dict:
         except Exception: pass
         return {"url": url, "http_status": str(exc.code), "content_type": exc.headers.get("Content-Type", "") if exc.headers else "",
                 "bytes_read": "0", "html_title": "", "contains_tracklist_word": "", "contains_comments_word": "",
-                "contains_creator_word": "", "embedded_json_markers": "", "sample": body[:350], "error": f"HTTPError: {exc.reason}"}
+                "contains_creator_word": "", "embedded_json_markers": "", "known_tracklist_marker_hits": "", "tracklist_snippet": "", "sample": body[:350], "error": f"HTTPError: {exc.reason}"}
     except (URLError, TimeoutError, OSError, ValueError) as exc:
         return {"url": url, "http_status": "", "content_type": "", "bytes_read": "0", "html_title": "",
                 "contains_tracklist_word": "", "contains_comments_word": "", "contains_creator_word": "",
