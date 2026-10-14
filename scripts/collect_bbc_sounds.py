@@ -111,8 +111,8 @@ def parse_date(text):
     lines=[line.strip() for line in value.splitlines() if line.strip()]
     # BBC programme pages put the broadcast date after the explicit "Last on" label.
     for i,line in enumerate(lines):
-        if line.casefold()=="last on":
-            for candidate in lines[i+1:i+4]:
+        if line.casefold().startswith("last on"):
+            for candidate in [line, *lines[i+1:i+4]]:
                 m=re.search(r"\b(\d{1,2})\s+([A-Za-z]{3,9})\s+(20\d{2})\b",candidate)
                 if m:
                     for fmt in ("%d %B %Y","%d %b %Y"):
@@ -272,7 +272,8 @@ def main():
                 content_url=url
             if status!=200 or "html" not in ctype.lower(): raise ValueError(f"Unexpected episode response: {status} {ctype}")
             p=TextParser(); p.feed(html); text="\n".join(p.text)
-            # Avoid guessing the episode date from an episode title; parse explicit page date only.
+            episode_title=ep["title"] or " ".join(p.title).strip()
+            # Avoid guessing the episode date from track titles; parse the page title or explicit broadcast date.
             dt=parse_date(text)
             has_heading=bool(re.search(r"Music Played|Tracklist",text,re.I))
             page_status="fetched"
@@ -286,10 +287,10 @@ def main():
             candidates_found=[]
             if content_url==url:
                 # Sounds SPA fallback only: use conservative text extraction if the canonical programme page failed.
-                candidates_found=extract_tracklist_candidates(p,text,url,ep["title"],dt)
+                candidates_found=extract_tracklist_candidates(p,text,url,episode_title,dt)
             heading_parser=ProgrammeTrackParser(); heading_parser.feed(html)
             for artist, title in heading_parser.pairs:
-                candidates_found.append({"episode_date":dt,"episode_title":ep["title"],"episode_url":url,
+                candidates_found.append({"episode_date":dt,"episode_title":episode_title,"episode_url":url,
                     "track_title":title,"artist_candidate":artist,"extraction_method":"bbc_programme_heading_artist_followed_by_track_title",
                     "review_status":"needs_manual_review","evidence_text":f"{artist} | {title}",
                     "notes":"Extracted from server-rendered BBC programme Music Played section. Review against the full visible list; not automatically certified complete."})
