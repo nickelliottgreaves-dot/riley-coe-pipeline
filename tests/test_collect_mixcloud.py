@@ -1,5 +1,6 @@
 import unittest
-from scripts.collect_mixcloud import inventory_item, parse_date
+from unittest.mock import patch
+from scripts.collect_mixcloud import inventory_item, parse_date, resolve_cloudcasts_endpoint
 
 class MixcloudInventoryTests(unittest.TestCase):
     def test_no_sections_is_unavailable_not_complete(self):
@@ -13,6 +14,15 @@ class MixcloudInventoryTests(unittest.TestCase):
         self.assertEqual(ep["tracks_extracted"], "2")
         self.assertEqual([x["artist"] for x in tracks], ["A Certain Ratio","Robyn Hitchcock"])
         self.assertTrue(all(x["verification_status"] == "needs_visible_page_verification" for x in tracks))
+
+    def test_cloudcasts_endpoint_uses_api_metadata_connection(self):
+        profile = {"metadata": {"connections": {
+            "cloudcasts": "https://api.mixcloud.com/canonical-user/cloudcasts/"
+        }}}
+        with patch("scripts.collect_mixcloud.get_json", return_value=profile) as get_json:
+            endpoint = resolve_cloudcasts_endpoint("Canonical-User")
+        self.assertEqual(endpoint, "https://api.mixcloud.com/canonical-user/cloudcasts/")
+        get_json.assert_called_once_with("https://api.mixcloud.com/Canonical-User/?metadata=1")
 
     def test_date_parser(self):
         self.assertEqual(parse_date("2026-10-01T20:00:00Z").isoformat(), "2026-10-01")
