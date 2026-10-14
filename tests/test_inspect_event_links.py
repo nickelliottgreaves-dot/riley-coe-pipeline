@@ -24,8 +24,8 @@ class EventPageCrawlerTests(unittest.TestCase):
             with (d/"out/event_page_crawl_audit.csv").open(newline="") as f: venue_audit=list(csv.DictReader(f))
             self.assertEqual({r["venue"] for r in venue_audit},{"Test","Empty venue"})
             empty=next(r for r in venue_audit if r["venue"]=="Empty venue")
-            self.assertEqual(empty["status"],"NO_SEED_LINKS")
-            self.assertEqual(empty["seed_candidate_links"],"0")
-            self.assertIn("discovery gap",empty["notes"])
+            self.assertEqual(empty["status"],"PARTIAL")
+            self.assertEqual(empty["seed_candidate_links"],"1")
+            self.assertIn("Bounded crawl",empty["notes"])
 
 if __name__=="__main__": unittest.main()
