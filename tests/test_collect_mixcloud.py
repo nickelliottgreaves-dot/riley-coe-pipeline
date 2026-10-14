@@ -1,4 +1,5 @@
 import unittest
+from urllib.error import HTTPError
 from unittest.mock import patch
 from scripts.collect_mixcloud import inventory_item, parse_date, resolve_cloudcasts_endpoint
 
@@ -23,6 +24,20 @@ class MixcloudInventoryTests(unittest.TestCase):
             endpoint = resolve_cloudcasts_endpoint("Canonical-User")
         self.assertEqual(endpoint, "https://api.mixcloud.com/canonical-user/cloudcasts/")
         get_json.assert_called_once_with("https://api.mixcloud.com/Canonical-User/?metadata=1")
+
+    def test_cloudcasts_endpoint_uses_user_search_when_profile_key_is_unresolved(self):
+        def fake_get_json(url):
+            if "/search/?" in url:
+                return {"data": [{
+                    "key": "/SixMusicAlternative/",
+                    "name": "The 6 Music Archive",
+                    "url": "https://www.mixcloud.com/SixMusicAlternative/"
+                }]}
+            raise HTTPError(url, 404, "Not Found", None, None)
+
+        with patch("scripts.collect_mixcloud.get_json", side_effect=fake_get_json):
+            endpoint = resolve_cloudcasts_endpoint("SixMusicAlternative")
+        self.assertEqual(endpoint, "https://api.mixcloud.com/SixMusicAlternative/cloudcasts/")
 
     def test_date_parser(self):
         self.assertEqual(parse_date("2026-10-01T20:00:00Z").isoformat(), "2026-10-01")
