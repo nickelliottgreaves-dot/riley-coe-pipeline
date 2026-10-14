@@ -33,8 +33,32 @@ def parse_date(value: str | None) -> date | None:
     except (ValueError, TypeError):
         return None
 
+def resolve_cloudcasts_endpoint(username: str) -> str:
+    """Resolve the account's canonical cloudcasts connection from Mixcloud metadata.
+
+    The public API documents connections on the user object. Do not assume the
+    supplied display-name casing is the canonical API key.
+    """
+    requested = username.strip("/")
+    candidates = list(dict.fromkeys([requested, requested.lower()]))
+    for candidate in candidates:
+        profile_url = f"{API_ROOT}/{candidate}/?metadata=1"
+        try:
+            profile = get_json(profile_url)
+        except (HTTPError, URLError, TimeoutError, OSError, json.JSONDecodeError):
+            continue
+        connections = profile.get("metadata", {}).get("connections", {})
+        endpoint = connections.get("cloudcasts")
+        if isinstance(endpoint, str) and endpoint.startswith(API_ROOT + "/"):
+            return endpoint
+    # Compatibility fallback; the caller will preserve an explicit error if
+    # this legacy endpoint is unavailable too.
+    return f"{API_ROOT}/{requested}/cloudcasts/"
+
+
 def fetch_cloudcasts(username: str, since: date, until: date) -> tuple[list[dict], list[str]]:
-    url = f"{API_ROOT}/{username.strip('/')}/cloudcasts/?{urlencode({'limit': 100, 'offset': 0})}"
+    endpoint = resolve_cloudcasts_endpoint(username)
+    url = f"{endpoint.rstrip('/')}/?{urlencode({'limit': 100, 'offset': 0})}"
     found: list[dict] = []
     errors: list[str] = []
     visited: set[str] = set()
