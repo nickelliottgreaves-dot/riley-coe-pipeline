@@ -26,11 +26,13 @@ class EventCandidateTests(unittest.TestCase):
         self.assertEqual(p.links,[("/events/abc","Artist live")])
         self.assertEqual(len(p.scripts),1)
 
-    def test_third_party_calendar_rejects_missing_or_remote_location(self):
+    def test_third_party_calendar_requires_venue_specific_location(self):
         self.assertFalse(third_party_location_is_local("", "Lubber Fiend"))
         self.assertFalse(third_party_location_is_local("Black Cat, Washington, DC", "Lubber Fiend"))
         self.assertTrue(third_party_location_is_local("The Lubber Fiend, Newcastle upon Tyne", "Lubber Fiend"))
-        self.assertTrue(third_party_location_is_local("Newcastle upon Tyne, UK", "The Globe"))
+        # A city-wide result is local, but does not prove that it is at this venue.
+        self.assertFalse(third_party_location_is_local("Newcastle upon Tyne, UK", "The Globe"))
+        self.assertFalse(third_party_location_is_local("Newcastle, United Kingdom", "Lubber Fiend"))
 
     def test_songkick_aggregate_pages_are_not_event_links(self):
         self.assertTrue(is_songkick_nonlocal_aggregate_url("https://www.songkick.com/metro-areas/1409-us-washington"))
