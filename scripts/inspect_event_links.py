@@ -47,7 +47,7 @@ class Parser(HTMLParser):
 
 def fetch(url):
     req=Request(url,headers={"User-Agent":UA,"Accept":"text/html,application/xhtml+xml"})
-    with urlopen(req,timeout=4) as r:
+    with urlopen(req,timeout=3) as r:
         body=r.read(3_000_001)
         truncated=len(body)>3_000_000
         return r.status,r.headers.get("Content-Type",""),body[:3_000_000].decode("utf-8",errors="replace"),truncated
@@ -141,8 +141,23 @@ def main():
         url=(row.get("candidate_url") or "").strip()
         venue=(row.get("venue") or "Unknown").strip()
         if url.startswith(("https://","http://")) and not is_aggregate_calendar_url(url):
-            by_venue[venue].append(url)
             candidate_urls_by_venue[venue].add(url)
+    # Prioritise actual event/detail pages ahead of month indexes, ticket widgets,
+    # and generic calendar links. A strict page cap must not starve event pages.
+    for venue, candidate_urls in candidate_urls_by_venue.items():
+        source_url=source_urls.get(venue, "")
+        def seed_priority(url):
+            parsed=urlparse(url); path=parsed.path.casefold()
+            if url.rstrip("/") == source_url.rstrip("/"):
+                return (0, url)
+            calendarish=bool(re.search(r"/(?:date/\\d{4}/\\d{1,2}|calendar|events/?|gigs/?|whatson/?|whats-on/?|promoter/)",path))
+            ticket_widget=bool(re.search(r"universe\\.com|fatsoma\\.com|ticketmaster|gigantic\\.com",parsed.netloc,re.I))
+            detailish=bool(re.search(r"/(?:listing|event|events|gig|tickets?)/[^/]+",path))
+            return (1 if detailish and not calendarish else 3 if calendarish else 2 if not ticket_widget else 4, url)
+        ordered=sorted(candidate_urls-{source_url},key=seed_priority)
+        # Keep the source calendar first, then detail candidates, and calendar
+        # navigation last. Deduplication happens again when the queue is built.
+        by_venue[venue]=([source_url] if source_url.startswith(("https://","http://")) and not is_aggregate_calendar_url(source_url) else [])+ordered
     shared_host_groups=defaultdict(set)
     for shared_url,names in source_venues_by_url.items():
         unique_names=sorted(set(names))
