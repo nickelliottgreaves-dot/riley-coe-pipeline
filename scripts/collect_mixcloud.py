@@ -17,6 +17,7 @@ from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 API_ROOT = "https://api.mixcloud.com"
+GRAPHQL_CLOUDCAST_LOOKUP_AVAILABLE: bool | None = None
 DEFAULT_USER = "SixMusicAlternative"
 USER_AGENT = "riley-coe-pipeline/0.1 (research evidence collector)"
 EPISODE_FIELDS = ["episode_date", "episode_title", "source", "url", "tracklist_status", "tracks_extracted", "notes"]
@@ -28,7 +29,7 @@ def get_json(url: str, timeout: int = 25) -> dict:
         return json.loads(response.read().decode("utf-8"))
 
 
-def get_graphql(query: str, timeout: int = 25) -> dict:
+def get_graphql(query: str, timeout: int = 8) -> dict:
     """Call Mixcloud's current public GraphQL endpoint.
 
     The legacy api.mixcloud.com REST endpoints now return 404 for this account;
@@ -297,6 +298,10 @@ def fetch_cloudcasts_html(username: str, since: date, until: date) -> tuple[list
 
 def fetch_show_comment_tracks(item: dict) -> list[dict]:
     """Read numbered tracklist rows from the uploader's public GraphQL comment."""
+    global GRAPHQL_CLOUDCAST_LOOKUP_AVAILABLE
+    if GRAPHQL_CLOUDCAST_LOOKUP_AVAILABLE is False:
+        item["_graphql_comment_error"] = "Skipped after the first public GraphQL show lookup failed."
+        return []
     public_url = str(item.get("url") or "")
     prefix = "https://www.mixcloud.com/"
     if not public_url.startswith(prefix):
@@ -325,8 +330,10 @@ def fetch_show_comment_tracks(item: dict) -> list[dict]:
             continue
         cloudcast = data.get("cloudcastLookup") or {}
         if cloudcast:
+            GRAPHQL_CLOUDCAST_LOOKUP_AVAILABLE = True
             break
     if not cloudcast:
+        GRAPHQL_CLOUDCAST_LOOKUP_AVAILABLE = False
         item["_graphql_comment_error"] = last_error or "GraphQL cloudcastLookup returned no object for either account casing"
         return []
     comments = (cloudcast.get("comments") or {}).get("edges") or []
