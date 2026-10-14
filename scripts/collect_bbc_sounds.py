@@ -70,7 +70,7 @@ class ProgrammeTrackParser(HTMLParser):
         self.pairs = []
     def handle_starttag(self, tag, attrs):
         tag=tag.lower()
-        if tag in {"h2","h3"}:
+        if tag in {"h2","h3","h4","h5","h6"}:
             self.heading_buf = []
         elif tag == "p" and self.in_tracklist and self.artist and self.pending_artist and self.paragraph_buf is None:
             self.paragraph_buf = []
@@ -81,7 +81,7 @@ class ProgrammeTrackParser(HTMLParser):
             self.paragraph_buf.append(data)
     def handle_endtag(self, tag):
         tag=tag.lower()
-        if tag in {"h2","h3"} and self.heading_buf is not None:
+        if tag in {"h2","h3","h4","h5","h6"} and self.heading_buf is not None:
             heading = " ".join(" ".join(self.heading_buf).split()).strip()
             self.heading_buf = None
             if heading.casefold()=="music played":
@@ -92,7 +92,8 @@ class ProgrammeTrackParser(HTMLParser):
                 self.in_tracklist=False
                 self.artist=""
                 self.pending_artist=False
-            elif tag=="h3" and self.in_tracklist and heading:
+            elif tag in {"h3","h4","h5","h6"} and self.in_tracklist and heading:
+                # BBC can render expanded "Show more" entries at deeper heading levels.
                 self.artist=heading
                 self.pending_artist=True
         elif tag=="p" and self.paragraph_buf is not None:

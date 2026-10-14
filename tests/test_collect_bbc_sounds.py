@@ -42,6 +42,23 @@ class BBCProgrammeParserTests(unittest.TestCase):
         self.assertEqual(dt,"2026-10-13")
         self.assertEqual(note,"")
 
+    def test_extracts_artist_title_pairs_across_track_heading_levels(self):
+        html = """
+        <h3>Navigation label</h3><p>Do not collect</p>
+        <h2>Music Played</h2>
+        <h3>Artist One</h3><p>Track One</p>
+        <h4>Artist Two</h4><p>Track Two</p>
+        <h5>Artist Three</h5><p>Track Three</p>
+        <h6>Artist Four</h6><p>Track Four</p>
+        <h2>Broadcast</h2><h3>Related programme</h3><p>Do not collect</p>
+        """
+        parser = ProgrammeTrackParser()
+        parser.feed(html)
+        self.assertEqual(parser.pairs, [
+            ("Artist One", "Track One"), ("Artist Two", "Track Two"),
+            ("Artist Three", "Track Three"), ("Artist Four", "Track Four")
+        ])
+
     def test_text_parser_preserves_html_title(self):
         parser = TextParser()
         parser.feed("<html><head><title>Riley &amp; Coe - 13/10/2026 - BBC Sounds</title></head><body>Music Played</body></html>")
