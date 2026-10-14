@@ -156,7 +156,19 @@ jobs:
           UNTIL=$(python -c "from datetime import date; print(date.today().isoformat())")
           echo "Window: $SINCE through $UNTIL"
           python scripts/collect_radiofiles.py --since "$SINCE" --until "$UNTIL" --out-dir artifacts/radiofiles
-      - name: Preserve RadioFiles candidates, snapshots and audit
+      - name: Compare candidate artists with authoritative pool (review only)
+        if: always()
+        run: |
+          if test -f artifacts/radiofiles/radiofiles_track_candidates.csv; then
+            python scripts/compare_radiofiles_artist_pool.py \
+              --pool data/artist_pool.csv \
+              --candidates artifacts/radiofiles/radiofiles_track_candidates.csv \
+              --aliases config/artist_aliases.csv \
+              --out-dir artifacts/radiofiles/pool-comparison
+          else
+            echo "Collector did not produce candidates; comparison intentionally not run."
+          fi
+      - name: Preserve RadioFiles candidates, snapshots, audit and pool comparison
         if: always()
         uses: actions/upload-artifact@v4
         with:
