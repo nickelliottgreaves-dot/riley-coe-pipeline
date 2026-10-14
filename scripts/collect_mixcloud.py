@@ -112,19 +112,33 @@ class CloudcastLinkParser(HTMLParser):
 
 
 def episode_date_from_text(value: str) -> date | None:
-    """Parse dates in visible Mixcloud show titles and URL slugs."""
-    match = re.search(
-        r"(?i)(\d{1,2})(?:st|nd|rd|th)?[\s_-]+"
-        r"(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|"
-        r"jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)[\s_-]+(20\d{2})",
-        value,
-    )
-    if not match:
-        return None
-    try:
-        return datetime.strptime(f"{match.group(1)} {match.group(2)[:3]} {match.group(3)}", "%d %b %Y").date()
-    except ValueError:
-        return None
+    """Parse dates in visible Mixcloud show titles and URL slugs.
+
+    Mixcloud titles/slugs have appeared in day-month-year, month-day-year,
+    and ISO year-month-day forms. Try explicit formats rather than treating a
+    dated upload as absent merely because its slug format changed.
+    """
+    patterns = [
+        (r"(?i)(\\d{1,2})(?:st|nd|rd|th)?[\\s_-]+"
+         r"(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|"
+         r"jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)[\\s_-]+(20\\d{2})",
+         lambda m: f"{m.group(1)} {m.group(2)[:3]} {m.group(3)}", "%d %b %Y"),
+        (r"(?i)(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|"
+         r"jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)[\\s_-]+"
+         r"(\\d{1,2})(?:st|nd|rd|th)?[\\s,_-]+(20\\d{2})",
+         lambda m: f"{m.group(2)} {m.group(1)[:3]} {m.group(3)}", "%d %b %Y"),
+        (r"(?<!\\d)(20\\d{2})[-_/](0?[1-9]|1[0-2])[-_/](0?[1-9]|[12]\\d|3[01])(?!\\d)",
+         lambda m: f"{m.group(1)}-{m.group(2)}-{m.group(3)}", "%Y-%m-%d"),
+    ]
+    for pattern, build, date_format in patterns:
+        match = re.search(pattern, value)
+        if not match:
+            continue
+        try:
+            return datetime.strptime(build(match), date_format).date()
+        except ValueError:
+            continue
+    return None
 
 
 def fetch_html_cloudcasts(username: str, since: date, until: date) -> tuple[list[dict], list[str]]:
