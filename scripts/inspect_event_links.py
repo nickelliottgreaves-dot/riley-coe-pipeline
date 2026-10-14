@@ -150,8 +150,8 @@ def main():
             parsed=urlparse(url); path=parsed.path.casefold()
             if url.rstrip("/") == source_url.rstrip("/"):
                 return (0, url)
-            calendarish=bool(re.search(r"/(?:date/\\d{4}/\\d{1,2}|calendar|events/?|gigs/?|whatson/?|whats-on/?|promoter/)",path))
-            ticket_widget=bool(re.search(r"universe\\.com|fatsoma\\.com|ticketmaster|gigantic\\.com",parsed.netloc,re.I))
+            calendarish=bool(re.search(r"/(?:date/\d{4}/\d{1,2}|calendar|events/?|gigs/?|whatson/?|whats-on/?|promoter/)",path))
+            ticket_widget=bool(re.search(r"universe\.com|fatsoma\.com|ticketmaster|gigantic\.com",parsed.netloc,re.I))
             detailish=bool(re.search(r"/(?:listing|event|events|gig|tickets?)/[^/]+",path))
             return (1 if detailish and not calendarish else 3 if calendarish else 2 if not ticket_widget else 4, url)
         ordered=sorted(candidate_urls-{source_url},key=seed_priority)
