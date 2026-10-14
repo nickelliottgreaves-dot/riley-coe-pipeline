@@ -55,6 +55,37 @@ def fetch(url):
         if len(raw)>4_000_000: raw=raw[:4_000_000]
         return r.status,ctype,raw.decode("utf-8",errors="replace")
 
+def render_visible_text(url, max_show_more_clicks=40):
+    """Render BBC Sounds and expand the visible tracklist before extraction.
+
+    Returns (visible_text, click_count). If rendering fails, the caller falls
+    back to the static HTML snapshot and records that limitation.
+    """
+    from playwright.sync_api import sync_playwright
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page(user_agent="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/130.0.0.0 Safari/537.36")
+        try:
+            response = page.goto(url, wait_until="domcontentloaded", timeout=60000)
+            if response is None or response.status >= 400:
+                raise RuntimeError(f"BBC rendered page response: {response.status if response else 'no response'}")
+            page.wait_for_timeout(1200)
+            clicks = 0
+            for _ in range(max_show_more_clicks):
+                button = page.get_by_role("button", name=re.compile(r"show more", re.I)).last
+                if not button.count() or not button.is_visible():
+                    break
+                before = len(page.locator("body").inner_text(timeout=15000))
+                button.click(timeout=7000)
+                page.wait_for_timeout(250)
+                after = len(page.locator("body").inner_text(timeout=15000))
+                clicks += 1
+                if after <= before:
+                    break
+            return page.locator("body").inner_text(timeout=15000), clicks
+        finally:
+            browser.close()
+
 def parse_date(text):
     m=re.search(r"\b(\d{1,2})\s+([A-Za-z]{3,9})\s+(20\d{2})\b",text or "")
     if not m: return ""
@@ -202,9 +233,19 @@ def main():
         try:
             status,ctype,html=fetch(url)
             if status!=200 or "html" not in ctype.lower(): raise ValueError(f"Unexpected episode response: {status} {ctype}")
-            p=TextParser(); p.feed(html); text="\n".join(p.text)
+            p=TextParser(); p.feed(html); static_text="\n".join(p.text)
+            rendered_clicks = 0
+            render_note = ""
+            try:
+                text, rendered_clicks = render_visible_text(url)
+                if len(text.strip()) < len(static_text.strip()):
+                    text = static_text
+                    render_note = "Rendered page text was shorter than static HTML; static text retained."
+            except Exception as render_exc:
+                text = static_text
+                render_note = f"Playwright expansion unavailable; static HTML fallback used ({type(render_exc).__name__}: {render_exc})."
             # Avoid guessing the episode date from an episode title; parse explicit page date only.
-            dt=parse_date(text)
+            dt=parse_date(text) or parse_date(static_text)
             has_heading=bool(re.search(r"Music Played|Tracklist",text,re.I))
             page_status="fetched"
             if dt and not (start<=date.fromisoformat(dt)<=end): continue
@@ -212,12 +253,12 @@ def main():
                 note="Could not reliably extract broadcast date; manual date check required."
             else: note=""
             snap=snaps/(episode_id(url)+".txt")
-            snap.write_text("SOURCE: "+url+"\nLISTING: "+ep["listing_source_url"]+"\n\n"+text+"\n",encoding="utf-8")
+            snap.write_text("SOURCE: "+url+"\nLISTING: "+ep["listing_source_url"]+"\nSHOW_MORE_CLICKS: "+str(rendered_clicks)+"\nRENDER_NOTE: "+render_note+"\n\n"+text+"\n",encoding="utf-8")
             state="visible_tracklist_heading_detected_needs_review" if has_heading else "tracklist_not_detected_needs_review"
             candidates_found=extract_tracklist_candidates(p,text,url,ep["title"],dt)
             trackrows.extend(candidates_found)
             candidate_artist_names=sorted({r["artist_candidate"] for r in candidates_found},key=str.casefold)
-            rows.append({"episode_date":dt,"episode_title":ep["title"],"episode_url":url,"listing_source_url":ep["listing_source_url"],"page_fetch_status":page_status,"visible_tracklist_heading_detected":str(has_heading).lower(),"tracklist_status":state,"notes":(note+" " if note else "")+"Page access does not prove tracklist completeness; inspect saved visible-text snapshot and official page."})
+            rows.append({"episode_date":dt,"episode_title":ep["title"],"episode_url":url,"listing_source_url":ep["listing_source_url"],"page_fetch_status":page_status,"visible_tracklist_heading_detected":str(has_heading).lower(),"tracklist_status":state,"notes":(note+" " if note else "")+(render_note+" " if render_note else "")+f"Rendered Show more clicks: {rendered_clicks}. Page access and button expansion do not prove tracklist completeness; inspect saved visible-text snapshot and official page."})
             linkrows.append({"episode_url":url,"episode_title":ep["title"],"episode_date":dt,"source_url":url,"tracklist_status":state,"candidate_artists":"; ".join(candidate_artist_names),"snapshot_file":str(snap.relative_to(out)),"notes":f"{len(candidates_found)} provisional track/artist candidates extracted where patterns matched; manually compare against complete visible tracklist."})
         except (HTTPError,URLError,TimeoutError,OSError,ValueError) as exc:
             rows.append({"episode_date":"","episode_title":ep["title"],"episode_url":url,"listing_source_url":ep["listing_source_url"],"page_fetch_status":"failed","visible_tracklist_heading_detected":"false","tracklist_status":"inaccessible","notes":f"{type(exc).__name__}: {exc}"})
@@ -230,7 +271,7 @@ def main():
         w=csv.DictWriter(f,fieldnames=LINK_FIELDS); w.writeheader(); w.writerows(linkrows)
     with (out/"bbc_track_candidates.csv").open("w",encoding="utf-8",newline="") as f:
         w=csv.DictWriter(f,fieldnames=TRACK_FIELDS); w.writeheader(); w.writerows(trackrows)
-    summary={"window_start":start.isoformat(),"window_end":end.isoformat(),"series_url":args.listing_url,"listing_pages_fetched":len(listing_pages),"listing_pagination_status":pagination_status,"listing_page_cap_reached":pagination_status=="page_cap_reached","episodes_discovered":len(episodes),"episode_pages_in_window_or_undated":sum(r["page_fetch_status"]=="fetched" for r in rows),"visible_tracklist_headings_detected":sum(r["visible_tracklist_heading_detected"]=="true" for r in rows),"undated_episode_pages":sum(r["page_fetch_status"]=="fetched" and not bool(r["episode_date"]) for r in rows),"inaccessible_episode_pages":sum(r["page_fetch_status"]=="failed" for r in rows),"provisional_track_artist_candidates":len(trackrows),"episodes_certified_complete":0,"errors":errors,"listing_pages":listing_pages,"status":"PARTIAL","limitations":["BBC episode listing pagination may not expose every episode; inspect listing_pagination_status and page-cap flag.","Episode dates may not be machine-readable in visible text.","Tracklist heading detection is not completeness verification.","Track/artist candidates are extracted only from explicit JSON-LD or simple visible-text patterns; all candidates require manual review.","Text-pattern extraction may miss tracks and can misassign artist/title order; no episode is marked complete automatically."]}
+    summary={"window_start":start.isoformat(),"window_end":end.isoformat(),"series_url":args.listing_url,"listing_pages_fetched":len(listing_pages),"listing_pagination_status":pagination_status,"listing_page_cap_reached":pagination_status=="page_cap_reached","episodes_discovered":len(episodes),"episode_pages_in_window_or_undated":sum(r["page_fetch_status"]=="fetched" for r in rows),"visible_tracklist_headings_detected":sum(r["visible_tracklist_heading_detected"]=="true" for r in rows),"undated_episode_pages":sum(r["page_fetch_status"]=="fetched" and not bool(r["episode_date"]) for r in rows),"inaccessible_episode_pages":sum(r["page_fetch_status"]=="failed" for r in rows),"provisional_track_artist_candidates":len(trackrows),"episodes_with_rendered_expansion":sum("SHOW_MORE_CLICKS:" in p.read_text(encoding="utf-8") for p in snaps.glob("*.txt")),"episodes_certified_complete":0,"errors":errors,"listing_pages":listing_pages,"status":"PARTIAL","limitations":["BBC episode listing pagination may not expose every episode; inspect listing_pagination_status and page-cap flag.","Episode dates may not be machine-readable in visible text.","Tracklist heading detection is not completeness verification.","Track/artist candidates are extracted from explicit JSON-LD or visible-text patterns after attempting to click the BBC Show more button; all candidates require manual review.","Text-pattern extraction may miss tracks and can misassign artist/title order; rendered expansion is recorded but no episode is marked complete automatically."]}
     (out/"bbc_collection_audit.json").write_text(json.dumps(summary,indent=2)+"\n",encoding="utf-8")
     print(json.dumps(summary,indent=2))
     return 1 if errors else 0
