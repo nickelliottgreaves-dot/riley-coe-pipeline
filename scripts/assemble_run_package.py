@@ -6,7 +6,7 @@ verified events or marks the run complete. Existing output directories are not
 overwritten to protect prior evidence.
 """
 from __future__ import annotations
-import argparse, csv, json, subprocess, sys, shutil
+import argparse, csv, json, subprocess, sys, shutil, re, unicodedata
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -19,6 +19,62 @@ MATCH_FIELDS=["event_artist","matched_pool_artist","candidate_pool_artist","matc
 REGRESSION_FIELDS=["artist","searched","result","evidence_url","notes"]
 INPUT_AUDIT_FIELDS=["input_name","path","status","size_bytes","notes"]
 DISCOVERY_COVERAGE_FIELDS=["venue","source_url","homepage_fetch_status","http_status","structured_event_count","candidate_link_count","detail_pages_fetched","detail_pages_failed","crawl_cap_reached","calendar_coverage_verified","notes"]
+TRACKLIST_COMPARISON_FIELDS=["episode_pid","bbc_episode_date","radiofiles_episode_date","bbc_candidate_tracks","radiofiles_candidate_tracks","shared_title_count","bbc_only_titles","radiofiles_only_titles","title_sets_match","status","complete_certified","notes"]
+
+def normalized_track_title(value):
+    value=unicodedata.normalize("NFKD",value or "")
+    value="".join(ch for ch in value if not unicodedata.combining(ch))
+    return " ".join(re.findall(r"[a-z0-9]+",value.casefold()))
+
+def episode_pid_from_url(url):
+    value=url or ""
+    query=re.search(r"[?&]pid=(m[0-9a-z]{7,})",value,re.I)
+    if query: return query.group(1).casefold()
+    match=re.search(r"/(?:sounds/play|programmes)/(m[0-9a-z]{7,})",value,re.I)
+    return match.group(1).casefold() if match else ""
+
+def compare_episode_tracklists(bbc_tracks, radiofiles_tracks):
+    """Compare candidate track-title sets; never certify completeness or alter the pool."""
+    bbc_by_pid={}; radiofiles_by_pid={}
+    for row in bbc_tracks:
+        pid=episode_pid_from_url(row.get("episode_url",""))
+        title=row.get("track_title","").strip()
+        key=normalized_track_title(title)
+        if pid and key:
+            group=bbc_by_pid.setdefault(pid,{"date":set(),"titles":{}})
+            if row.get("episode_date"): group["date"].add(row["episode_date"])
+            group["titles"].setdefault(key,title)
+    for row in radiofiles_tracks:
+        pid=(row.get("episode_pid") or episode_pid_from_url(row.get("source_url",""))).casefold()
+        title=row.get("track_title","").strip()
+        key=normalized_track_title(title)
+        if pid and key:
+            group=radiofiles_by_pid.setdefault(pid,{"date":set(),"titles":{}})
+            if row.get("episode_date"): group["date"].add(row["episode_date"])
+            group["titles"].setdefault(key,title)
+    output=[]
+    for pid in sorted(set(bbc_by_pid)|set(radiofiles_by_pid)):
+        b=bbc_by_pid.get(pid,{"date":set(),"titles":{}})
+        r=radiofiles_by_pid.get(pid,{"date":set(),"titles":{}})
+        bt,rt=set(b["titles"]),set(r["titles"]); shared=bt&rt
+        if not bt: status="radiofiles_only_no_official_candidates"
+        elif not rt: status="bbc_only_no_radiofiles_candidates"
+        elif bt==rt: status="title_sets_match_artist_credit_review_required"
+        elif bt<rt: status="bbc_candidate_subset_of_radiofiles"
+        elif rt<bt: status="radiofiles_candidate_subset_of_bbc"
+        else: status="title_sets_differ"
+        output.append({
+            "episode_pid":pid,"bbc_episode_date":"; ".join(sorted(b["date"])),
+            "radiofiles_episode_date":"; ".join(sorted(r["date"])),
+            "bbc_candidate_tracks":len(bt),"radiofiles_candidate_tracks":len(rt),
+            "shared_title_count":len(shared),
+            "bbc_only_titles":"; ".join(b["titles"][k] for k in sorted(bt-rt)),
+            "radiofiles_only_titles":"; ".join(r["titles"][k] for k in sorted(rt-bt)),
+            "title_sets_match":str(bool(bt) and bt==rt).lower(),"status":status,
+            "complete_certified":"false",
+            "notes":"Exact normalized track-title comparison only. Candidate equality does not certify visible-list completeness or artist-credit identity; review official episode page and all track rows."
+        })
+    return output
 
 def read_csv(path, fields):
     if not path or not Path(path).exists(): return []
@@ -114,6 +170,8 @@ def main():
             "evidence_text":track.get("tracklist_api_url",""),
             "notes":((track.get("notes") or "")+" RadioFiles third-party JSON candidate; cross-check against another complete source before importing.").strip()})
     write_csv(out/"tracklist_candidate_review.csv",track_review_fields,track_review_rows)
+    tracklist_comparison=compare_episode_tracklists(bbc_tracks,radiofiles_tracks)
+    write_csv(out/"episode_tracklist_comparison.csv",TRACKLIST_COMPARISON_FIELDS,tracklist_comparison)
     event_rows=read_csv(args.events,["event_date","venue","event_title","artist","artist_role","source_url","verified","notes"]) if args.events else []
     # Add Event JSON-LD candidates from inspected detail pages; they remain unverified.
     inspected_rows=read_csv(args.event_page_inspection,["venue","page_url","event_title","event_date","performer_names","price","currency","availability","event_jsonld_found","notes"]) if args.event_page_inspection else []
@@ -285,7 +343,7 @@ def main():
               "researcher_notes":"Automatically assembled evidence scaffold. Not a completed research run. BBC Sounds/visible tracklists, event detail pages, supports, prices/ticket status, regression checks, full venue coverage and safety-net searches still require verification.",
               "package_kind":"candidate_scaffold","source_episode_rows":len(episode_rows),"candidate_event_rows":len(events),"manual_sweep_rows":len(manual_sweep_rows),"unresolved_event_candidates":len(unresolved),
               "mandatory_venue_rows":len(venue_rows),"venue_calendar_checks_completed":0,"regression_artists_seeded":len(regression_rows),"regression_artist_checks_completed":0,
-              "input_file_audit":"input_file_audit.csv","venue_discovery_coverage":"venue_discovery_coverage.csv","tracklist_candidate_review":"tracklist_candidate_review.csv","dated_exports":list(dated_exports)+[dedup_path.name],"missing_or_unsupplied_inputs":missing_inputs,"input_files_present":sum(r["status"]=="present" for r in input_audit)}
+              "input_file_audit":"input_file_audit.csv","venue_discovery_coverage":"venue_discovery_coverage.csv","tracklist_candidate_review":"tracklist_candidate_review.csv","episode_tracklist_comparison":"episode_tracklist_comparison.csv","dated_exports":list(dated_exports)+[dedup_path.name],"missing_or_unsupplied_inputs":missing_inputs,"input_files_present":sum(r["status"]=="present" for r in input_audit)}
     (out/"run_manifest.json").write_text(json.dumps(manifest,indent=2)+"\n",encoding="utf-8")
     summary={"output_directory":str(out),"status":"PARTIAL","episode_rows":len(episode_rows),"event_candidate_rows":len(events),"manual_sweep_rows":len(manual_sweep_rows),"unresolved_event_candidates":len(unresolved),"mandatory_venue_rows":len(venue_rows),"regression_artists_seeded":len(regression_rows),"regression_artist_checks_completed":0,"complete_claimed":False,"missing_or_unsupplied_inputs":missing_inputs}
     (out/"package_assembly_summary.json").write_text(json.dumps(summary,indent=2)+"\n",encoding="utf-8")
