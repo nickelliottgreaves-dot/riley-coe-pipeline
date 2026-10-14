@@ -120,7 +120,7 @@ class MixcloudInventoryTests(unittest.TestCase):
         payload = {"cloudcastLookup": {
             "owner": {"username": "SixMusicAlternative"},
             "comments": {"edges": [{"node": {
-                "comment": "1.\\nThreadbare\\nLande Hekt\\n2.\\nNew York No Wave\\nIll Ease",
+                "comment": "1.\nThreadbare\nLande Hekt\n2.\nNew York No Wave\nIll Ease",
                 "user": {"username": "SixMusicAlternative"}
             }}], "totalCount": 1}
         }}
