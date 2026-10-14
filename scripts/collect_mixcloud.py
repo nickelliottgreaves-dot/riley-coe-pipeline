@@ -30,15 +30,22 @@ def get_json(url: str, timeout: int = 25) -> dict:
 
 
 def get_graphql(query: str, timeout: int = 8) -> dict:
-    """Call Mixcloud's current public GraphQL endpoint.
-
-    The legacy api.mixcloud.com REST endpoints now return 404 for this account;
-    the live Mixcloud web client and yt-dlp use app.mixcloud.com/graphql.
-    """
+    """Call Mixcloud's public GraphQL API with browser TLS impersonation when available."""
     url = "https://app.mixcloud.com/graphql?" + urlencode({"query": query})
-    req = Request(url, headers={"User-Agent": "Mozilla/5.0 (compatible; RileyCoePipeline/1.0)", "Accept": "application/json"})
-    with urlopen(req, timeout=timeout) as response:
-        payload = json.loads(response.read().decode("utf-8"))
+    headers = {"User-Agent": USER_AGENT, "Accept": "application/json"}
+    try:
+        from curl_cffi import requests as curl_requests
+    except ImportError:
+        req = Request(url, headers=headers)
+        with urlopen(req, timeout=timeout) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    else:
+        try:
+            response = curl_requests.get(url, headers=headers, timeout=timeout, impersonate="chrome")
+            response.raise_for_status()
+            payload = response.json()
+        except Exception as exc:
+            raise ValueError(f"Mixcloud GraphQL HTTP request failed: {type(exc).__name__}: {exc}") from exc
     if not isinstance(payload, dict):
         raise ValueError("Unexpected Mixcloud GraphQL response shape")
     if payload.get("errors"):
