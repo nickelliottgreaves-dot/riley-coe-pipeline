@@ -531,8 +531,25 @@ def fetch_show_page_tracks_browser(item: dict) -> list[dict]:
     return tracks
 
 def fetch_show_page_tracks(item: dict) -> tuple[dict, list[dict]]:
-    """Extract public comment tracklists first, then clearly structured page rows."""
+    """Try the official REST show object, creator comment, then rendered public page."""
     url = str(item.get("url") or "")
+    # Mixcloud documents a direct REST object endpoint for every public show URL.
+    # This is distinct from the profile inventory route and may expose sections even
+    # when the public page itself is inaccessible to automated browsers.
+    try:
+        detail = fetch_show_detail(item)
+        if sections_from(detail):
+            episode, rest_tracks = inventory_item(detail)
+            episode["source"] = "Mixcloud official REST show object"
+            episode["tracklist_status"] = "incomplete"
+            episode["notes"] = "REST show sections extracted as candidates; verify against the complete creator-comment tracklist before treating as complete."
+            for track in rest_tracks:
+                track["source"] = "Mixcloud official REST show object"
+                track["verification_status"] = "needs_complete_visible_page_verification"
+            if rest_tracks:
+                return episode, rest_tracks
+    except (HTTPError, URLError, TimeoutError, OSError, json.JSONDecodeError) as exc:
+        item["_rest_detail_error"] = f"{type(exc).__name__}: {exc}"
     comment_tracks = fetch_show_comment_tracks(item)
     if comment_tracks:
         episode, _ = inventory_item(item)
