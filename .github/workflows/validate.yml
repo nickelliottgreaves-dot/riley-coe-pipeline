@@ -53,7 +53,7 @@ jobs:
         id: collect
         run: |
           mkdir -p artifacts/mixcloud
-          SINCE=$(python -c "from datetime import date,timedelta; print((date.today()-timedelta(days=7)).isoformat())")
+          SINCE=$(python -c "from datetime import date,timedelta; print((date.today()-timedelta(days=21)).isoformat())")
           UNTIL=$(python -c "from datetime import date; print(date.today().isoformat())")
           echo "Window: $SINCE through $UNTIL"
           python scripts/collect_mixcloud.py --since "$SINCE" --until "$UNTIL" --out-dir artifacts/mixcloud
