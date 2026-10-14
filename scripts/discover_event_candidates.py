@@ -86,12 +86,10 @@ def third_party_location_is_local(location, venue):
     venue_compact = re.sub(r"[^a-z0-9]", "", (venue or "").casefold())
     if venue_compact and venue_compact in compact:
         return True
-    local_terms = (
-        "newcastle", "gateshead", "tyne", "hexham", "corbridge", "northumberland",
-        "north tyneside", "south tyneside", "whitley bay", "north shields",
-        "south shields", "blyth", "morpeth"
-    )
-    return any(term in location for term in local_terms)
+    # Locality is not venue attribution. A Newcastle-wide Songkick card must
+    # not be assigned to whichever venue page happened to link to it. Require
+    # the configured venue name to appear in the event's own location field.
+    return False
 
 
 def is_songkick_nonlocal_aggregate_url(url):
@@ -174,7 +172,7 @@ def main():
             item["candidate_links_found"]=sum(1 for r in links if r["venue"]==venue)
             item["status"]="fetched_candidates_only"
             if rejected_nonlocal_events:
-                item["notes"]=(item["notes"]+" " if item["notes"] else "")+f"Rejected {rejected_nonlocal_events} third-party structured event(s) with missing/nonlocal location; they were not attributed to this venue."
+                item["notes"]=(item["notes"]+" " if item["notes"] else "")+f"Rejected {rejected_nonlocal_events} third-party structured event(s) without venue-specific location attribution; local-city-only locations were not assigned to this venue."
             item["notes"]=(item["notes"]+" " if item["notes"] else "")+"Fetch success does not prove calendar completeness; JavaScript-only events and pagination may be absent."
         except (HTTPError,URLError,TimeoutError,OSError) as exc:
             item.update(status="failed",notes=f"Fetch failed: {type(exc).__name__}: {exc}")
