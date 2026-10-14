@@ -22,7 +22,7 @@ class WorkflowArtifactContractTests(unittest.TestCase):
 
     def test_event_page_inspection_has_nontrivial_per_venue_page_budget(self):
         import re
-        match = re.search(r"--max-pages-per-venue\\s+(\\d+)", WORKFLOW)
+        match = re.search(r"--max-pages-per-venue\s+(\d+)", WORKFLOW)
         self.assertIsNotNone(match, "Workflow must configure the event-page crawl budget explicitly")
         self.assertGreaterEqual(int(match.group(1)), 15, "Five pages per venue starves event-detail candidates on large calendars")
 
