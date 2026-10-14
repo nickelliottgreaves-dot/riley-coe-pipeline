@@ -2,7 +2,7 @@ import unittest
 from datetime import date
 from unittest.mock import patch
 from io import BytesIO
-from scripts.collect_mixcloud import inventory_item, parse_date, parse_mixcloud_title_date, fetch_cloudcasts, fetch_cloudcasts_html, fetch_show_page_tracks, fetch_cloudcasts_search, fetch_show_comment_tracks, parse_visible_track_rows
+from scripts.collect_mixcloud import inventory_item, parse_date, parse_mixcloud_title_date, fetch_cloudcasts, fetch_cloudcasts_html, fetch_show_page_tracks, fetch_cloudcasts_search, fetch_show_comment_tracks, fetch_show_page_tracks_reader, parse_visible_track_rows
 
 class MixcloudInventoryTests(unittest.TestCase):
     def test_no_sections_is_unavailable_not_complete(self):
@@ -163,6 +163,18 @@ class MixcloudInventoryTests(unittest.TestCase):
         self.assertEqual(episode["tracklist_status"], "incomplete")
         self.assertEqual([(x["artist"], x["track_title"]) for x in tracks], [("The Fall", "Rebellious Jukebox")])
         self.assertEqual(tracks[0]["verification_status"], "needs_complete_visible_page_verification")
+
+    def test_reader_fallback_extracts_creator_comment_tracklist(self):
+        text = b'Riley & Coe Tuesday 6th October 2026\\nComments\\nCreator\\n1.\\nRebellious Jukebox\\nThe Fall\\n2.\\nStuck In A Room\\nBritish Birds\\nReply'
+        response = type("Response", (), {"__enter__": lambda self: self, "__exit__": lambda self, *args: None,
+            "read": lambda self, n: text})()
+        item = {"name": "Riley & Coe Tuesday 6th October 2026",
+            "url": "https://www.mixcloud.com/SixMusicAlternative/riley-coe-tuesday-6th-october-2026/",
+            "created_time": "2026-10-06"}
+        with patch("scripts.collect_mixcloud.urlopen", return_value=response):
+            tracks = fetch_show_page_tracks_reader(item)
+        self.assertEqual([(x["track_title"], x["artist"]) for x in tracks],
+            [("Rebellious Jukebox", "The Fall"), ("Stuck In A Room", "British Birds")])
 
     def test_show_page_parser_reads_numbered_creator_comment_tracklist(self):
         html = b'<div>Comments</div><div>The 6 Music Archive</div><div>Creator</div><div>Button: 00:00</div><div>1.</div><div>Threadbare</div><div>Lande Hekt</div><div>2.</div><div>New York No Wave</div><div>Ill Ease</div><div>Reply</div>'
