@@ -126,6 +126,11 @@ jobs:
         run: |
           mkdir -p artifacts/alternate-tracklists
           python scripts/diagnose_alternate_tracklists.py --out-dir artifacts/alternate-tracklists
+      - name: Smoke-test RadioFiles JSON collector over the current 14-day archive window
+        run: |
+          SINCE=$(python -c "from datetime import date,timedelta; print((date.today()-timedelta(days=13)).isoformat())")
+          UNTIL=$(python -c "from datetime import date; print(date.today().isoformat())")
+          python scripts/collect_radiofiles.py --since "$SINCE" --until "$UNTIL" --out-dir artifacts/alternate-tracklists/radiofiles-smoke
       - name: Preserve alternate source diagnostics
         if: always()
         uses: actions/upload-artifact@v4
