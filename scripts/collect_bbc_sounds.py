@@ -106,9 +106,9 @@ class ProgrammeTrackParser(HTMLParser):
             self.paragraph_buf=None
             if self.in_tracklist and self.artist and self.pending_artist and title:
                 broadcast_metadata = self.artist.casefold()=="broadcast" and bool(
-                    re.fullmatch(r"(?:last\\s+)?(?:mon|tue|wed|thu|fri|sat|sun)(?:day)?(?:\\s+\\d{1,2}\\s+[A-Za-z]{3,9}\\s+20\\d{2})?",title,re.I)
-                    or re.fullmatch(r"\\d{1,2}/\\d{1,2}/20\\d{2}",title)
-                    or re.fullmatch(r"\\d{1,2}:\\d{2}",title)
+                    re.fullmatch(r"(?:last\s+)?(?:mon|tue|wed|thu|fri|sat|sun)(?:day)?(?:\s+\d{1,2}\s+[A-Za-z]{3,9}\s+20\d{2})?",title,re.I)
+                    or re.fullmatch(r"\d{1,2}/\d{1,2}/20\d{2}",title)
+                    or re.fullmatch(r"\d{1,2}:\d{2}",title)
                     or title.casefold()=="bbc radio 6 music"
                     or title.casefold() in {"today","yesterday"}
                 )
