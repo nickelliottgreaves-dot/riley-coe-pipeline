@@ -1,7 +1,7 @@
 import unittest
 from urllib.error import HTTPError
 from unittest.mock import patch
-from scripts.collect_mixcloud import inventory_item, parse_date, resolve_cloudcasts_endpoint
+from scripts.collect_mixcloud import episode_date_from_text, inventory_item, parse_date, resolve_cloudcasts_endpoint
 
 class MixcloudInventoryTests(unittest.TestCase):
     def test_no_sections_is_unavailable_not_complete(self):
@@ -38,6 +38,11 @@ class MixcloudInventoryTests(unittest.TestCase):
         with patch("scripts.collect_mixcloud.get_json", side_effect=fake_get_json):
             endpoint = resolve_cloudcasts_endpoint("SixMusicAlternative")
         self.assertEqual(endpoint, "https://api.mixcloud.com/SixMusicAlternative/cloudcasts/")
+
+    def test_episode_date_from_mixcloud_title_or_slug(self):
+        self.assertEqual(episode_date_from_text("riley-coe-tuesday-6th-october-2026").isoformat(), "2026-10-06")
+        self.assertEqual(episode_date_from_text("Riley & Coe Monday 5th October 2026").isoformat(), "2026-10-05")
+        self.assertIsNone(episode_date_from_text("Riley & Coe - no date"))
 
     def test_date_parser(self):
         self.assertEqual(parse_date("2026-10-01T20:00:00Z").isoformat(), "2026-10-01")
