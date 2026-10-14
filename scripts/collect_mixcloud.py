@@ -161,10 +161,12 @@ def fetch_html_cloudcasts(username: str, since: date, until: date) -> tuple[list
     parser.feed(html_text)
     # Cloudcast cards may be embedded in hydration JSON rather than ordinary
     # anchors. Scan the captured public HTML for same-account show paths too.
-    raw_paths = re.findall(
-        r"(?i)(?:https?://(?:www\\.)?mixcloud\\.com)?(/?" + re.escape(username.strip("/")) + r"/riley[-_]coe[^\\"\'<>\\s\\\\]*)",
-        html_text,
+    path_pattern = (
+        r"(?i)(?:https?://(?:www\\.)?mixcloud\\.com)?(/?"
+        + re.escape(username.strip("/"))
+        + r"/riley[-_]coe[A-Za-z0-9/_-]*"
     )
+    raw_paths = re.findall(path_pattern, html_text)
     link_candidates = list(parser.links)
     link_candidates.extend((path, "") for path in raw_paths)
     found: list[dict] = []
