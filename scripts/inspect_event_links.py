@@ -95,6 +95,8 @@ def main():
     # happened to find a link. Zero candidates is an auditable outcome, not
     # proof of an empty calendar.
     source_urls={}
+    candidate_urls_by_venue=defaultdict(set)
+    source_venues_by_url=defaultdict(list)
     with args.sources.open(encoding="utf-8-sig",newline="") as f:
         for source in csv.DictReader(f):
             venue=(source.get("venue") or "").strip()
@@ -102,6 +104,8 @@ def main():
             if venue:
                 by_venue[venue]
                 source_urls[venue]=source_url
+                if source_url.startswith(("https://","http://")):
+                    source_venues_by_url[source_url].append(venue)
                 # Always attempt the configured venue calendar itself. A zero-link
                 # discovery result must not leave a configured venue unchecked.
                 if source_url.startswith(("https://","http://")) and not is_aggregate_calendar_url(source_url):
@@ -111,6 +115,12 @@ def main():
         venue=(row.get("venue") or "Unknown").strip()
         if url.startswith(("https://","http://")) and not is_aggregate_calendar_url(url):
             by_venue[venue].append(url)
+            candidate_urls_by_venue[venue].add(url)
+    shared_host_groups=defaultdict(set)
+    for shared_url,names in source_venues_by_url.items():
+        unique_names=sorted(set(names))
+        if len(unique_names)>1:
+            shared_host_groups[urlparse(shared_url).netloc.casefold()].update(unique_names)
     all_rows=[]; audits=[]
     for venue,urls in by_venue.items():
         queue=deque((u,0) for u in dict.fromkeys(urls)); visited=set(); failed=0; added=0; cap=False
@@ -158,11 +168,44 @@ def main():
                 failed+=1
                 all_rows.append({"venue":venue,"page_url":url,"http_status":"","content_type":"","page_title":"","event_title":"","event_date":"","performer_names":"","price":"","currency":"","availability":"","event_jsonld_found":"false","visible_text_snapshot":"","verified":"false","status":"fetch_failed","notes":f"{type(exc).__name__}: {exc}"})
             time.sleep(max(0,args.delay))
+        candidate_count=len(candidate_urls_by_venue[venue] - {source_urls.get(venue, "")})
         has_seed=bool(urls)
-        audit_notes="Bounded crawl only; source calendar and candidate links are attempted, but cap, JavaScript content, pagination and event/support completeness require review." if has_seed else "No usable source URL or candidate links supplied. This is a discovery gap, not evidence that the calendar is empty."
+        audit_notes=("Bounded crawl only; configured source calendar attempted; "+str(candidate_count)+" distinct candidate links discovered. Cap, JavaScript content, pagination and event/support completeness require review.") if has_seed else "No usable source URL or candidate links supplied. This is a discovery gap, not evidence that the calendar is empty."
+        if candidate_count==0 and has_seed:
+            audit_notes+=" No candidate detail links were discovered; attempting the configured source page alone does not establish an empty calendar."
+        host=urlparse(source_urls.get(venue, "")).netloc.casefold()
+        if host in shared_host_groups:
+            audit_notes+=" This source host is shared by venue aliases ("+", ".join(sorted(shared_host_groups[host]))+"); room attribution must be explicit before an event is assigned to a room."
         if any(is_aggregate_calendar_url(u) for u in urls):
             audit_notes+=" Aggregate Songkick metro/live-stream URLs were excluded."
-        audits.append({"venue":venue,"seed_candidate_links":len(set(urls)),"pages_fetched":len(visited)-failed,"pages_failed":failed,"same_host_links_added":added,"crawl_cap_reached":str(cap).lower(),"status":"PARTIAL" if has_seed else "NO_SEED_LINKS","notes":audit_notes})
+        audits.append({"venue":venue,"seed_candidate_links":candidate_count,"pages_fetched":len(visited)-failed,"pages_failed":failed,"same_host_links_added":added,"crawl_cap_reached":str(cap).lower(),"status":"PARTIAL" if has_seed else "NO_SEED_LINKS","notes":audit_notes})
+    # Shared venue calendars (e.g. The Cluny/Cluny 2 and Glasshouse/Sage Two)
+    # must not cause every event on the parent calendar to be attributed to
+    # every room. Resolve only when the event/page title names the specific
+    # room; otherwise preserve a single explicitly ambiguous candidate.
+    grouped={}
+    for row in all_rows:
+        host=urlparse(row.get("page_url","")).netloc.casefold()
+        aliases=sorted(shared_host_groups.get(host,set()))
+        if len(aliases)>1:
+            title_blob=" ".join([row.get("page_title",""),row.get("event_title","")]).casefold()
+            room_aliases=[name for name in aliases
+                          if re.search(r"\\b(?:2|two)\\b",name,re.I)
+                          and re.search(r"\\b"+re.escape(name.casefold())+r"\\b",title_blob)]
+            if room_aliases:
+                row["venue"]=room_aliases[0]
+            else:
+                row["venue"]="Unresolved shared calendar: "+" / ".join(aliases)
+                row["status"]="shared_calendar_attribution_unresolved"
+                row["notes"]=(row.get("notes","")+" Shared calendar serves multiple venue/room labels; title does not establish the room. Do not attribute this candidate to a specific room without event-level evidence.").strip()
+        key=(row.get("page_url",""),row.get("event_title",""),row.get("event_date",""),row.get("performer_names",""))
+        if key not in grouped:
+            grouped[key]=row
+        elif row.get("venue","")!=grouped[key].get("venue",""):
+            grouped[key]["venue"]="Unresolved shared calendar: "+" / ".join(aliases or sorted({row.get("venue",""),grouped[key].get("venue","")}))
+            grouped[key]["status"]="shared_calendar_attribution_unresolved"
+            grouped[key]["notes"]=(grouped[key].get("notes","")+" Duplicate detail page was reached through multiple venue aliases; venue/room attribution remains unresolved.").strip()
+    all_rows=list(grouped.values())
     with (args.out_dir/"event_page_inspection.csv").open("w",encoding="utf-8",newline="") as f:
         w=csv.DictWriter(f,fieldnames=EVENT_FIELDS);w.writeheader();w.writerows(all_rows)
     with (args.out_dir/"event_page_crawl_audit.csv").open("w",encoding="utf-8",newline="") as f:
