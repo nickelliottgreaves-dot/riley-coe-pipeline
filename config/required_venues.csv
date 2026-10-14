@@ -1,17 +1,21 @@
 venue,mandatory,notes
-The Cluny,TRUE,Include main room
-Cluny 2,TRUE,Separate room listing
-Boiler Shop,TRUE,
-Wylam Brewery,TRUE,
-The Grove,TRUE,
-Glasshouse International Centre for Music,TRUE,Include Sage One and Sage Two listings where applicable
-Sage Two,TRUE,Check separately if event listings are distinct
-Cumberland Arms,TRUE,
-Cobalt Studios,TRUE,
-NX Newcastle,TRUE,
-Think Tank,TRUE,Resolve venue naming during research
-O2 City Hall Newcastle,TRUE,
-Central Gateshead/Central Bar,TRUE,Check official venue Linktree and verify individual event links
-Gosforth Civic Theatre,TRUE,
-Newcastle University / Students' Union,TRUE,Include relevant live-music listings
-Lubber Fiend,TRUE,
+"The Cluny","TRUE","Include main room"
+"Cluny 2","TRUE","Separate room listing"
+"Boiler Shop","TRUE","Official calendar on homepage; follow View Full Calendar and pagination"
+"Wylam Brewery","TRUE","Official What's On calendar"
+"The Grove","TRUE","Follow Events navigation and inspect the full calendar"
+"Glasshouse International Centre for Music","TRUE","Include Sage One and Sage Two listings where applicable"
+"Sage Two","TRUE","Check separately if event listings are distinct"
+"Cumberland Arms","TRUE","Follow Live Events navigation; verify full listing"
+"Cobalt Studios","TRUE","Official site; find current events page and seasonal schedule"
+"NX Newcastle","TRUE","Official live events listing"
+"Think Tank","TRUE","Resolve venue naming during research"
+"O2 City Hall Newcastle","TRUE","Official Academy Music Group event calendar"
+"Central Gateshead / Central Bar","TRUE","Official venue Linktree with upcoming listings; verify individual event links"
+"Gosforth Civic Theatre","TRUE","Official What's On calendar"
+"Newcastle University / Students' Union","TRUE","Include relevant live-music listings"
+"Lubber Fiend","TRUE","Official venue page; locate full events listing"
+"The Globe","TRUE","Safety-net grassroots live-music venue; must be checked despite automated 403."
+"Little Buildings","TRUE","Safety-net grassroots live-music venue."
+"Utilita Arena Newcastle","TRUE","Safety-net for major touring acts and arena support bills."
+"ZEROX Newcastle","TRUE","Safety-net alternative live-music venue."
