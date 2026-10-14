@@ -1,21 +1,21 @@
 venue,source_url,source_status,notes
-The Cluny,https://thecluny.com/gigs/,verified_official_calendar,Official Gigs calendar; inspect all pages and both rooms
-Cluny 2,https://thecluny.com/gigs/,verified_official_calendar,Same official calendar; identify room separately
-Boiler Shop,https://www.boilershop.net/,verified_official_calendar,Official calendar on homepage; follow View Full Calendar and pagination
-Wylam Brewery,https://www.wylambrewery.co.uk/events/,verified_official_calendar,Official What's On calendar
-The Grove,https://www.thegrovenewcastle.co.uk/,verified_official_site,Follow Events navigation and inspect the full calendar
-Glasshouse International Centre for Music,https://theglasshouseicm.org/whats-on/,verified_official_calendar,Check all result pages and date filters
-Sage Two,https://theglasshouseicm.org/whats-on/,verified_official_calendar,Same official calendar; record Sage Two room separately
-Cumberland Arms,https://www.thecumberlandarms.co.uk/,verified_official_site,Follow Live Events navigation; verify full listing
-Cobalt Studios,https://cobaltstudios.co.uk/,verified_official_site,Official site; find current events page and seasonal schedule
-NX Newcastle,https://www.nxnewcastle.com/whats-on/live-events/,verified_official_calendar,Official live events listing
-Think Tank,https://www.thinktankncl.co.uk/shows/,verified_official_calendar,Official Think Tank? NCL shows listing
-O2 City Hall Newcastle,https://www.academymusicgroup.com/o2cityhallnewcastle/events,verified_official_calendar,Official Academy Music Group event calendar
-Central Gateshead / Central Bar,https://linktr.ee/central.bar,verified_official_social_listing,Official venue Linktree with upcoming listings; verify individual event links
-Gosforth Civic Theatre,https://www.gosforthcivictheatre.co.uk/whats-on,verified_official_calendar,Official What's On calendar
-Newcastle University / Students' Union,https://nusu.co.uk/,verified_official_site,Follow official events calendar; also check university venue listings
-Lubber Fiend,https://www.thelubberfiend.com/venue,verified_official_site,Official venue page; locate full events listing
-The Globe,https://theglobenewcastle.bar/whats-on/,verified_official_calendar,Safety-net grassroots live-music venue; check dated listings and ticket links
-Little Buildings,https://www.littlebuildingslive.com/,verified_official_site,Safety-net grassroots live-music venue; inspect current What's On listings and linked ticket pages
-Utilita Arena Newcastle,https://www.utilitaarena.co.uk/events,verified_official_calendar,Safety-net for major touring acts and arena support bills
-ZEROX Newcastle,https://www.zeroxbar.com/,verified_official_site,Safety-net alternative live-music venue; inspect official event and ticket links
+"The Cluny","https://thecluny.com/gigs/","verified_official_calendar","Official Gigs calendar; inspect all pages and both rooms"
+"Cluny 2","https://thecluny.com/gigs/","verified_official_calendar","Same official calendar; identify room separately"
+"Boiler Shop","https://www.boilershop.net/events/","verified_official_calendar","Official events calendar; inspect the full calendar and event pages."
+"Wylam Brewery","https://www.wylambrewery.co.uk/events/","verified_official_calendar","Official What's On calendar"
+"The Grove","https://thegrovenewcastle.gigantic.com/promoter/the-grove-newcastle-ltd?view=grid","verified_ticketing_calendar","Venue-specific Gigantic ticketing calendar; use event-detail links and cross-check supports."
+"Glasshouse International Centre for Music","https://theglasshouseicm.org/whats-on/","verified_official_calendar","Check all result pages and date filters"
+"Sage Two","https://theglasshouseicm.org/whats-on/","verified_official_calendar","Same official calendar; record Sage Two room separately"
+"Cumberland Arms","https://www.thecumberlandarms.co.uk/","verified_official_site","Follow Live Events navigation; verify full listing"
+"Cobalt Studios","https://soundcheck.club/newcastle/club/cobalt-studios/","verified_third_party_calendar","Official site returned HTTP 403 in automated checks; use Soundcheck venue calendar as fallback and follow official/ticket links for matching gigs."
+"NX Newcastle","https://www.nxnewcastle.com/events/","verified_official_calendar","Official all-events calendar; distinguish live events from club nights."
+"Think Tank","https://www.thinktankncl.co.uk/shows/","verified_official_calendar","Official Think Tank? NCL shows listing"
+"O2 City Hall Newcastle","https://www.academymusicgroup.com/o2cityhallnewcastle/events","verified_official_calendar","Official Academy Music Group event calendar"
+"Central Gateshead / Central Bar","https://linktr.ee/central.bar","verified_official_social_listing","Official venue Linktree with upcoming listings; verify individual event links"
+"Gosforth Civic Theatre","https://www.gosforthcivictheatre.co.uk/whats-on","verified_official_calendar","Official What's On calendar"
+"Newcastle University / Students' Union","https://www.ticketmaster.co.uk/newcastle-university-student-union-entrades-newcastle-upon-tyne/venue/256461","verified_ticketing_calendar","Ticketmaster venue calendar with lineups for touring gigs; supplement with official NUSU event pages for student showcases."
+"Lubber Fiend","https://www.songkick.com/venues/4426128-lubber-fiend/calendar","verified_third_party_calendar","Official venue page is JavaScript-only; use Songkick calendar for dated listings and cross-check linked tickets/official posts."
+"The Globe","https://soundbitenortheast.com/venue/the-globe/","verified_third_party_calendar","Official Globe calendar returns HTTP 403 to automated fetch; use SoundBite venue calendar and follow official Globe ticket links."
+"Little Buildings","https://soundbitenortheast.com/venue/little-buildings/","verified_third_party_calendar","Official site exposes no dated calendar in static HTML; use SoundBite venue listings and follow event links."
+"Utilita Arena Newcastle","https://www.utilitaarena.co.uk/events/all","verified_official_calendar","Official all-events calendar; inspect dates, artist/support bill, ticket status and event details."
+"ZEROX Newcastle","https://soundbitenortheast.com/venue/zerox-newcastle/","verified_third_party_calendar","Official site has no dated calendar in static HTML; use SoundBite venue listings and follow official/ticket links."

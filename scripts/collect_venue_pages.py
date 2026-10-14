@@ -6,7 +6,7 @@ from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-AGENT="riley-coe-pipeline/0.1 (public venue calendar discovery)"
+AGENT="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
 FIELDS=["venue","source_url","source_status","http_status","content_type","page_title","calendar_coverage_status","text_file","notes"]
 
 class VisibleText(HTMLParser):

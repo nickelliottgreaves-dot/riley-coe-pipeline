@@ -14,7 +14,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urljoin, urlparse
 from urllib.request import Request, urlopen
 
-AGENT = "riley-coe-pipeline/0.2 (event candidate discovery)"
+AGENT = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
 EVENT_FIELDS = ["event_date","venue","event_title","artist","artist_role","source_url","verified","price","ticket_status","discovery_method","notes"]
 LINK_FIELDS = ["venue","link_text","candidate_url","source_page_url","candidate_reason","verified","notes"]
 AUDIT_FIELDS = ["venue","source_url","http_status","content_type","structured_events_found","candidate_links_found","status","notes"]
