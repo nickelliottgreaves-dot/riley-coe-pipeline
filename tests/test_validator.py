@@ -20,7 +20,7 @@ class ValidatorTests(unittest.TestCase):
             self.assertIn("Missing run_manifest.json", result.stdout)
 
 
-    def test_every_required_venue_has_an_official_source_registry_entry(self):
+    def test_every_required_venue_has_a_usable_source_registry_entry(self):
         import csv, re
         required_path = ROOT / "config" / "required_venues.csv"
         source_path = ROOT / "config" / "venue_sources.csv"

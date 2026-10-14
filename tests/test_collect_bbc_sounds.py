@@ -1,59 +1,29 @@
-import sys,unittest
+import sys
+import unittest
 from pathlib import Path
-sys.path.insert(0,str(Path(__file__).resolve().parents[1]/"scripts"))
-from collect_bbc_sounds import episode_id,find_episodes,parse_date,TextParser,extract_tracklist_candidates
 
-class BBCCollectorTests(unittest.TestCase):
-    def test_episode_id(self):
-        self.assertEqual(episode_id("https://www.bbc.co.uk/programmes/m0031tk4"),"m0031tk4")
-        self.assertEqual(episode_id("https://www.bbc.co.uk/sounds/play/m0031tk4"),"m0031tk4")
-    def test_finds_episode_links(self):
-        html='<a href="/programmes/m0031tk4">Gideon reigns supreme</a><a href="/about">About</a>'
-        self.assertEqual(find_episodes(html,"https://www.bbc.co.uk/programmes/m001mf2c/episodes")[0]["title"],"Gideon reigns supreme")
-    def test_parse_date(self):
-        self.assertEqual(parse_date("Radio 6 Music 01 Oct 2026 120 mins"),"2026-10-01")
-    def test_extracts_review_only_visible_text_candidates(self):
-        p=TextParser()
-        p.feed("<h2>Tracklist</h2><p>Artist One - Song One</p><p>Song Two by Artist Two</p>")
-        candidates=extract_tracklist_candidates(p,"Tracklist\nArtist One - Song One\nSong Two by Artist Two","https://www.bbc.co.uk/programmes/m0031tk4","Test episode","2026-10-01")
-        self.assertEqual(len(candidates),2)
-        self.assertEqual(candidates[0]["artist_candidate"],"Artist One")
-        self.assertEqual(candidates[0]["track_title"],"Song One")
-        self.assertTrue(all(row["review_status"]=="needs_manual_review" for row in candidates))
-    def test_extracts_explicitly_labelled_track_artist_pairs(self):
-        p=TextParser()
-        line_one="Track: Song One | Artist: Artist One"
-        line_two="Artist: Artist Two; Title: Song Two"
-        p.feed("<h2>Tracklist</h2><p>"+line_one+"</p><p>"+line_two+"</p>")
-        candidates=extract_tracklist_candidates(p,"Tracklist\n"+line_one+"\n"+line_two,
-            "https://www.bbc.co.uk/programmes/m0031tk4","Test episode","2026-10-01")
-        self.assertEqual(len(candidates),2)
-        by_artist={row["artist_candidate"]:row for row in candidates}
-        self.assertEqual(by_artist["Artist One"]["track_title"],"Song One")
-        self.assertEqual(by_artist["Artist Two"]["track_title"],"Song Two")
-        self.assertTrue(all(row["review_status"]=="needs_manual_review" for row in candidates))
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "scripts"))
+from collect_bbc_sounds import ProgrammeTrackParser, parse_date
 
-    def test_extracts_visible_bbc_tracklist_rows_with_repeated_title_nodes(self):
-        p=TextParser()
-        text="Tracklist\nTrack\nArtist\n1.\nFree Way\nFree Way\nLafayette And The Lasabres\n2.\nThe Swim Thing\nThe Swim Thing\nDave Lewis\nShow more"
-        candidates=extract_tracklist_candidates(p,text,"https://www.bbc.co.uk/sounds/play/m0032d2m","Test episode","2026-10-12")
-        self.assertEqual(len(candidates),2)
-        self.assertEqual(candidates[0]["track_title"],"Free Way")
-        self.assertEqual(candidates[0]["artist_candidate"],"Lafayette And The Lasabres")
-        self.assertEqual(candidates[1]["track_title"],"The Swim Thing")
-        self.assertEqual(candidates[1]["artist_candidate"],"Dave Lewis")
-        self.assertTrue(all(row["review_status"]=="needs_manual_review" for row in candidates))
 
-    def test_extracts_jsonld_recording_candidates(self):
-        p=TextParser()
-        p.feed('<script type="application/ld+json">{"@type":"MusicRecording","name":"Track Name","byArtist":{"@type":"MusicGroup","name":"Artist Name"}}</script>')
-        candidates=extract_tracklist_candidates(p,"","https://www.bbc.co.uk/programmes/m0031tk4","Test episode","")
-        self.assertEqual(len(candidates),1)
-        self.assertEqual(candidates[0]["artist_candidate"],"Artist Name")
-        self.assertEqual(candidates[0]["extraction_method"],"jsonld_music_recording")
-        self.assertEqual(candidates[0]["review_status"],"needs_manual_review")
-    def test_text_parser_skips_scripts(self):
-        p=TextParser();p.feed('<p>Tracklist</p><script>secret text</script><a href="/programmes/m0031tk4">Episode</a>')
-        self.assertIn("Tracklist",p.text);self.assertNotIn("secret text",p.text)
-        self.assertEqual(len(p.links),1)
-if __name__=="__main__":unittest.main()
+class BBCProgrammeParserTests(unittest.TestCase):
+    def test_episode_title_date_wins_over_date_inside_tracklist(self):
+        text = "Riley & Coe - 13/10/2026 - BBC Sounds\nTrack title mentions 7 Oct 2026"
+        self.assertEqual(parse_date(text), "2026-10-13")
+
+    def test_extracts_only_artist_title_pairs_inside_music_played_section(self):
+        html = """
+        <h2>Next</h2><h3>Navigation label</h3><p>Do not collect</p>
+        <h2>Music Played</h2>
+        <h3>Artist One</h3><p>Track One</p>
+        <h3>Artist Two</h3><p>Track Two</p>
+        <h2>Broadcast</h2><h3>Related programme</h3><p>Not a track</p>
+        """
+        parser = ProgrammeTrackParser()
+        parser.feed(html)
+        self.assertEqual(parser.pairs, [("Artist One", "Track One"), ("Artist Two", "Track Two")])
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -111,7 +111,7 @@ event_date,venue,event_title,artist,artist_role,pool_match_status,matched_pool_n
 "2026-10-23","O2 City Hall Newcastle","Soul II Soul","Soul II Soul","headliner","NOT_FOUND_IN_POOL","","https://www.academymusicgroup/o2cityhallnewcastle/events","","",""
 "2026-10-25","O2 City Hall Newcastle","The Proclaimers","The Proclaimers","headliner","NOT_FOUND_IN_POOL","","https://www.academymusicgroup/o2cityhallnewcastle/events","","",""
 "2026-10-23","Central Bar","The Fargo Railroad Co.","The Fargo Railroad Co.","headliner","NOT_FOUND_IN_POOL","","https://linktr.ee/central.bar","","",""
-"2026-10-26","Central Bar","The Klittens","The Klittens","headliner","NOT_FOUND_IN_POOL","","https://soundbitenortheast.com/venue/the-globe/","","",""
+"2026-10-26","Central Bar","The Klittens","The Klittens","headliner","NOT_FOUND_IN_POOL","","https://linktr.ee/central.bar","","",""
 "2026-10-22","Gosforth Civic Theatre","Ibibio Sound Machine","Ibibio Sound Machine","headliner","NOT_FOUND_IN_POOL","","https://www.gosforthcivictheatre.co.uk/whats-on/ibibio-sound-machine","","",""
 "2026-10-26","Gosforth Civic Theatre","Circuit des Yeux feat. Alan Sparhawk presents Nosferatu (1922)","Circuit des Yeux","performer","NOT_FOUND_IN_POOL","","https://www.gosforthcivictheatre.co.uk/whats-on","","",""
 "2026-10-26","Gosforth Civic Theatre","Circuit des Yeux feat. Alan Sparhawk presents Nosferatu (1922)","Alan Sparhawk","guest performer","POSSIBLE_RELATED_NAME_REVIEW","Low & Alan Sparhawk","https://www.gosforthcivictheatre.co.uk/whats-on","","","Possible relation to pool entry 'Low & Alan Sparhawk'; not an exact artist-name match, manual identity review required."
