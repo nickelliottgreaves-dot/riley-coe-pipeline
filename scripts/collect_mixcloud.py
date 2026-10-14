@@ -56,69 +56,78 @@ def parse_date(value: str | None) -> date | None:
         return None
 
 
+
 def fetch_cloudcasts(username: str, since: date, until: date) -> tuple[list[dict], list[str]]:
     """Discover recent uploads using Mixcloud's current GraphQL user connection."""
     found: list[dict] = []
     errors: list[str] = []
-    cursor = None
-    visited_cursors = set()
-    pages = 0
-    while pages < 10:
-        after = f', after: "{cursor}"' if cursor else ""
-        query = """{
-          userLookup(lookup: {username: "%s"}) {
-            displayName
-            uploads(first: 100%s) {
-              edges { node { name slug url publishDate owner { username displayName } } }
-              pageInfo { endCursor hasNextPage }
-            }
-          }
-        }""" % (username.strip("/"), after)
-        try:
-            data = get_graphql(query)
-        except (HTTPError, URLError, TimeoutError, OSError, json.JSONDecodeError, ValueError) as exc:
-            errors.append(f"Mixcloud GraphQL user-upload discovery failed: {type(exc).__name__}: {exc}")
-            break
-        user = data.get("userLookup") or {}
-        if not user:
-            errors.append("Mixcloud GraphQL returned no userLookup object; data keys=" + ",".join(sorted(data.keys())))
-            break
-        uploads = user.get("uploads") or {}
-        edges = uploads.get("edges") or []
-        if not edges and not found:
-            errors.append("Mixcloud GraphQL user lookup had no upload edges; user keys=" + ",".join(sorted(user.keys())) + "; uploads keys=" + ",".join(sorted(uploads.keys())))
-        for edge in edges:
-            item = (edge or {}).get("node") or {}
-            if not isinstance(item, dict):
-                continue
-            published = parse_date(item.get("publishDate") or item.get("created_time"))
-            if not published or not (since <= published <= until):
-                continue
-            owner = item.get("owner") or {}
-            slug = str(item.get("slug") or "").strip("/")
-            url = str(item.get("url") or "").strip()
-            if not url and slug:
-                url = f"https://www.mixcloud.com/{username.strip('/')}/{slug}/"
-            found.append({
-                "name": str(item.get("name") or slug or "Riley & Coe episode"),
-                "title": str(item.get("name") or slug or "Riley & Coe episode"),
-                "url": url,
-                "key": f"/{username.strip('/')}/{slug}/" if slug else "",
-                "created_time": published.isoformat(),
-                "owner": owner,
-                "_graphql_discovery": True
-            })
-        page_info = uploads.get("pageInfo") or {}
-        if not page_info.get("hasNextPage"):
-            break
-        cursor = page_info.get("endCursor")
-        if not cursor or cursor in visited_cursors:
-            errors.append("Mixcloud GraphQL pagination returned a missing or repeated cursor.")
-            break
-        visited_cursors.add(cursor)
-        pages += 1
-    if pages >= 10:
-        errors.append("Stopped after 10 Mixcloud GraphQL upload pages; inventory may be incomplete.")
+    accounts = list(dict.fromkeys([username.strip("/").casefold(), username.strip("/")]))
+    for account in accounts:
+        cursor = None
+        visited_cursors = set()
+        pages = 0
+        account_found = False
+        while pages < 10:
+            after = f', after: "{cursor}"' if cursor else ""
+            query = """{
+              userLookup(lookup: {username: "%s"}) {
+                displayName
+                uploads(first: 100%s) {
+                  edges { node { name slug url publishDate owner { username displayName } } }
+                  pageInfo { endCursor hasNextPage }
+                }
+              }
+            }""" % (account, after)
+            try:
+                data = get_graphql(query)
+            except (HTTPError, URLError, TimeoutError, OSError, json.JSONDecodeError, ValueError) as exc:
+                errors.append(f"Mixcloud GraphQL user-upload discovery failed for {account}: {type(exc).__name__}: {exc}")
+                break
+            user = data.get("userLookup") or {}
+            if not user:
+                errors.append(f"Mixcloud GraphQL returned no userLookup for {account}; data keys=" + ",".join(sorted(data.keys())))
+                break
+            uploads = user.get("uploads") or {}
+            edges = uploads.get("edges") or []
+            for edge in edges:
+                item = (edge or {}).get("node") or {}
+                if not isinstance(item, dict):
+                    continue
+                published = parse_date(item.get("publishDate") or item.get("created_time"))
+                if not published or not (since <= published <= until):
+                    continue
+                owner = item.get("owner") or {}
+                slug = str(item.get("slug") or "").strip("/")
+                url = str(item.get("url") or "").strip()
+                owner_username = str(owner.get("username") or account)
+                if not url and slug:
+                    url = f"https://www.mixcloud.com/{owner_username}/{slug}/"
+                found.append({
+                    "name": str(item.get("name") or slug or "Riley & Coe episode"),
+                    "title": str(item.get("name") or slug or "Riley & Coe episode"),
+                    "url": url, "key": f"/{owner_username}/{slug}/" if slug else "",
+                    "created_time": published.isoformat(), "owner": owner,
+                    "_graphql_discovery": True
+                })
+            if found:
+                account_found = True
+                break
+            page_info = uploads.get("pageInfo") or {}
+            if not edges and not page_info.get("hasNextPage"):
+                errors.append(f"Mixcloud GraphQL user lookup for {account} returned no upload edges.")
+                break
+            if not page_info.get("hasNextPage"):
+                break
+            cursor = page_info.get("endCursor")
+            if not cursor or cursor in visited_cursors:
+                errors.append("Mixcloud GraphQL pagination returned a missing or repeated cursor.")
+                break
+            visited_cursors.add(cursor)
+            pages += 1
+        if pages >= 10:
+            errors.append("Stopped after 10 Mixcloud GraphQL upload pages; inventory may be incomplete.")
+        if account_found:
+            return found, []
     return found, errors
 
 class MixcloudHTMLParser(HTMLParser):
@@ -296,24 +305,29 @@ def fetch_show_comment_tracks(item: dict) -> list[dict]:
     if len(parts) != 2:
         return []
     username, slug = parts
-    query = """{
-      cloudcastLookup(lookup: {username: "%s", slug: "%s"}) {
-        name publishDate url
-        owner { username displayName }
-        comments(first: 100) {
-          edges { node { comment created user { displayName username } } }
-          totalCount
-        }
-      }
-    }""" % (username, slug)
-    try:
-        data = get_graphql(query)
-    except (HTTPError, URLError, TimeoutError, OSError, json.JSONDecodeError, ValueError) as exc:
-        item["_graphql_comment_error"] = f"{type(exc).__name__}: {exc}"
-        return []
-    cloudcast = data.get("cloudcastLookup") or {}
+    cloudcast = {}
+    last_error = ""
+    for account in list(dict.fromkeys([username.casefold(), username])):
+        query = """{
+          cloudcastLookup(lookup: {username: "%s", slug: "%s"}) {
+            name publishDate url
+            owner { username displayName }
+            comments(first: 100) {
+              edges { node { comment created user { displayName username } } }
+              totalCount
+            }
+          }
+        }""" % (account, slug)
+        try:
+            data = get_graphql(query)
+        except (HTTPError, URLError, TimeoutError, OSError, json.JSONDecodeError, ValueError) as exc:
+            last_error = f"{type(exc).__name__}: {exc}"
+            continue
+        cloudcast = data.get("cloudcastLookup") or {}
+        if cloudcast:
+            break
     if not cloudcast:
-        item["_graphql_comment_error"] = "GraphQL cloudcastLookup returned no object; data keys=" + ",".join(sorted(data.keys()))
+        item["_graphql_comment_error"] = last_error or "GraphQL cloudcastLookup returned no object for either account casing"
         return []
     comments = (cloudcast.get("comments") or {}).get("edges") or []
     item["_graphql_comment_count"] = len(comments)
