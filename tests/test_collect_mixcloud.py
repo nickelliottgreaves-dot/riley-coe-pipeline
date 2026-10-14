@@ -137,7 +137,7 @@ class MixcloudInventoryTests(unittest.TestCase):
         response = type("Response", (), {"__enter__": lambda self: self, "__exit__": lambda self, *args: None,
             "read": lambda self, n: html})()
         item = {"name": "Riley & Coe Tuesday 6th October 2026", "url": "https://www.mixcloud.com/SixMusicAlternative/riley-coe-tuesday-6th-october-2026/", "created_time": "2026-10-06"}
-        with patch("scripts.collect_mixcloud.get_json", return_value={"data": []}), patch("scripts.collect_mixcloud.urlopen", return_value=response):
+        with patch("scripts.collect_mixcloud.get_graphql", return_value={"cloudcastLookup": {"comments": {"edges": []}}}), patch("scripts.collect_mixcloud.urlopen", return_value=response):
             episode, tracks = fetch_show_page_tracks(item)
         self.assertEqual(len(tracks), 2)
         self.assertEqual(tracks[0]["artist"], "Artist One")
