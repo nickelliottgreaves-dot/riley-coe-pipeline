@@ -70,6 +70,14 @@ def clean(v):
 def likely(href,text):
     return bool(re.search(r"event|gig|show|concert|ticket|whats-on|whatson|live-music|performance|listing|page=|next|older",href+" "+text,re.I))
 
+def is_aggregate_calendar_url(url):
+    """Reject city-wide Songkick pages; they cannot establish a venue's events."""
+    parsed=urlparse(url)
+    if not parsed.netloc.casefold().endswith("songkick.com"):
+        return False
+    path=parsed.path.casefold()
+    return path.startswith("/metro-areas/") or path.startswith("/live-stream-concerts")
+
 def main():
     ap=argparse.ArgumentParser()
     ap.add_argument("--links",type=Path,required=True)
@@ -86,13 +94,23 @@ def main():
     # Initialise every configured venue, not just venues for which discovery
     # happened to find a link. Zero candidates is an auditable outcome, not
     # proof of an empty calendar.
+    source_urls={}
     with args.sources.open(encoding="utf-8-sig",newline="") as f:
         for source in csv.DictReader(f):
             venue=(source.get("venue") or "").strip()
-            if venue: by_venue[venue]
+            source_url=(source.get("source_url") or "").strip()
+            if venue:
+                by_venue[venue]
+                source_urls[venue]=source_url
+                # Always attempt the configured venue calendar itself. A zero-link
+                # discovery result must not leave a configured venue unchecked.
+                if source_url.startswith(("https://","http://")) and not is_aggregate_calendar_url(source_url):
+                    by_venue[venue].append(source_url)
     for row in seeds:
         url=(row.get("candidate_url") or "").strip()
-        if url.startswith(("https://","http://")): by_venue[(row.get("venue") or "Unknown").strip()].append(url)
+        venue=(row.get("venue") or "Unknown").strip()
+        if url.startswith(("https://","http://")) and not is_aggregate_calendar_url(url):
+            by_venue[venue].append(url)
     all_rows=[]; audits=[]
     for venue,urls in by_venue.items():
         queue=deque((u,0) for u in dict.fromkeys(urls)); visited=set(); failed=0; added=0; cap=False
@@ -131,7 +149,7 @@ def main():
                 if depth<args.max_depth:
                     for href,txt in p.links:
                         target=urljoin(url,href); parsed=urlparse(target)
-                        if parsed.scheme not in {"https","http"} or parsed.netloc not in source_hosts or target in visited or not likely(href,txt): continue
+                        if parsed.scheme not in {"https","http"} or parsed.netloc not in source_hosts or target in visited or is_aggregate_calendar_url(target) or not likely(href,txt): continue
                         # Avoid adding fragments and tracking-only URL variants.
                         target=target.split("#",1)[0]
                         if target not in visited and not any(x[0]==target for x in queue):
@@ -140,7 +158,11 @@ def main():
                 failed+=1
                 all_rows.append({"venue":venue,"page_url":url,"http_status":"","content_type":"","page_title":"","event_title":"","event_date":"","performer_names":"","price":"","currency":"","availability":"","event_jsonld_found":"false","visible_text_snapshot":"","verified":"false","status":"fetch_failed","notes":f"{type(exc).__name__}: {exc}"})
             time.sleep(max(0,args.delay))
-        audits.append({"venue":venue,"seed_candidate_links":len(set(urls)),"pages_fetched":len(visited)-failed,"pages_failed":failed,"same_host_links_added":added,"crawl_cap_reached":str(cap).lower(),"status":"PARTIAL" if urls else "NO_SEED_LINKS","notes":"Bounded crawl only; cap, JavaScript content, pagination and event/support completeness require review." if urls else "No candidate links supplied for this configured venue. This is a discovery gap, not evidence that the calendar is empty."})
+        has_seed=bool(urls)
+        audit_notes="Bounded crawl only; source calendar and candidate links are attempted, but cap, JavaScript content, pagination and event/support completeness require review." if has_seed else "No usable source URL or candidate links supplied. This is a discovery gap, not evidence that the calendar is empty."
+        if any(is_aggregate_calendar_url(u) for u in urls):
+            audit_notes+=" Aggregate Songkick metro/live-stream URLs were excluded."
+        audits.append({"venue":venue,"seed_candidate_links":len(set(urls)),"pages_fetched":len(visited)-failed,"pages_failed":failed,"same_host_links_added":added,"crawl_cap_reached":str(cap).lower(),"status":"PARTIAL" if has_seed else "NO_SEED_LINKS","notes":audit_notes})
     with (args.out_dir/"event_page_inspection.csv").open("w",encoding="utf-8",newline="") as f:
         w=csv.DictWriter(f,fieldnames=EVENT_FIELDS);w.writeheader();w.writerows(all_rows)
     with (args.out_dir/"event_page_crawl_audit.csv").open("w",encoding="utf-8",newline="") as f:
