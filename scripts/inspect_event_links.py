@@ -158,11 +158,12 @@ def main():
         # Keep the source calendar first, then detail candidates, and calendar
         # navigation last. Deduplication happens again when the queue is built.
         by_venue[venue]=([source_url] if source_url.startswith(("https://","http://")) and not is_aggregate_calendar_url(source_url) else [])+ordered
-    shared_host_groups=defaultdict(set)
+    shared_aliases_by_venue={}
     for shared_url,names in source_venues_by_url.items():
         unique_names=sorted(set(names))
         if len(unique_names)>1:
-            shared_host_groups[urlparse(shared_url).netloc.casefold()].update(unique_names)
+            for name in unique_names:
+                shared_aliases_by_venue[name]=set(unique_names)
     all_rows=[]; audits=[]
     for venue,urls in by_venue.items():
         queue=deque((u,0) for u in dict.fromkeys(urls)); visited=set(); failed=0; added=0; cap=False
@@ -215,13 +216,15 @@ def main():
         audit_notes=("Bounded crawl only; configured source calendar attempted; "+str(candidate_count)+" distinct candidate links discovered. Cap, JavaScript content, pagination and event/support completeness require review.") if has_seed else "No usable source URL or candidate links supplied. This is a discovery gap, not evidence that the calendar is empty."
         if candidate_count==0 and has_seed:
             audit_notes+=" No candidate detail links were discovered; attempting the configured source page alone does not establish an empty calendar."
-        host=urlparse(source_urls.get(venue, "")).netloc.casefold()
-        if host in shared_host_groups:
-            audit_notes+=" This source host is shared by venue aliases ("+", ".join(sorted(shared_host_groups[host]))+"); room attribution must be explicit before an event is assigned to a room."
+        shared_aliases=shared_aliases_by_venue.get(venue,set())
+        if len(shared_aliases)>1:
+            audit_notes+=" This exact source calendar is shared by venue aliases ("+", ".join(sorted(shared_aliases))+"); room attribution must be explicit before an event is assigned to a room."
         if any(is_aggregate_calendar_url(u) for u in urls):
             audit_notes+=" Aggregate Songkick metro/live-stream URLs were excluded."
         audits.append({"venue":venue,"seed_candidate_links":candidate_count,"pages_fetched":len(visited)-failed,"pages_failed":failed,"same_host_links_added":added,"crawl_cap_reached":str(cap).lower(),"status":"PARTIAL" if has_seed else "NO_SEED_LINKS","notes":audit_notes})
-    all_rows=apply_shared_calendar_attribution(all_rows,shared_host_groups)
+    for row in all_rows:
+        row["_shared_aliases"]=sorted(shared_aliases_by_venue.get(row.get("venue",""),set()))
+    all_rows=apply_shared_calendar_attribution(all_rows)
     with (args.out_dir/"event_page_inspection.csv").open("w",encoding="utf-8",newline="") as f:
         w=csv.DictWriter(f,fieldnames=EVENT_FIELDS);w.writeheader();w.writerows(all_rows)
     with (args.out_dir/"event_page_crawl_audit.csv").open("w",encoding="utf-8",newline="") as f:
