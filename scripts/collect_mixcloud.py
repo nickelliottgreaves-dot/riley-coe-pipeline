@@ -716,6 +716,8 @@ def main() -> int:
         time.sleep(0.15)
     episodes.sort(key=lambda r: (r["episode_date"], r["episode_title"]))
     tracks.sort(key=lambda r: (r["episode_date"], int(r["track_position"] or 0)))
+    if episodes and not tracks:
+        errors.append("No track rows could be extracted from any discovered Mixcloud episode; inventory-only success is not sufficient for the gig-matching pipeline.")
     out = args.out_dir
     write_csv(out / "mixcloud_episode_inventory.csv", EPISODE_FIELDS, episodes)
     write_csv(out / "mixcloud_api_track_candidates.csv", TRACK_FIELDS, tracks)
