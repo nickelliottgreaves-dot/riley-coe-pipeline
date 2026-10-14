@@ -14,7 +14,7 @@ SHOWS = [
     "https://www.mixcloud.com/SixMusicAlternative/riley-coe-monday-12th-october-2026-gid-solo/",
 ]
 KNOWN = ["Lande Hekt", "Ill Ease", "Doo Rag", "Juni Habel", "The Cutter", "Echo & the Bunnymen"]
-FIELDS = ["url", "navigation_status", "page_title", "body_chars", "known_artist_hits",
+FIELDS = ["url", "navigation_status", "page_state", "page_title", "body_chars", "known_artist_hits",
           "tracklist_heading", "creator_comment_text_found", "api_responses", "body_excerpt", "error"]
 
 
@@ -66,7 +66,7 @@ def main() -> int:
     report = {
         "created_utc": datetime.now(timezone.utc).isoformat(),
         "pages_probed": len(rows),
-        "pages_with_known_tracklist_artists": sum(bool(r["known_artist_hits"]) for r in rows),
+        "pages_with_known_tracklist_artists": sum(bool(r["known_artist_hits"]) for r in rows),\n        "pages_returning_not_found": sum(r["page_state"] == "page_not_found" for r in rows),
         "artist_rows_extracted": 0,
         "tracklists_certified_complete": 0,
         "interpretation": "Rendered text and network response evidence only; no tracklist completeness claim.",
