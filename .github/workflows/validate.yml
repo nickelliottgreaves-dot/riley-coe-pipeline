@@ -60,6 +60,28 @@ jobs:
           if-no-files-found: warn
           retention-days: 30
 
+
+  mixcloud-rest-diagnostics:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Probe documented Mixcloud REST endpoints and comment access
+        run: |
+          mkdir -p artifacts/mixcloud-diagnostics
+          python scripts/diagnose_mixcloud_rest.py --out-dir artifacts/mixcloud-diagnostics
+      - name: Preserve endpoint diagnostics even when all endpoints fail
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: riley-coe-mixcloud-rest-diagnostics-${{ github.run_id }}
+          path: artifacts/mixcloud-diagnostics/
+          if-no-files-found: warn
+          retention-days: 30
+
   bbc-sounds-inventory:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
