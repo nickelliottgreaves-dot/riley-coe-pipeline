@@ -89,7 +89,9 @@ def main():
     events=[]; links=[]; audit=[]; errors=[]
     for src in rows(args.sources):
         venue=(src.get("venue") or "").strip(); url=(src.get("source_url") or "").strip()
+        source_status=(src.get("source_status") or "").strip()
         item={"venue":venue,"source_url":url,"http_status":"","content_type":"","structured_events_found":0,"candidate_links_found":0,"status":"not_checked","notes":""}
+        rejected_nonlocal_events=0
         if not url.startswith(("https://","http://")):
             item.update(status="failed",notes="Missing configured HTTP(S) source URL"); errors.append(venue+": missing URL"); audit.append(item); continue
         try:
@@ -110,7 +112,13 @@ def main():
                     title=clean_value(ev.get("name"))
                     dt=date_part(ev.get("startDate"))
                     if not title or not dt or not (start.isoformat() <= dt <= end.isoformat()): continue
-                    location=clean_value(ev.get("location")) or venue
+                    location_raw=clean_value(ev.get("location"))
+                    # A third-party calendar can accidentally expose adjacent metro-area
+                    # or livestream events. Never silently relabel those as this venue.
+                    if source_status == "verified_third_party_calendar" and not third_party_location_is_local(location_raw, venue):
+                        rejected_nonlocal_events += 1
+                        continue
+                    location=location_raw or venue
                     performers=as_list(ev.get("performer") or ev.get("performers"))
                     performer_names=[clean_value(p) for p in performers if clean_value(p)]
                     offers=as_list(ev.get("offers"))
@@ -130,12 +138,17 @@ def main():
                 absolute=urljoin(url,href)
                 p=urlparse(absolute)
                 if p.scheme not in {"http","https"} or not likely_event_link(href,text): continue
+                # These Songkick endpoints describe an entire metro area or livestreams,
+                # not events at the configured local venue.
+                if is_songkick_nonlocal_aggregate_url(absolute): continue
                 if len(text.strip())<2: continue
                 key=(venue,absolute)
                 if any((r["venue"],r["candidate_url"])==key for r in links): continue
                 links.append({"venue":venue,"link_text":text[:300],"candidate_url":absolute,"source_page_url":url,"candidate_reason":"URL or anchor text resembles an event/calendar/ticket link","verified":"false","notes":"Candidate only; inspect page, date, pagination and support acts. Not proof of coverage."})
             item["candidate_links_found"]=sum(1 for r in links if r["venue"]==venue)
             item["status"]="fetched_candidates_only"
+            if rejected_nonlocal_events:
+                item["notes"]=(item["notes"]+" " if item["notes"] else "")+f"Rejected {rejected_nonlocal_events} third-party structured event(s) with missing/nonlocal location; they were not attributed to this venue."
             item["notes"]=(item["notes"]+" " if item["notes"] else "")+"Fetch success does not prove calendar completeness; JavaScript-only events and pagination may be absent."
         except (HTTPError,URLError,TimeoutError,OSError) as exc:
             item.update(status="failed",notes=f"Fetch failed: {type(exc).__name__}: {exc}")
