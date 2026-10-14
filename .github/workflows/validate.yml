@@ -194,19 +194,31 @@ jobs:
           retention-days: 30
 
   bbc-sounds-inventory:
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/review/radiofiles-pool-compare')
+    if: always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/review/radiofiles-pool-compare'))
+    needs: [radiofiles-inventory]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Download RadioFiles episode inventory as discovery fallback
+        if: always()
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: riley-coe-radiofiles-inventory-${{ github.run_id }}
+          path: artifacts/radiofiles
       - name: Inventory official BBC Riley & Coe programme pages and extract tracklist candidates
         run: |
           mkdir -p artifacts/bbc-sounds
-          START=$(python -c "from datetime import date,timedelta; print((date.today()-timedelta(days=7)).isoformat())")
+          START=$(python -c "from datetime import date,timedelta; print((date.today()-timedelta(days=13)).isoformat())")
           END=$(python -c "from datetime import date; print(date.today().isoformat())")
-          python scripts/collect_bbc_sounds.py --start "$START" --end "$END" --out-dir artifacts/bbc-sounds
+          FALLBACK_ARGS=()
+          if [ -f artifacts/radiofiles/radiofiles_episode_inventory.csv ]; then
+            FALLBACK_ARGS=(--episode-ids-file artifacts/radiofiles/radiofiles_episode_inventory.csv)
+          fi
+          python scripts/collect_bbc_sounds.py --start "$START" --end "$END" --out-dir artifacts/bbc-sounds "${FALLBACK_ARGS[@]}"
       - name: Preserve BBC episode inventory, snapshots and audit
         if: always()
         uses: actions/upload-artifact@v4
