@@ -36,9 +36,9 @@ def parse_date(value: str | None) -> date | None:
 
 def parse_title_date(title: str) -> date | None:
     """Extract the broadcast date from the visible Riley & Coe Mixcloud title."""
-    if not re.search(r"riley\\s*&\\s*coe", title, re.IGNORECASE):
+    if not re.search(r"riley\s*&\s*coe", title, re.IGNORECASE):
         return None
-    match = re.search(r"\\b(\\d{1,2})(?:st|nd|rd|th)?\\s+([A-Za-z]+)\\s+(\\d{4})\\b", title, re.IGNORECASE)
+    match = re.search(r"\b(\d{1,2})(?:st|nd|rd|th)?\s+([A-Za-z]+)\s+(\d{4})\b", title, re.IGNORECASE)
     if match:
         day, month, year = match.groups()
         for fmt in ("%d %B %Y", "%d %b %Y"):
@@ -46,7 +46,7 @@ def parse_title_date(title: str) -> date | None:
                 return datetime.strptime(f"{day} {month} {year}", fmt).date()
             except ValueError:
                 continue
-    numeric = re.search(r"\\b(\\d{1,2})[/-](\\d{1,2})[/-](\\d{4})\\b", title)
+    numeric = re.search(r"\b(\d{1,2})[/-](\d{1,2})[/-](\d{4})\b", title)
     if numeric:
         day, month, year = numeric.groups()
         try:
@@ -94,7 +94,7 @@ def _fetch_search_fallback(username: str, since: date, until: date) -> tuple[lis
                 continue
             title = str(item.get("name") or item.get("title") or "").strip()
             show_url = str(item.get("url") or "").strip()
-            if not re.search(r"riley\\s*&\\s*coe", title, re.IGNORECASE):
+            if not re.search(r"riley\s*&\s*coe", title, re.IGNORECASE):
                 continue
             if not show_url.casefold().startswith(expected_prefix):
                 continue
