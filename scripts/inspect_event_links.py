@@ -47,7 +47,7 @@ class Parser(HTMLParser):
 
 def fetch(url):
     req=Request(url,headers={"User-Agent":UA,"Accept":"text/html,application/xhtml+xml"})
-    with urlopen(req,timeout=20) as r:
+    with urlopen(req,timeout=12) as r:
         body=r.read(3_000_001)
         truncated=len(body)>3_000_000
         return r.status,r.headers.get("Content-Type",""),body[:3_000_000].decode("utf-8",errors="replace"),truncated
@@ -93,6 +93,15 @@ def main():
     for row in seeds:
         url=(row.get("candidate_url") or "").strip()
         if url.startswith(("https://","http://")): by_venue[(row.get("venue") or "Unknown").strip()].append(url)
+    # Always crawl the configured official source page as a seed, even when
+    # candidate discovery found no links. Otherwise zero-link venues never get
+    # fetched and their calendars/pagination cannot be discovered here.
+    with args.sources.open(encoding="utf-8-sig",newline="") as f:
+        for source in csv.DictReader(f):
+            venue=(source.get("venue") or "").strip()
+            url=(source.get("source_url") or "").strip()
+            if venue and url.startswith(("https://","http://")):
+                by_venue[venue].append(url)
     all_rows=[]; audits=[]
     for venue,urls in by_venue.items():
         queue=deque((u,0) for u in dict.fromkeys(urls)); visited=set(); failed=0; added=0; cap=False
