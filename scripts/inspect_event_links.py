@@ -9,6 +9,7 @@ unverified. It records caps and errors so an incomplete crawl cannot look comple
 from __future__ import annotations
 import argparse,csv,json,re,time,hashlib
 from collections import deque,defaultdict
+from concurrent.futures import ThreadPoolExecutor
 from html.parser import HTMLParser
 from pathlib import Path
 from urllib.error import HTTPError,URLError
@@ -102,8 +103,9 @@ def main():
             url=(source.get("source_url") or "").strip()
             if venue and url.startswith(("https://","http://")):
                 by_venue[venue].append(url)
-    all_rows=[]; audits=[]
-    for venue,urls in by_venue.items():
+    def crawl_venue(venue, urls):
+        all_rows=[]
+        audits=[]
         queue=deque((u,0) for u in dict.fromkeys(urls)); visited=set(); failed=0; added=0; cap=False
         source_hosts={urlparse(u).netloc for u in urls if urlparse(u).netloc}
         while queue:
@@ -150,6 +152,18 @@ def main():
                 all_rows.append({"venue":venue,"page_url":url,"http_status":"","content_type":"","page_title":"","event_title":"","event_date":"","performer_names":"","price":"","currency":"","availability":"","event_jsonld_found":"false","visible_text_snapshot":"","verified":"false","status":"fetch_failed","notes":f"{type(exc).__name__}: {exc}"})
             time.sleep(max(0,args.delay))
         audits.append({"venue":venue,"seed_candidate_links":len(set(urls)),"pages_fetched":len(visited)-failed,"pages_failed":failed,"same_host_links_added":added,"crawl_cap_reached":str(cap).lower(),"status":"PARTIAL" if urls else "NO_SEED_LINKS","notes":"Bounded crawl only; cap, JavaScript content, pagination and event/support completeness require review." if urls else "No candidate links supplied for this configured venue. This is a discovery gap, not evidence that the calendar is empty."})
+        return all_rows, audits
+
+    # Crawl independent venues concurrently so a slow or blocked site cannot
+    # make the entire 20-venue sweep serially wait on every timeout.
+    all_rows=[]; audits=[]
+    venue_items=list(by_venue.items())
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        futures=[executor.submit(crawl_venue, venue, urls) for venue, urls in venue_items]
+        for future in futures:
+            venue_rows, venue_audits = future.result()
+            all_rows.extend(venue_rows)
+            audits.extend(venue_audits)
     with (args.out_dir/"event_page_inspection.csv").open("w",encoding="utf-8",newline="") as f:
         w=csv.DictWriter(f,fieldnames=EVENT_FIELDS);w.writeheader();w.writerows(all_rows)
     with (args.out_dir/"event_page_crawl_audit.csv").open("w",encoding="utf-8",newline="") as f:
