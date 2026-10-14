@@ -254,7 +254,7 @@ def fetch_cloudcasts_html(username: str, since: date, until: date) -> tuple[list
             "Accept": "text/html,application/xhtml+xml"
         })
         try:
-            with urlopen(req, timeout=25) as response:
+            with urlopen(req, timeout=8) as response:
                 final_url = response.geturl() if hasattr(response, "geturl") else page_url
                 page = response.read(5_000_001).decode("utf-8", errors="replace")
         except (HTTPError, URLError, TimeoutError, OSError) as exc:
@@ -297,11 +297,80 @@ def fetch_cloudcasts_html(username: str, since: date, until: date) -> tuple[list
             items.append({"name": title, "title": title, "url": canonical, "created_time": published.isoformat(), "_html_fallback": True})
             added += 1
         diagnostics.append(f"{page_url} -> {final_url}; html_chars={len(page)}; anchors={len(parser.links)}; candidate_links={len(links)}; dated_shows_added={added}; sample_links={links[:8]}")
+    # Browser rendering may expose upload cards omitted from static HTML.
+    browser_items, browser_errors = fetch_cloudcasts_browser(username, since, until)
+    if browser_items:
+        existing = {str(item.get("url") or "").rstrip("/") for item in items}
+        for item in browser_items:
+            if str(item.get("url") or "").rstrip("/") not in existing:
+                items.append(item)
+                existing.add(str(item.get("url") or "").rstrip("/"))
+    elif browser_errors:
+        diagnostics.extend(browser_errors)
     if not items:
-        errors.append("Mixcloud HTML discovery found no dated show links. " + " | ".join(diagnostics))
+        errors.append("Mixcloud HTML/browser discovery found no dated show links. " + " | ".join(diagnostics))
     return items, errors
 
 
+
+
+def fetch_cloudcasts_browser(username: str, since: date, until: date) -> tuple[list[dict], list[str]]:
+    """Discover upload cards from the rendered public Mixcloud uploads page."""
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        return [], ["Playwright is not installed; rendered profile discovery skipped."]
+    profile = f"https://www.mixcloud.com/{username.strip('/')}/uploads/"
+    errors = []
+    items = []
+    seen = set()
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True, args=["--no-sandbox"])
+            page = browser.new_page(user_agent=USER_AGENT)
+            page.goto(profile, wait_until="domcontentloaded", timeout=20000)
+            page.wait_for_timeout(1200)
+            for _ in range(8):
+                clicked = False
+                for label in ("Load more", "Show more"):
+                    try:
+                        control = page.get_by_text(label, exact=True).first
+                        if control.is_visible(timeout=300):
+                            control.click(timeout=1200)
+                            page.wait_for_timeout(300)
+                            clicked = True
+                            break
+                    except Exception:
+                        continue
+                page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+                page.wait_for_timeout(300)
+                if not clicked:
+                    break
+            links = page.locator("a[href]").evaluate_all("(nodes) => nodes.map(a => ({href: a.href, text: (a.innerText || a.getAttribute('aria-label') || '').trim()}))")
+            browser.close()
+        for link in links:
+            absolute = str(link.get("href") or "")
+            parsed = urlparse(absolute)
+            parts = [part for part in parsed.path.split("/") if part]
+            if parsed.netloc.lower() not in {"www.mixcloud.com", "mixcloud.com"} or len(parts) != 2:
+                continue
+            if parts[0].casefold() != username.strip("/").casefold() or not parts[1].casefold().startswith("riley-coe-"):
+                continue
+            slug = parts[1]
+            title = str(link.get("text") or "").strip() or slug.replace("-", " ")
+            published = parse_mixcloud_title_date(slug.replace("-", " ")) or parse_mixcloud_title_date(title)
+            if not published or not (since <= published <= until):
+                continue
+            canonical = f"https://www.mixcloud.com/{parts[0]}/{slug}/"
+            if canonical in seen:
+                continue
+            seen.add(canonical)
+            items.append({"name": title, "title": title, "url": canonical, "created_time": published.isoformat(), "_html_fallback": True, "_browser_discovery": True})
+    except Exception as exc:
+        errors.append(f"Mixcloud rendered profile discovery failed: {type(exc).__name__}: {exc}")
+    if not items and not errors:
+        errors.append("Rendered Mixcloud uploads page exposed no dated Riley & Coe episode links.")
+    return items, errors
 
 def fetch_show_comment_tracks(item: dict) -> list[dict]:
     """Read numbered tracklist rows from the uploader's public GraphQL comment."""
