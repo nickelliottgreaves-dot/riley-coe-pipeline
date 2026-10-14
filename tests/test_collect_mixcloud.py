@@ -108,9 +108,9 @@ class MixcloudInventoryTests(unittest.TestCase):
         self.assertEqual(errors, [])
 
     def test_public_comment_api_extracts_numbered_tracklist(self):
-        payload = {"data": [
-            {"comment": "1.\nThreadbare\nLande Hekt\n2.\nNew York No Wave\nIll Ease"}
-        ]}
+        payload = {"cloudcastLookup": {"owner": {"username": "SixMusicAlternative"}, "comments": {"edges": [
+            {"node": {"comment": "1.\nThreadbare\nLande Hekt\n2.\nNew York No Wave\nIll Ease", "user": {"username": "SixMusicAlternative"}}}
+        ]}}}
         item = {"name": "Riley & Coe Wednesday 30th September 2026",
             "url": "https://www.mixcloud.com/SixMusicAlternative/riley-coe-wednesday-30th-september-2026/",
             "created_time": "2026-09-30"}
