@@ -182,6 +182,8 @@ def main() -> int:
         "username": args.username,
         "window_start": since.isoformat(),
         "window_end": until.isoformat(),
+        "source_status": ("unavailable" if not items and any("404" in e or "inactive" in e.casefold() for e in errors) else ("ok" if not errors else "partial")),
+        "fallback_required": bool(not items and any("404" in e or "inactive" in e.casefold() for e in errors)),
         "episodes_found": len(episodes),
         "candidate_artist_rows": len(tracks),
         "episodes_marked_complete": sum(r["tracklist_status"] == "complete" for r in episodes),
@@ -196,7 +198,10 @@ def main() -> int:
     }
     (out / "mixcloud_collection_audit.json").write_text(json.dumps(audit, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(audit, indent=2))
-    return 0 if not errors else 1
+    source_unavailable = not items and any("404" in e or "inactive" in e.casefold() for e in errors)
+    # A known unavailable public account is an audited source state, not a collector crash.
+    # BBC/RadioFiles fallback and the final fail-closed validator determine completeness.
+    return 0 if not errors or source_unavailable else 1
 
 if __name__ == "__main__":
     sys.exit(main())
