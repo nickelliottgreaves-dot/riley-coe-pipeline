@@ -396,7 +396,7 @@ def fetch_show_comment_tracks(item: dict) -> list[dict]:
           }
         }""" % (account, slug)
         try:
-            data = get_graphql(query)
+            data = get_graphql(query, timeout=5)
         except (HTTPError, URLError, TimeoutError, OSError, json.JSONDecodeError, ValueError) as exc:
             last_error = f"{type(exc).__name__}: {exc}"
             continue
@@ -493,7 +493,7 @@ def fetch_show_page_tracks_browser(item: dict) -> list[dict]:
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True, args=["--no-sandbox"])
             page = browser.new_page(user_agent=USER_AGENT)
-            response = page.goto(url, wait_until="domcontentloaded", timeout=12000)
+            response = page.goto(url, wait_until="domcontentloaded", timeout=8000)
             status = response.status if response is not None else None
             item["_browser_http_status"] = status
             if status == 404:
@@ -542,7 +542,7 @@ def fetch_show_page_tracks_reader(item: dict) -> list[dict]:
         "Accept": "text/plain"
     })
     try:
-        with urlopen(req, timeout=15) as response:
+        with urlopen(req, timeout=8) as response:
             text = response.read(5_000_001).decode("utf-8", errors="replace")
     except (HTTPError, URLError, TimeoutError, OSError) as exc:
         item["_reader_error"] = f"{type(exc).__name__}: {exc}"
@@ -667,7 +667,7 @@ def fetch_show_detail(item: dict) -> dict:
         if not public_url.startswith(prefix):
             return item
         detail_url = API_ROOT + "/" + public_url[len(prefix):].lstrip("/")
-    detail = get_json(detail_url)
+    detail = get_json(detail_url, timeout=5)
     if isinstance(detail, dict):
         merged = dict(item)
         merged.update(detail)
