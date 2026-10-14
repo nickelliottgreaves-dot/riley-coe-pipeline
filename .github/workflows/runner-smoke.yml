@@ -1,0 +1,24 @@
+name: Runner provisioning smoke test
+
+on:
+  push:
+    branches:
+      - rebuild/core-gig-finder
+    paths:
+      - ".github/workflows/runner-smoke.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Confirm hosted runner starts
+        run: |
+          echo "RUNNER_SMOKE_STARTED"
+          echo "Repository: $GITHUB_REPOSITORY"
+          echo "Ref: $GITHUB_REF"
+          date -u
