@@ -234,7 +234,14 @@ def find_episodes(html,base):
 
 def merge_episode_fallbacks(episodes, fallback_rows, start, end):
     """Add/annotate BBC episode PIDs discovered from a fallback inventory."""
-    by_id={episode_id(row.get("url","")):row for row in episodes if episode_id(row.get("url",""))}
+    by_id={}
+    for row in episodes:
+        pid=episode_id(row.get("url",""))
+        if pid:
+            # Keep the normalized ID in the row as well as the lookup map.
+            # Fallback-discovered and listing-discovered episodes must share a schema.
+            row["episode_id"]=pid
+            by_id[pid]=row
     for fallback in fallback_rows:
         pid=(fallback.get("episode_pid") or "").strip()
         if not re.fullmatch(r"m[0-9a-z]{7,}",pid,re.I):
