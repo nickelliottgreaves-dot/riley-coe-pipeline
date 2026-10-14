@@ -133,6 +133,22 @@ class MixcloudInventoryTests(unittest.TestCase):
             [("Threadbare", "Lande Hekt"), ("New York No Wave", "Ill Ease")])
 
 
+    def test_show_page_http_404_skips_redundant_static_fetch(self):
+        item = {"name": "Riley & Coe Tuesday 6th October 2026",
+            "url": "https://www.mixcloud.com/SixMusicAlternative/riley-coe-tuesday-6th-october-2026/",
+            "created_time": "2026-10-06"}
+        def browser_404(candidate):
+            candidate["_browser_http_status"] = 404
+            candidate["_browser_error"] = "HTTP 404 from Mixcloud public show page"
+            return []
+        with patch("scripts.collect_mixcloud.fetch_show_comment_tracks", return_value=[]), \
+             patch("scripts.collect_mixcloud.fetch_show_page_tracks_browser", side_effect=browser_404), \
+             patch("scripts.collect_mixcloud.urlopen", side_effect=AssertionError("must not retry a confirmed 404")):
+            episode, tracks = fetch_show_page_tracks(item)
+        self.assertEqual(tracks, [])
+        self.assertEqual(episode["tracklist_status"], "unavailable")
+        self.assertIn("HTTP 404", episode["notes"])
+
     def test_show_page_parser_reads_numbered_creator_comment_tracklist(self):
         html = b'<div>Comments</div><div>The 6 Music Archive</div><div>Creator</div><div>Button: 00:00</div><div>1.</div><div>Threadbare</div><div>Lande Hekt</div><div>2.</div><div>New York No Wave</div><div>Ill Ease</div><div>Reply</div>'
         response = type("Response", (), {"__enter__": lambda self: self, "__exit__": lambda self, *args: None,
