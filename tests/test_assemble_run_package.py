@@ -71,6 +71,33 @@ class EvidencePackageTests(unittest.TestCase):
             self.assertEqual(undated["artist_candidate"],"Undated Artist")
             self.assertIn("Date missing or invalid",undated["notes"])
 
+    def test_imports_manual_sweep_and_matches_pool_without_verifying_events(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            sweep=root/"venue-sweep.csv"
+            with sweep.open("w",newline="",encoding="utf-8") as f:
+                w=csv.DictWriter(f,fieldnames=["event_date","venue","event_title","artist","artist_role","pool_match_status","matched_pool_name","source_url","price","ticket_status","notes"])
+                w.writeheader()
+                w.writerow({"event_date":"2026-10-21","venue":"Ye Gods Venue","event_title":"Ye Gods live","artist":"Ye Gods","artist_role":"headliner","source_url":"https://example.org/calendar","price":"12.00","ticket_status":"InStock","notes":"Source-visible manual sweep row"})
+            out=root/"run"
+            subprocess.run([sys.executable,str(ROOT/"scripts/assemble_run_package.py"),
+                "--start","2026-10-14","--end","2026-10-27","--manual-sweep",str(sweep),"--out-dir",str(out)],
+                check=True,capture_output=True,text=True)
+            with (out/"events.csv").open(newline="",encoding="utf-8") as f:
+                events=list(csv.DictReader(f))
+            self.assertEqual(len(events),1)
+            self.assertEqual(events[0]["artist"],"Ye Gods")
+            self.assertEqual(events[0]["verified"],"false")
+            self.assertEqual(events[0]["price"],"12.00")
+            self.assertIn("Manual source-visible venue sweep",events[0]["notes"])
+            with (out/"pool_matches.csv").open(newline="",encoding="utf-8") as f:
+                matches=list(csv.DictReader(f))
+            match=next(row for row in matches if row["event_artist"]=="Ye Gods")
+            self.assertEqual(match["match_type"],"exact")
+            self.assertEqual(match["matched_pool_artist"],"Ye Gods")
+            self.assertEqual(match["verified"],"false")
+            self.assertEqual(json.loads((out/"run_manifest.json").read_text())["manual_sweep_rows"],1)
+
     def test_creates_partial_package_and_refuses_overwrite(self):
         with tempfile.TemporaryDirectory() as tmp:
             out=Path(tmp)/"run"

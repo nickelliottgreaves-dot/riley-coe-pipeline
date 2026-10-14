@@ -322,6 +322,14 @@ jobs:
         run: |
           START=$(python -c "from datetime import date; print(date.today().isoformat())")
           END=$(python -c "from datetime import date,timedelta; print((date.today()+timedelta(days=13)).isoformat())")
+          MANUAL_SWEEP_ARGS=()
+          MANUAL_SWEEP="artifacts/manual-review/venue-sweep-${START}.csv"
+          if [ -f "$MANUAL_SWEEP" ]; then
+            MANUAL_SWEEP_ARGS=(--manual-sweep "$MANUAL_SWEEP")
+            echo "Including dated manual venue sweep: $MANUAL_SWEEP"
+          else
+            echo "No dated manual venue sweep found for $START; machine candidates remain the only event input."
+          fi
           python scripts/assemble_run_package.py \
             --start "$START" --end "$END" \
             --episodes "artifacts/riley-coe-mixcloud-inventory-${{ github.run_id }}/mixcloud_episode_inventory.csv" \
@@ -334,6 +342,7 @@ jobs:
             --venue-audit "artifacts/riley-coe-event-candidates-${{ github.run_id }}/event_discovery_audit.csv" \
             --event-page-inspection "artifacts/riley-coe-event-page-inspection-${{ github.run_id }}/event_page_inspection.csv" \
             --event-page-audit "artifacts/riley-coe-event-page-inspection-${{ github.run_id }}/event_page_crawl_audit.csv" \
+            "${MANUAL_SWEEP_ARGS[@]}" \
             --out-dir artifacts/evidence-package
       - name: Preserve dated evidence scaffold for review
         if: always()

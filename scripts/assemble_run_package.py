@@ -37,7 +37,7 @@ def main():
     ap.add_argument("--start",required=True); ap.add_argument("--end",required=True)
     ap.add_argument("--previous-successful-run",default="unknown/not yet established")
     ap.add_argument("--episodes",type=Path); ap.add_argument("--bbc-episodes",type=Path); ap.add_argument("--bbc-track-candidates",type=Path); ap.add_argument("--mixcloud-track-candidates",type=Path); ap.add_argument("--radiofiles-episodes",type=Path); ap.add_argument("--radiofiles-track-candidates",type=Path); ap.add_argument("--events",type=Path)
-    ap.add_argument("--venue-audit",type=Path); ap.add_argument("--event-page-inspection",type=Path); ap.add_argument("--event-page-audit",type=Path); ap.add_argument("--out-dir",type=Path,required=True)
+    ap.add_argument("--venue-audit",type=Path); ap.add_argument("--event-page-inspection",type=Path); ap.add_argument("--event-page-audit",type=Path); ap.add_argument("--manual-sweep",type=Path,help="Optional dated source-visible venue sweep CSV; candidates remain unverified."); ap.add_argument("--out-dir",type=Path,required=True)
     ap.add_argument("--pool",type=Path,default=ROOT/"data/artist_pool.csv")
     args=ap.parse_args()
     start=date.fromisoformat(args.start); end=date.fromisoformat(args.end)
@@ -53,6 +53,7 @@ def main():
         ("radiofiles_episode_inventory",args.radiofiles_episodes,True),
         ("radiofiles_track_candidates",args.radiofiles_track_candidates,True),
         ("event_candidates",args.events,True),
+        ("manual_venue_sweep",args.manual_sweep,False),
         ("event_discovery_audit",args.venue_audit,True),
         ("event_page_inspection",args.event_page_inspection,True),
         ("event_page_crawl_audit",args.event_page_audit,True),
@@ -139,8 +140,24 @@ def main():
         else:
             event_rows.append({**base,"artist":"","artist_role":"unknown",
                 "notes":"Unresolved inspected-page JSON-LD candidate; performer not exposed. "+(item.get("notes") or "")})
+    # Import a dated manual source-visible sweep when one is available for this run.
+    # These rows enrich the review queue but are never marked verified.
+    manual_sweep_rows=read_csv(args.manual_sweep,["event_date","venue","event_title","artist","artist_role","source_url","price","ticket_status","notes"]) if args.manual_sweep else []
+    for item in manual_sweep_rows:
+        event_rows.append({
+            "event_date":item.get("event_date",""),
+            "venue":item.get("venue",""),
+            "event_title":item.get("event_title",""),
+            "artist":item.get("artist",""),
+            "artist_role":item.get("artist_role","role_unverified") or "role_unverified",
+            "source_url":item.get("source_url",""),
+            "verified":"false",
+            "price":item.get("price",""),
+            "ticket_status":item.get("ticket_status",""),
+            "notes":("Manual source-visible venue sweep; event detail, room, role, price and ticket status still require independent verification. "+(item.get("notes") or "")).strip()
+        })
     # Preserve only event rows inside the requested window; every candidate remains unverified.
-    events=[]; unresolved=[]; seen_event_keys=set()
+    events=[]; unresolved=[]; seen_event_keys={}
     for r in event_rows:
         raw_date=(r.get("event_date") or "").strip()
         dt=raw_date[:10] if len(raw_date)>=10 else ""
@@ -162,15 +179,24 @@ def main():
             unresolved_row["notes"]=((r.get("notes") or "")+" Performer missing; retained for manual triage.").strip()
             unresolved.append(unresolved_row)
             continue
-        key=(dt,"".join(ch.casefold() for ch in (r.get("venue") or "") if ch.isalnum()),
-             " ".join((r.get("event_title") or "").casefold().split()),
-             " ".join((r.get("artist") or "").casefold().split()),
-             (r.get("source_url") or "").strip())
+        norm_key=lambda value:"".join(ch.casefold() for ch in (value or "") if ch.isalnum())
+        key=(dt,norm_key(r.get("venue","")),norm_key(r.get("event_title","")),norm_key(r.get("artist","")))
+        candidate={**{k:r.get(k,"") for k in EVENT_FIELDS},"event_date":dt,"verified":"false",
+                   "notes":((r.get("notes") or "")+" Candidate imported; independently verify the event detail page and support bill.").strip()}
         if key in seen_event_keys:
+            existing=events[seen_event_keys[key]]
+            for field in ("price","ticket_status"):
+                if not (existing.get(field) or "").strip() and (candidate.get(field) or "").strip():
+                    existing[field]=candidate[field]
+            if "unverified" in (existing.get("artist_role") or "").casefold() and candidate.get("artist_role"):
+                existing["artist_role"]=candidate["artist_role"]
+            if candidate.get("source_url") and candidate["source_url"] != existing.get("source_url"):
+                existing["notes"]=(existing.get("notes","")+" Additional candidate source: "+candidate["source_url"]+".").strip()
+            if candidate.get("notes") and candidate["notes"] not in existing.get("notes",""):
+                existing["notes"]=(existing.get("notes","")+" "+candidate["notes"]).strip()
             continue
-        seen_event_keys.add(key)
-        events.append({**{k:r.get(k,"") for k in EVENT_FIELDS},"event_date":dt,"verified":"false",
-                       "notes":((r.get("notes") or "")+" Candidate imported; independently verify the event detail page and support bill.").strip()})
+        seen_event_keys[key]=len(events)
+        events.append(candidate)
     venue_audit=read_csv(args.venue_audit,["venue","source_url","status","notes"]) if args.venue_audit else []
     detail_audit=read_csv(args.event_page_audit,["venue","seed_candidate_links","pages_fetched","pages_failed","same_host_links_added","crawl_cap_reached","status","notes"]) if args.event_page_audit else []
     audit_by_venue={''.join(c.casefold() for c in r.get("venue","") if c.isalnum()):r for r in venue_audit}
@@ -257,11 +283,11 @@ def main():
               "previous_successful_run":args.previous_successful_run,"claimed_status":"PARTIAL",
               "episode_coverage_complete":False,"venue_sweep_complete":False,"artist_pool_compared":False,"all_event_sources_verified":False,
               "researcher_notes":"Automatically assembled evidence scaffold. Not a completed research run. BBC Sounds/visible tracklists, event detail pages, supports, prices/ticket status, regression checks, full venue coverage and safety-net searches still require verification.",
-              "package_kind":"candidate_scaffold","source_episode_rows":len(episode_rows),"candidate_event_rows":len(events),"unresolved_event_candidates":len(unresolved),
+              "package_kind":"candidate_scaffold","source_episode_rows":len(episode_rows),"candidate_event_rows":len(events),"manual_sweep_rows":len(manual_sweep_rows),"unresolved_event_candidates":len(unresolved),
               "mandatory_venue_rows":len(venue_rows),"venue_calendar_checks_completed":0,"regression_artists_seeded":len(regression_rows),"regression_artist_checks_completed":0,
               "input_file_audit":"input_file_audit.csv","venue_discovery_coverage":"venue_discovery_coverage.csv","tracklist_candidate_review":"tracklist_candidate_review.csv","dated_exports":list(dated_exports)+[dedup_path.name],"missing_or_unsupplied_inputs":missing_inputs,"input_files_present":sum(r["status"]=="present" for r in input_audit)}
     (out/"run_manifest.json").write_text(json.dumps(manifest,indent=2)+"\n",encoding="utf-8")
-    summary={"output_directory":str(out),"status":"PARTIAL","episode_rows":len(episode_rows),"event_candidate_rows":len(events),"unresolved_event_candidates":len(unresolved),"mandatory_venue_rows":len(venue_rows),"regression_artists_seeded":len(regression_rows),"regression_artist_checks_completed":0,"complete_claimed":False,"missing_or_unsupplied_inputs":missing_inputs}
+    summary={"output_directory":str(out),"status":"PARTIAL","episode_rows":len(episode_rows),"event_candidate_rows":len(events),"manual_sweep_rows":len(manual_sweep_rows),"unresolved_event_candidates":len(unresolved),"mandatory_venue_rows":len(venue_rows),"regression_artists_seeded":len(regression_rows),"regression_artist_checks_completed":0,"complete_claimed":False,"missing_or_unsupplied_inputs":missing_inputs}
     (out/"package_assembly_summary.json").write_text(json.dumps(summary,indent=2)+"\n",encoding="utf-8")
     print(json.dumps(summary,indent=2))
     return 0
