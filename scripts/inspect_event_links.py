@@ -190,8 +190,8 @@ def main():
         if len(aliases)>1:
             title_blob=" ".join([row.get("page_title",""),row.get("event_title","")]).casefold()
             room_aliases=[name for name in aliases
-                          if re.search(r"\\b(?:2|two)\\b",name,re.I)
-                          and re.search(r"\\b"+re.escape(name.casefold())+r"\\b",title_blob)]
+                          if re.search(r"\b(?:2|two)\b",name,re.I)
+                          and re.search(r"\b"+re.escape(name.casefold())+r"\b",title_blob)]
             if room_aliases:
                 row["venue"]=room_aliases[0]
             else:
