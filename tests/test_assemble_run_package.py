@@ -27,6 +27,12 @@ class EvidencePackageTests(unittest.TestCase):
             subprocess.run([sys.executable,str(ROOT/"scripts/assemble_run_package.py"),
                 "--start","2026-10-13","--end","2026-10-26","--bbc-episodes",str(bbc),
                 "--bbc-track-candidates",str(candidates),"--mixcloud-track-candidates",str(mixcloud),"--mixcloud-audit",str(mixcloud_audit),"--out-dir",str(out)],check=True,capture_output=True,text=True)
+            with (out/"venue_coverage.csv").open(newline="",encoding="utf-8") as f:
+                venue_coverage=list(csv.DictReader(f))
+            with (ROOT/"config/venue_sources.csv").open(encoding="utf-8-sig",newline="") as f:
+                configured_sources=list(csv.DictReader(f))
+            self.assertEqual(len(venue_coverage),len(configured_sources),"Evidence package must represent every configured venue, including safety-net sources")
+            self.assertEqual({r["venue"] for r in venue_coverage},{r["venue"] for r in configured_sources})
             with (out/"episodes.csv").open(newline="",encoding="utf-8") as f:
                 episodes=list(csv.DictReader(f))
             self.assertEqual(episodes[0]["tracklist_status"],"not_yet_checked")
