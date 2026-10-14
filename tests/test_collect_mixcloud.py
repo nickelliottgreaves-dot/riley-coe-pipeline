@@ -151,6 +151,27 @@ class MixcloudInventoryTests(unittest.TestCase):
         self.assertEqual(episode["tracklist_status"], "unavailable")
         self.assertIn("HTTP 404", episode["notes"])
 
+    def test_soft_404_invokes_reader_fallback(self):
+        item = {"name": "Riley & Coe Tuesday 6th October 2026",
+            "url": "https://www.mixcloud.com/SixMusicAlternative/riley-coe-tuesday-6th-october-2026/",
+            "created_time": "2026-10-06"}
+        rows = [{"episode_date": "2026-10-06", "episode_title": item["name"],
+            "episode_url": item["url"], "artist": "The Fall", "track_title": "Rebellious Jukebox",
+            "track_position": "1", "source": "Mixcloud public page via Jina Reader",
+            "verification_status": "needs_complete_visible_page_verification"}]
+        def browser_soft_404(candidate):
+            candidate["_browser_text_sample"] = "Home Link | Log in | Page Not Found"
+            candidate["_browser_text_line_count"] = 9
+            return []
+        with patch("scripts.collect_mixcloud.fetch_show_detail", return_value=item), \
+             patch("scripts.collect_mixcloud.fetch_show_comment_tracks", return_value=[]), \
+             patch("scripts.collect_mixcloud.fetch_show_page_tracks_browser", side_effect=browser_soft_404), \
+             patch("scripts.collect_mixcloud.fetch_show_page_tracks_reader", return_value=rows) as reader:
+            episode, tracks = fetch_show_page_tracks(item)
+        reader.assert_called_once_with(item)
+        self.assertEqual(episode["source"], "Mixcloud public page via Jina Reader")
+        self.assertEqual(tracks[0]["track_title"], "Rebellious Jukebox")
+
     def test_show_rest_sections_are_extracted_as_unverified_candidates(self):
         item = {"name": "Riley & Coe Tuesday 6th October 2026",
             "url": "https://www.mixcloud.com/SixMusicAlternative/riley-coe-tuesday-6th-october-2026/",
