@@ -8,6 +8,7 @@ official source before it can be marked complete in the run evidence.
 """
 from __future__ import annotations
 import argparse, csv, json, sys, time
+from html.parser import HTMLParser
 from datetime import date, datetime, timezone
 from pathlib import Path
 from urllib.error import HTTPError, URLError
@@ -87,6 +88,93 @@ def resolve_cloudcasts_endpoint(username: str) -> str:
     # records the failure rather than silently reporting an empty inventory.
     return f"{API_ROOT}/{requested}/cloudcasts/"
 
+class CloudcastLinkParser(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.links: list[tuple[str, str]] = []
+        self.anchor: dict | None = None
+
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+        if tag == "a" and attrs.get("href"):
+            self.anchor = {"href": attrs["href"], "text": []}
+
+    def handle_data(self, data):
+        if self.anchor is not None:
+            text = " ".join(data.split())
+            if text:
+                self.anchor["text"].append(text)
+
+    def handle_endtag(self, tag):
+        if tag == "a" and self.anchor is not None:
+            self.links.append((self.anchor["href"], " ".join(self.anchor["text"])))
+            self.anchor = None
+
+
+def episode_date_from_text(value: str) -> date | None:
+    """Parse dates in visible Mixcloud show titles and URL slugs."""
+    match = re.search(
+        r"(?i)(\d{1,2})(?:st|nd|rd|th)?[\\s_-]+"
+        r"(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|"
+        r"jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)[\\s_-]+(20\\d{2})",
+        value,
+    )
+    if not match:
+        return None
+    try:
+        return datetime.strptime(f"{match.group(1)} {match.group(2)[:3]} {match.group(3)}", "%d %b %Y").date()
+    except ValueError:
+        return None
+
+
+def fetch_html_cloudcasts(username: str, since: date, until: date) -> tuple[list[dict], list[str]]:
+    """Best-effort fallback using links rendered on the public account page.
+
+    It only inventories episode candidates; it does not claim the profile's
+    rendered links are exhaustive or that visible tracklists have been checked.
+    """
+    profile_url = f"https://www.mixcloud.com/{username.strip('/')}/"
+    req = Request(profile_url, headers={"User-Agent": USER_AGENT, "Accept": "text/html,application/xhtml+xml"})
+    errors: list[str] = []
+    try:
+        with urlopen(req, timeout=25) as response:
+            raw = response.read(4_000_001)
+    except (HTTPError, URLError, TimeoutError, OSError) as exc:
+        return [], [f"Mixcloud public profile HTML fallback failed for {profile_url}: {exc}"]
+    truncated = len(raw) > 4_000_000
+    parser = CloudcastLinkParser()
+    parser.feed(raw[:4_000_000].decode("utf-8", errors="replace"))
+    found: list[dict] = []
+    seen: set[str] = set()
+    account = username.strip("/").casefold()
+    for href, link_text in parser.links:
+        public_url = urljoin(profile_url, href)
+        parsed = urlparse(public_url)
+        path = parsed.path.strip("/")
+        parts = path.split("/")
+        if parsed.netloc.casefold() not in {"www.mixcloud.com", "mixcloud.com"} or len(parts) < 2:
+            continue
+        if parts[0].casefold() != account or "riley-coe" not in parts[1].casefold():
+            continue
+        if public_url in seen:
+            continue
+        seen.add(public_url)
+        episode_date = episode_date_from_text(link_text + " " + path.replace("/", " "))
+        if not episode_date or not (since <= episode_date <= until):
+            continue
+        found.append({
+            "name": link_text or parts[1].replace("-", " "),
+            "url": public_url,
+            "key": "/" + path.strip("/") + "/",
+            "created_time": episode_date.isoformat() + "T12:00:00Z",
+        })
+    if truncated:
+        errors.append("Mixcloud profile HTML was truncated at 4 MB; candidate inventory may be incomplete.")
+    if not found:
+        errors.append("Mixcloud profile HTML yielded no dated Riley & Coe links in the requested window; links may be client-rendered or not exposed.")
+    return found, errors
+
+
 def fetch_cloudcasts(username: str, since: date, until: date) -> tuple[list[dict], list[str], list[str]]:
     endpoint = resolve_cloudcasts_endpoint(username)
     url = f"{endpoint.rstrip('/')}/?{urlencode({'limit': 100, 'offset': 0})}"
@@ -138,12 +226,18 @@ def fetch_cloudcasts(username: str, since: date, until: date) -> tuple[list[dict
                 "Search results are not guaranteed exhaustive and require visible-page verification."
             )
         else:
-            errors.extend(fallback_errors)
-            if not fallback_found and not fallback_errors:
-                errors.append(
-                    f"Mixcloud public search returned no dated shows matching account {username!r} "
-                    f"for {since.isoformat()} through {until.isoformat()}."
+            html_found, html_errors = fetch_html_cloudcasts(username, since, until)
+            if html_found:
+                found = html_found
+                errors = []
+                warnings.append(
+                    f"Account cloudcasts listing failed ({primary_error}); public search yielded no matching dated shows, "
+                    f"so {len(found)} candidate(s) were recovered from the rendered profile page. "
+                    "Profile links may be incomplete; visible tracklists still require verification."
                 )
+            else:
+                errors.extend(fallback_errors)
+                errors.extend(html_errors)
     return found, errors, warnings
 
 def fetch_search_cloudcasts(username: str, since: date, until: date) -> tuple[list[dict], list[str]]:
