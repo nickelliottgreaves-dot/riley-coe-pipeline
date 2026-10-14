@@ -526,6 +526,8 @@ def fetch_show_page_tracks_browser(item: dict) -> list[dict]:
     tracks = parse_visible_track_rows(item, lines, "Mixcloud rendered public creator comment")
     item["_browser_text_line_count"] = len(lines)
     item["_browser_track_rows"] = len(tracks)
+    item["_browser_has_creator"] = any(line.casefold() == "creator" for line in lines)
+    item["_browser_text_sample"] = " | ".join(lines[:24])[:1200]
     return tracks
 
 def fetch_show_page_tracks(item: dict) -> tuple[dict, list[dict]]:
@@ -540,6 +542,10 @@ def fetch_show_page_tracks(item: dict) -> tuple[dict, list[dict]]:
         episode["notes"] = "Parsed numbered rows from the uploader's public comment; verify that this is the complete tracklist before treating it as complete."
         return episode, comment_tracks
     browser_tracks = fetch_show_page_tracks_browser(item)
+    if item.get("_browser_error") or item.get("_browser_text_line_count") is not None:
+        print("Mixcloud browser diagnostics:", item.get("url"), "error=", item.get("_browser_error", ""),
+              "lines=", item.get("_browser_text_line_count", 0), "creator=", item.get("_browser_has_creator", False),
+              "rows=", item.get("_browser_track_rows", 0), "sample=", item.get("_browser_text_sample", ""))
     if browser_tracks:
         episode, _ = inventory_item(item)
         episode["source"] = "Mixcloud rendered public HTML"
