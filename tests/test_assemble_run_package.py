@@ -16,6 +16,8 @@ class EvidencePackageTests(unittest.TestCase):
                 w=csv.DictWriter(f,fieldnames=["episode_date","episode_title","episode_url","artist_candidate","track_title","extraction_method","review_status","evidence_text","notes"])
                 w.writeheader()
                 w.writerow({"episode_date":"2026-10-13","episode_title":"Example","episode_url":"https://www.bbc.co.uk/programmes/m0031tk4","artist_candidate":"Example Artist","track_title":"Example Song","extraction_method":"visible_text_title_by_artist","review_status":"needs_manual_review","evidence_text":"Example Song by Example Artist","notes":"review"})
+            mixcloud_audit=tmp_path/"mixcloud_collection_audit.json"
+            mixcloud_audit.write_text(json.dumps({"source_status":"unavailable","episodes_found":0,"episodes_marked_complete":0,"search_fallback_attempted":True,"errors":["account no longer active"]}))
             mixcloud=tmp_path/"mixcloud_tracks.csv"
             with mixcloud.open("w",newline="",encoding="utf-8") as f:
                 w=csv.DictWriter(f,fieldnames=["episode_date","episode_title","episode_url","artist","track_title","track_position","source","verification_status"])
@@ -24,7 +26,7 @@ class EvidencePackageTests(unittest.TestCase):
             out=tmp_path/"run"
             subprocess.run([sys.executable,str(ROOT/"scripts/assemble_run_package.py"),
                 "--start","2026-10-13","--end","2026-10-26","--bbc-episodes",str(bbc),
-                "--bbc-track-candidates",str(candidates),"--mixcloud-track-candidates",str(mixcloud),"--out-dir",str(out)],check=True,capture_output=True,text=True)
+                "--bbc-track-candidates",str(candidates),"--mixcloud-track-candidates",str(mixcloud),"--mixcloud-audit",str(mixcloud_audit),"--out-dir",str(out)],check=True,capture_output=True,text=True)
             with (out/"episodes.csv").open(newline="",encoding="utf-8") as f:
                 episodes=list(csv.DictReader(f))
             self.assertEqual(episodes[0]["tracklist_status"],"not_yet_checked")
@@ -48,6 +50,11 @@ class EvidencePackageTests(unittest.TestCase):
             self.assertFalse(manifest["artist_pool_compared"])
             self.assertEqual(manifest["tracklist_artist_pool_review"],"tracklist_artist_pool_review.csv")
             self.assertTrue((out/"mixcloud_api_track_candidates.csv").exists())
+            self.assertTrue((out/"mixcloud_collection_audit.json").exists())
+            manifest=json.loads((out/"run_manifest.json").read_text())
+            self.assertEqual(manifest["mixcloud_source_status"],"unavailable")
+            self.assertTrue(manifest["mixcloud_search_fallback_attempted"])
+            self.assertFalse(manifest["mixcloud_visible_tracklists_verified"])
             self.assertTrue(any(name.startswith("Riley_Coe_tracklist_candidate_review_") for name in json.loads((out/"run_manifest.json").read_text())["dated_exports"]))
             self.assertTrue(any(name.startswith("Riley_Coe_episode_tracklist_comparison_") for name in json.loads((out/"run_manifest.json").read_text())["dated_exports"]))
             with (out/"input_file_audit.csv").open(newline="",encoding="utf-8") as f:

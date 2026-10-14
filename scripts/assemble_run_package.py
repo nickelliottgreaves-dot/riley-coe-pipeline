@@ -131,7 +131,7 @@ def main():
     ap.add_argument("--start",required=True); ap.add_argument("--end",required=True)
     ap.add_argument("--previous-successful-run",default="unknown/not yet established")
     ap.add_argument("--episodes",type=Path); ap.add_argument("--bbc-episodes",type=Path); ap.add_argument("--bbc-track-candidates",type=Path); ap.add_argument("--mixcloud-track-candidates",type=Path); ap.add_argument("--radiofiles-episodes",type=Path); ap.add_argument("--radiofiles-track-candidates",type=Path); ap.add_argument("--events",type=Path)
-    ap.add_argument("--venue-audit",type=Path); ap.add_argument("--event-page-inspection",type=Path); ap.add_argument("--event-page-audit",type=Path); ap.add_argument("--manual-sweep",type=Path,help="Optional dated source-visible venue sweep CSV; candidates remain unverified."); ap.add_argument("--manual-coverage",type=Path,help="Optional dated source-visible venue coverage ledger matching the run window."); ap.add_argument("--manual-pool-matches",type=Path,help="Optional dated manually researched pool-matching gig subset; never implies a complete sweep."); ap.add_argument("--out-dir",type=Path,required=True)
+    ap.add_argument("--venue-audit",type=Path); ap.add_argument("--event-page-inspection",type=Path); ap.add_argument("--event-page-audit",type=Path); ap.add_argument("--manual-sweep",type=Path,help="Optional dated source-visible venue sweep CSV; candidates remain unverified."); ap.add_argument("--manual-coverage",type=Path,help="Optional dated source-visible venue coverage ledger matching the run window."); ap.add_argument("--manual-pool-matches",type=Path,help="Optional dated manually researched pool-matching gig subset; never implies a complete sweep."); ap.add_argument("--mixcloud-audit",type=Path,help="Mixcloud collection audit JSON; required to expose source availability and visible-tracklist verification state."); ap.add_argument("--out-dir",type=Path,required=True)
     ap.add_argument("--pool",type=Path,default=ROOT/"data/artist_pool.csv")
     args=ap.parse_args()
     start=date.fromisoformat(args.start); end=date.fromisoformat(args.end)
@@ -144,6 +144,7 @@ def main():
         ("bbc_episode_inventory",args.bbc_episodes,True),
         ("bbc_track_candidates",args.bbc_track_candidates,True),
         ("mixcloud_track_candidates",args.mixcloud_track_candidates,True),
+        ("mixcloud_collection_audit",args.mixcloud_audit,False),
         ("radiofiles_episode_inventory",args.radiofiles_episodes,True),
         ("radiofiles_track_candidates",args.radiofiles_track_candidates,True),
         ("event_candidates",args.events,True),
@@ -187,7 +188,7 @@ def main():
         write_csv(out/"manual_pool_gig_matches.csv",manual_pool_match_fields,manual_pool_match_rows_in_window)
         if manual_pool_match_rows_outside_window:
             write_csv(out/"manual_pool_gig_matches_outside_window.csv",manual_pool_match_fields,manual_pool_match_rows_outside_window)
-    for source, dest in [(args.event_page_inspection,"event_page_inspection.csv"),(args.event_page_audit,"event_page_crawl_audit.csv"),(args.bbc_track_candidates,"bbc_track_candidates.csv"),(args.mixcloud_track_candidates,"mixcloud_api_track_candidates.csv"),(args.radiofiles_episodes,"radiofiles_episode_inventory.csv"),(args.radiofiles_track_candidates,"radiofiles_track_candidates.csv")]:
+    for source, dest in [(args.event_page_inspection,"event_page_inspection.csv"),(args.event_page_audit,"event_page_crawl_audit.csv"),(args.bbc_track_candidates,"bbc_track_candidates.csv"),(args.mixcloud_track_candidates,"mixcloud_api_track_candidates.csv"),(args.mixcloud_audit,"mixcloud_collection_audit.json"),(args.radiofiles_episodes,"radiofiles_episode_inventory.csv"),(args.radiofiles_track_candidates,"radiofiles_track_candidates.csv")]:
         if source and Path(source).exists():
             shutil.copy2(source,out/dest)
     episode_rows=read_csv(args.episodes,["episode_date","source","url","tracklist_status","tracks_extracted","notes"])
@@ -209,6 +210,10 @@ def main():
             "tracks_extracted":r.get("track_count_returned","0"),
             "notes":((r.get("notes") or "")+f" Original RadioFiles state: {state}. Third-party source; independent completeness verification still required.").strip()})
     # Consolidate machine-extracted track candidates from all available sources into one review queue.
+    mixcloud_audit={}
+    if args.mixcloud_audit:
+        with Path(args.mixcloud_audit).open(encoding="utf-8-sig") as f:
+            mixcloud_audit=json.load(f)
     track_review_fields=["episode_date","episode_title","episode_url","artist_candidate","track_title","track_position","extraction_method","review_status","evidence_text","notes"]
     track_review_rows=[]
     mixcloud_tracks=read_csv(args.mixcloud_track_candidates,["episode_date","episode_title","episode_url","artist","track_title","track_position","source","verification_status"]) if args.mixcloud_track_candidates else []
@@ -466,7 +471,7 @@ def main():
               "all_event_sources_verified":False,
               "researcher_notes":"Automatically assembled evidence scaffold. Not a completed research run. BBC Sounds/visible tracklists, event detail pages, supports, prices/ticket status, regression checks, full venue coverage and safety-net searches still require verification.",
               "package_kind":"candidate_scaffold","source_episode_rows":len(episode_rows),"candidate_event_rows":len(events),"manual_sweep_rows":len(manual_sweep_rows),"unresolved_event_candidates":len(unresolved),
-              "mandatory_venue_rows":len(venue_rows),"venue_calendar_checks_completed":sum(1 for r in venue_rows if (r.get("checked") or "").casefold()=="true"),"manual_pool_gig_matches_file":"manual_pool_gig_matches.csv" if args.manual_pool_matches else "","manual_pool_gig_match_rows":len(manual_pool_match_rows_in_window),"official_event_page_verified_pool_match_rows":sum(1 for r in manual_pool_match_rows_in_window if (r.get("evidence_level") or "").casefold()=="verified_official_event_page"),"regional_pool_match_lead_rows":sum(1 for r in manual_pool_match_rows_in_window if (r.get("evidence_level") or "").casefold()!="verified_official_event_page"),"manual_pool_gig_match_rows_outside_window":len(manual_pool_match_rows_outside_window),"regression_artists_seeded":len(regression_rows),"regression_artist_checks_completed":0,
+              "mandatory_venue_rows":len(venue_rows),"venue_calendar_checks_completed":sum(1 for r in venue_rows if (r.get("checked") or "").casefold()=="true"),"manual_pool_gig_matches_file":"manual_pool_gig_matches.csv" if args.manual_pool_matches else "","manual_pool_gig_match_rows":len(manual_pool_match_rows_in_window),"official_event_page_verified_pool_match_rows":sum(1 for r in manual_pool_match_rows_in_window if (r.get("evidence_level") or "").casefold()=="verified_official_event_page"),"regional_pool_match_lead_rows":sum(1 for r in manual_pool_match_rows_in_window if (r.get("evidence_level") or "").casefold()!="verified_official_event_page"),"manual_pool_gig_match_rows_outside_window":len(manual_pool_match_rows_outside_window),"mixcloud_audit_file":"mixcloud_collection_audit.json" if args.mixcloud_audit else "","mixcloud_source_status":mixcloud_audit.get("source_status","not_supplied"),"mixcloud_episodes_found":int(mixcloud_audit.get("episodes_found") or 0),"mixcloud_search_fallback_attempted":bool(mixcloud_audit.get("search_fallback_attempted",False)),"mixcloud_visible_tracklists_verified":bool(mixcloud_audit.get("episodes_found",0) and int(mixcloud_audit.get("episodes_marked_complete") or 0)==int(mixcloud_audit.get("episodes_found") or 0) and all((r.get("verification_status") or "").casefold()=="verified_visible_tracklist" for r in mixcloud_tracks)),"regression_artists_seeded":len(regression_rows),"regression_artist_checks_completed":0,
               "input_file_audit":"input_file_audit.csv","venue_discovery_coverage":"venue_discovery_coverage.csv","tracklist_candidate_review":"tracklist_candidate_review.csv","tracklist_artist_pool_review":"tracklist_artist_pool_review.csv","episode_tracklist_comparison":"episode_tracklist_comparison.csv","dated_exports":list(dated_exports)+[dedup_path.name],"missing_or_unsupplied_inputs":missing_inputs,"input_files_present":sum(r["status"]=="present" for r in input_audit)}
     (out/"run_manifest.json").write_text(json.dumps(manifest,indent=2)+"\n",encoding="utf-8")
     summary={"output_directory":str(out),"status":"PARTIAL","episode_rows":len(episode_rows),"event_candidate_rows":len(events),"manual_sweep_rows":len(manual_sweep_rows),"unresolved_event_candidates":len(unresolved),"mandatory_venue_rows":len(venue_rows),"regression_artists_seeded":len(regression_rows),"regression_artist_checks_completed":0,"complete_claimed":False,"missing_or_unsupplied_inputs":missing_inputs}

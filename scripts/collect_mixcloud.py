@@ -152,6 +152,8 @@ def fetch_cloudcasts(username: str, since: date, until: date) -> tuple[list[dict
     # fallback, preserving the primary failure in the audit instead of silently
     # presenting search results as a complete inventory.
     fallback, fallback_errors = _fetch_search_fallback(username, since, until)
+    if not fallback and not fallback_errors:
+        fallback_errors.append("Mixcloud search fallback was attempted but returned no matching Riley & Coe cloudcasts for this date window.")
     return fallback, errors + fallback_errors
 
 def fetch_show_detail(item: dict) -> dict:
@@ -265,7 +267,8 @@ def main() -> int:
         "window_end": until.isoformat(),
         "source_status": ("unavailable" if not items and any("404" in e or "inactive" in e.casefold() for e in errors) else ("ok" if not errors else "partial")),
         "fallback_required": bool(not items and any("404" in e or "inactive" in e.casefold() for e in errors)),
-        "discovery_method": "documented_search_fallback" if any(item.get("_search_fallback") for item in items) else "account_cloudcasts_endpoint",
+        "discovery_method": "account_cloudcasts_then_search_fallback" if any("search fallback" in e.casefold() for e in errors) or any(item.get("_search_fallback") for item in items) else "account_cloudcasts_endpoint",
+        "search_fallback_attempted": any("search fallback" in e.casefold() for e in errors) or any(item.get("_search_fallback") for item in items),
         "search_fallback_used": any(item.get("_search_fallback") for item in items),
         "episodes_found": len(episodes),
         "candidate_artist_rows": len(tracks),

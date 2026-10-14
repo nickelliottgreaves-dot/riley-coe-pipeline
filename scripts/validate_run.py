@@ -301,6 +301,7 @@ def main() -> int:
         ("artist_pool_compared", "artist_pool_compared"),
         ("event_artist_pool_compared", "event_artist_pool_compared"),
         ("tracklist_artist_pool_compared", "tracklist_artist_pool_compared"),
+        ("mixcloud_visible_tracklists_verified", "mixcloud_visible_tracklists_verified"),
         ("all_event_sources_verified", "all_event_sources_verified"),
     ):
         if manifest.get(flag) is not True:
