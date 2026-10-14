@@ -383,15 +383,18 @@ def main():
             "detail_pages_fetched":detail.get("pages_fetched","0" if not detail else ""),
             "detail_pages_failed":detail.get("pages_failed","0" if not detail else ""),
             "crawl_cap_reached":detail.get("crawl_cap_reached","false" if not detail else ""),
-            "calendar_coverage_verified":"false",
-            "notes":"Discovery metrics only. Homepage/link/detail-page fetches do not prove the complete venue calendar was searched. "+
+            "calendar_coverage_verified":str(key in manual_coverage_by_venue).lower(),
+            "notes":"Discovery metrics only; a dated, reviewed manual venue ledger is required to support calendar coverage. "+
                 (homepage.get("notes","") or "")+" "+(detail.get("notes","") or "")
         })
     write_csv(out/"venue_discovery_coverage.csv",DISCOVERY_COVERAGE_FIELDS,discovery_coverage_rows)
     venue_rows=[]
-    for v in required:
-        if (v.get("mandatory") or "").casefold()!="true": continue
-        name=v["venue"].strip(); key=''.join(c.casefold() for c in name if c.isalnum())
+    # Track every configured source, including the four safety-net venues.
+    # The mandatory list remains the subset that the validator always requires.
+    for v in sources:
+        name=(v.get("venue") or "").strip()
+        if not name: continue
+        key=''.join(c.casefold() for c in name if c.isalnum())
         src=source_by_venue.get(key,{})
         audit=audit_by_venue.get(key,{})
         # A dated, source-visible manual ledger supports a checked status, while its
