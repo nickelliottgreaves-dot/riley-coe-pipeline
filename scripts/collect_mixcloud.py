@@ -223,17 +223,17 @@ def fetch_cloudcasts_html(username: str, since: date, until: date) -> tuple[list
                     absolute = redirect_target
                     parsed = urlparse(absolute)
             parts = [part for part in parsed.path.split("/") if part]
-            if parsed.netloc.lower() not in {"www.mixcloud.com", "mixcloud.com"} or len(parts) < 2:
+            if parsed.netloc.lower() not in {"www.mixcloud.com", "mixcloud.com"} or len(parts) != 2:
                 continue
             if parts[0].casefold() != username.strip("/").casefold():
                 continue
-            if parts[1].casefold() in {"uploads", "favorites", "playlists", "following", "followers"}:
+            if not parts[1].casefold().startswith("riley-coe-"):
                 continue
             canonical = absolute.split("?", 1)[0].rstrip("/") + "/"
             if canonical == profile.rstrip("/") + "/" or canonical in seen:
                 continue
             title = anchor_title.strip() or parts[-1].replace("-", " ")
-            published = parse_mixcloud_title_date(title) or parse_mixcloud_title_date(parts[-1].replace("-", " "))
+            published = parse_mixcloud_title_date(parts[-1].replace("-", " ")) or parse_mixcloud_title_date(title)
             if not published or not (since <= published <= until):
                 continue
             seen.add(canonical)
@@ -244,9 +244,64 @@ def fetch_cloudcasts_html(username: str, since: date, until: date) -> tuple[list
         errors.append("Mixcloud HTML discovery found no dated show links. " + " | ".join(diagnostics))
     return items, errors
 
+
+def fetch_show_comment_tracks(item: dict) -> list[dict]:
+    """Read the creator's public tracklist comment through the documented show comments endpoint."""
+    public_url = str(item.get("url") or "")
+    prefix = "https://www.mixcloud.com/"
+    if not public_url.startswith(prefix):
+        return []
+    key = public_url[len(prefix):].strip("/")
+    if not key or "/" not in key:
+        return []
+    try:
+        payload = get_json(f"{API_ROOT}/{key}/comments/")
+    except (HTTPError, URLError, TimeoutError, OSError, json.JSONDecodeError):
+        return []
+    comments = payload.get("data", [])
+    if isinstance(comments, dict):
+        comments = comments.get("data", [])
+    if not isinstance(comments, list):
+        return []
+    tracks = []
+    position = 0
+    import html as html_lib
+    import re
+    for comment in comments:
+        if not isinstance(comment, dict):
+            continue
+        body = str(comment.get("comment") or comment.get("text") or comment.get("body") or "")
+        body = html_lib.unescape(body).replace("\\r", "")
+        lines = [line.strip() for line in body.splitlines() if line.strip()]
+        i = 0
+        while i < len(lines):
+            if re.fullmatch(r"\\d{1,3}\\.", lines[i]) and i + 2 < len(lines):
+                title, artist = lines[i + 1].strip(), lines[i + 2].strip()
+                if title and artist and not re.fullmatch(r"\\d{1,3}\\.", title):
+                    position += 1
+                    tracks.append({
+                        "episode_date": str(item.get("created_time", ""))[:10],
+                        "episode_title": str(item.get("name") or item.get("title") or ""),
+                        "episode_url": public_url, "artist": artist, "track_title": title,
+                        "track_position": str(position), "source": "Mixcloud public comments API",
+                        "verification_status": "needs_complete_visible_page_verification"
+                    })
+                    i += 3
+                    continue
+            i += 1
+    return tracks
+
 def fetch_show_page_tracks(item: dict) -> tuple[dict, list[dict]]:
-    """Extract only clearly structured visible track rows from a public show page."""
+    """Extract public comment tracklists first, then clearly structured page rows."""
     url = str(item.get("url") or "")
+    comment_tracks = fetch_show_comment_tracks(item)
+    if comment_tracks:
+        episode, _ = inventory_item(item)
+        episode["source"] = "Mixcloud public comments API"
+        episode["tracks_extracted"] = str(len(comment_tracks))
+        episode["tracklist_status"] = "incomplete"
+        episode["notes"] = "Parsed numbered rows from a public creator comment; verify that this is the complete tracklist before treating it as complete."
+        return episode, comment_tracks
     req = Request(url, headers={"User-Agent": USER_AGENT, "Accept": "text/html,application/xhtml+xml"})
     with urlopen(req, timeout=25) as response:
         html = response.read(5_000_001).decode("utf-8", errors="replace")
