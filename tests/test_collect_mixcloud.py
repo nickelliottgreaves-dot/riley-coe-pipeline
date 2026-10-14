@@ -166,7 +166,7 @@ class MixcloudInventoryTests(unittest.TestCase):
         self.assertEqual(tracks[0]["verification_status"], "needs_complete_visible_page_verification")
 
     def test_reader_fallback_extracts_creator_comment_tracklist(self):
-        text = b'Riley & Coe Tuesday 6th October 2026\\nComments\\nCreator\\n1.\\nRebellious Jukebox\\nThe Fall\\n2.\\nStuck In A Room\\nBritish Birds\\nReply'
+        text = b'Riley & Coe Tuesday 6th October 2026\nComments\nCreator\n1.\nRebellious Jukebox\nThe Fall\n2.\nStuck In A Room\nBritish Birds\nReply'
         response = type("Response", (), {"__enter__": lambda self: self, "__exit__": lambda self, *args: None,
             "read": lambda self, n: text})()
         item = {"name": "Riley & Coe Tuesday 6th October 2026",
