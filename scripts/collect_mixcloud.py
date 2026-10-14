@@ -119,15 +119,15 @@ def episode_date_from_text(value: str) -> date | None:
     dated upload as absent merely because its slug format changed.
     """
     patterns = [
-        (r"(?i)(\\d{1,2})(?:st|nd|rd|th)?[\\s_-]+"
+        (r"(?i)(\d{1,2})(?:st|nd|rd|th)?[\s_-]+"
          r"(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|"
-         r"jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)[\\s_-]+(20\\d{2})",
+         r"jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)[\s_-]+(20\d{2})",
          lambda m: f"{m.group(1)} {m.group(2)[:3]} {m.group(3)}", "%d %b %Y"),
         (r"(?i)(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|"
-         r"jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)[\\s_-]+"
-         r"(\\d{1,2})(?:st|nd|rd|th)?[\\s,_-]+(20\\d{2})",
+         r"jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)[\s_-]+"
+         r"(\d{1,2})(?:st|nd|rd|th)?[\s,_-]+(20\d{2})",
          lambda m: f"{m.group(2)} {m.group(1)[:3]} {m.group(3)}", "%d %b %Y"),
-        (r"(?<!\\d)(20\\d{2})[-_/](0?[1-9]|1[0-2])[-_/](0?[1-9]|[12]\\d|3[01])(?!\\d)",
+        (r"(?<!\d)(20\d{2})[-_/](0?[1-9]|1[0-2])[-_/](0?[1-9]|[12]\d|3[01])(?!\d)",
          lambda m: f"{m.group(1)}-{m.group(2)}-{m.group(3)}", "%Y-%m-%d"),
     ]
     for pattern, build, date_format in patterns:
