@@ -87,11 +87,12 @@ def resolve_cloudcasts_endpoint(username: str) -> str:
     # records the failure rather than silently reporting an empty inventory.
     return f"{API_ROOT}/{requested}/cloudcasts/"
 
-def fetch_cloudcasts(username: str, since: date, until: date) -> tuple[list[dict], list[str]]:
+def fetch_cloudcasts(username: str, since: date, until: date) -> tuple[list[dict], list[str], list[str]]:
     endpoint = resolve_cloudcasts_endpoint(username)
     url = f"{endpoint.rstrip('/')}/?{urlencode({'limit': 100, 'offset': 0})}"
     found: list[dict] = []
     errors: list[str] = []
+    warnings: list[str] = []
     visited: set[str] = set()
     pages = 0
     while url and url not in visited and pages < 30:
@@ -126,7 +127,73 @@ def fetch_cloudcasts(username: str, since: date, until: date) -> tuple[list[dict
         time.sleep(0.15)
     if pages >= 30 and url and url not in visited:
         errors.append("Stopped after 30 pages as a safety limit; inventory may be incomplete.")
+    if not found and any("HTTP Error 404" in err for err in errors):
+        primary_error = errors[0]
+        fallback_found, fallback_errors = fetch_search_cloudcasts(username, since, until)
+        if fallback_found:
+            found = fallback_found
+            errors = []
+            warnings.append(
+                f"Account cloudcasts listing failed ({primary_error}); recovered {len(found)} dated show candidate(s) via public search. "
+                "Search results are not guaranteed exhaustive and require visible-page verification."
+            )
+        else:
+            errors.extend(fallback_errors)
+    return found, errors, warnings
+
+def fetch_search_cloudcasts(username: str, since: date, until: date) -> tuple[list[dict], list[str]]:
+    """Best-effort dated fallback when the account's cloudcasts connection is unavailable.
+
+    Search is a discovery fallback only; it may omit results, so callers must
+    retain an explicit warning and never interpret it as a complete archive.
+    """
+    query = urlencode({
+        "q": "Riley & Coe",
+        "type": "cloudcast",
+        "limit": 100,
+        "offset": 0,
+        "since": since.isoformat(),
+        "until": until.isoformat(),
+    })
+    url = f"{API_ROOT}/search/?{query}"
+    found: list[dict] = []
+    errors: list[str] = []
+    visited: set[str] = set()
+    pages = 0
+    account = username.strip("/").casefold()
+    while url and url not in visited and pages < 30:
+        visited.add(url)
+        pages += 1
+        try:
+            payload = get_json(url)
+        except (HTTPError, URLError, TimeoutError, OSError, json.JSONDecodeError) as exc:
+            errors.append(f"Mixcloud search fallback failed for {url}: {exc}")
+            break
+        data = payload.get("data", [])
+        if not isinstance(data, list):
+            errors.append(f"Unexpected Mixcloud search response shape at {url}")
+            break
+        for item in data:
+            if not isinstance(item, dict):
+                continue
+            public_url = str(item.get("url") or "").strip()
+            key = str(item.get("key") or "").strip()
+            path = urlparse(public_url).path.strip("/") if public_url else key.strip("/")
+            slug = path.split("/", 1)[0].casefold() if path else ""
+            if slug != account:
+                continue
+            published = parse_date(item.get("created_time") or item.get("updated_time"))
+            if published and since <= published <= until:
+                found.append(item)
+        next_url = payload.get("paging", {}).get("next")
+        if not next_url:
+            break
+        url = next_url
+        time.sleep(0.15)
+    if pages >= 30 and url and url not in visited:
+        errors.append("Mixcloud search fallback stopped after 30 pages; inventory may be incomplete.")
     return found, errors
+
 
 def fetch_show_detail(item: dict) -> dict:
     # The user cloudcasts endpoint may omit per-show tracklist sections. Fetch
@@ -210,10 +277,11 @@ def main() -> int:
 
     errors: list[str] = []
     try:
-        items, errors = fetch_cloudcasts(args.username, since, until)
+        items, errors, warnings = fetch_cloudcasts(args.username, since, until)
     except Exception as exc:  # final defensive guard; retain an audit even on unexpected API failures
         items = []
         errors.append(f"Unexpected collector error: {type(exc).__name__}: {exc}")
+        warnings = []
 
     episodes, tracks = [], []
     for item in items:
@@ -242,6 +310,7 @@ def main() -> int:
         "episodes_marked_complete": sum(r["tracklist_status"] == "complete" for r in episodes),
         "episodes_requiring_manual_verification": sum(r["tracklist_status"] != "complete" for r in episodes),
         "errors": errors,
+        "warnings": warnings,
         "limitations": [
             "This collector inventories Mixcloud public API data only; it does not check BBC Sounds episode coverage.",
             "It deliberately never marks a tracklist complete from API sections alone.",
