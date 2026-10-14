@@ -78,6 +78,33 @@ def is_aggregate_calendar_url(url):
     path=parsed.path.casefold()
     return path.startswith("/metro-areas/") or path.startswith("/live-stream-concerts")
 
+def apply_shared_calendar_attribution(rows, shared_host_groups):
+    """Avoid assigning a shared parent calendar's events to every room alias."""
+    grouped={}
+    for row in rows:
+        host=urlparse(row.get("page_url","")).netloc.casefold()
+        aliases=sorted(shared_host_groups.get(host,set()))
+        if len(aliases)>1:
+            title_blob=" ".join([row.get("page_title",""),row.get("event_title","")]).casefold()
+            room_aliases=[name for name in aliases
+                          if re.search(r"\b(?:2|two)\b",name,re.I)
+                          and re.search(r"\b"+re.escape(name.casefold())+r"\b",title_blob)]
+            if room_aliases:
+                row["venue"]=room_aliases[0]
+            else:
+                row["venue"]="Unresolved shared calendar: "+" / ".join(aliases)
+                row["status"]="shared_calendar_attribution_unresolved"
+                row["notes"]=(row.get("notes","")+" Shared calendar serves multiple venue/room labels; title does not establish the room. Do not attribute this candidate to a specific room without event-level evidence.").strip()
+        key=(row.get("page_url",""),row.get("event_title",""),row.get("event_date",""),row.get("performer_names",""))
+        if key not in grouped:
+            grouped[key]=row
+        elif row.get("venue","")!=grouped[key].get("venue",""):
+            grouped[key]["venue"]="Unresolved shared calendar: "+" / ".join(aliases or sorted({row.get("venue",""),grouped[key].get("venue","")}))
+            grouped[key]["status"]="shared_calendar_attribution_unresolved"
+            grouped[key]["notes"]=(grouped[key].get("notes","")+" Duplicate detail page was reached through multiple venue aliases; venue/room attribution remains unresolved.").strip()
+    return list(grouped.values())
+
+
 def main():
     ap=argparse.ArgumentParser()
     ap.add_argument("--links",type=Path,required=True)
@@ -179,33 +206,7 @@ def main():
         if any(is_aggregate_calendar_url(u) for u in urls):
             audit_notes+=" Aggregate Songkick metro/live-stream URLs were excluded."
         audits.append({"venue":venue,"seed_candidate_links":candidate_count,"pages_fetched":len(visited)-failed,"pages_failed":failed,"same_host_links_added":added,"crawl_cap_reached":str(cap).lower(),"status":"PARTIAL" if has_seed else "NO_SEED_LINKS","notes":audit_notes})
-    # Shared venue calendars (e.g. The Cluny/Cluny 2 and Glasshouse/Sage Two)
-    # must not cause every event on the parent calendar to be attributed to
-    # every room. Resolve only when the event/page title names the specific
-    # room; otherwise preserve a single explicitly ambiguous candidate.
-    grouped={}
-    for row in all_rows:
-        host=urlparse(row.get("page_url","")).netloc.casefold()
-        aliases=sorted(shared_host_groups.get(host,set()))
-        if len(aliases)>1:
-            title_blob=" ".join([row.get("page_title",""),row.get("event_title","")]).casefold()
-            room_aliases=[name for name in aliases
-                          if re.search(r"\b(?:2|two)\b",name,re.I)
-                          and re.search(r"\b"+re.escape(name.casefold())+r"\b",title_blob)]
-            if room_aliases:
-                row["venue"]=room_aliases[0]
-            else:
-                row["venue"]="Unresolved shared calendar: "+" / ".join(aliases)
-                row["status"]="shared_calendar_attribution_unresolved"
-                row["notes"]=(row.get("notes","")+" Shared calendar serves multiple venue/room labels; title does not establish the room. Do not attribute this candidate to a specific room without event-level evidence.").strip()
-        key=(row.get("page_url",""),row.get("event_title",""),row.get("event_date",""),row.get("performer_names",""))
-        if key not in grouped:
-            grouped[key]=row
-        elif row.get("venue","")!=grouped[key].get("venue",""):
-            grouped[key]["venue"]="Unresolved shared calendar: "+" / ".join(aliases or sorted({row.get("venue",""),grouped[key].get("venue","")}))
-            grouped[key]["status"]="shared_calendar_attribution_unresolved"
-            grouped[key]["notes"]=(grouped[key].get("notes","")+" Duplicate detail page was reached through multiple venue aliases; venue/room attribution remains unresolved.").strip()
-    all_rows=list(grouped.values())
+    all_rows=apply_shared_calendar_attribution(all_rows,shared_host_groups)
     with (args.out_dir/"event_page_inspection.csv").open("w",encoding="utf-8",newline="") as f:
         w=csv.DictWriter(f,fieldnames=EVENT_FIELDS);w.writeheader();w.writerows(all_rows)
     with (args.out_dir/"event_page_crawl_audit.csv").open("w",encoding="utf-8",newline="") as f:
