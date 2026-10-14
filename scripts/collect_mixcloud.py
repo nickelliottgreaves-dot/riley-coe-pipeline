@@ -27,6 +27,26 @@ def get_json(url: str, timeout: int = 25) -> dict:
     with urlopen(req, timeout=timeout) as response:
         return json.loads(response.read().decode("utf-8"))
 
+
+def get_graphql(query: str, timeout: int = 25) -> dict:
+    """Call Mixcloud's current public GraphQL endpoint.
+
+    The legacy api.mixcloud.com REST endpoints now return 404 for this account;
+    the live Mixcloud web client and yt-dlp use app.mixcloud.com/graphql.
+    """
+    url = "https://app.mixcloud.com/graphql?" + urlencode({"query": query})
+    req = Request(url, headers={"User-Agent": "Mozilla/5.0 (compatible; RileyCoePipeline/1.0)", "Accept": "application/json"})
+    with urlopen(req, timeout=timeout) as response:
+        payload = json.loads(response.read().decode("utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError("Unexpected Mixcloud GraphQL response shape")
+    if payload.get("errors") and not payload.get("data"):
+        raise ValueError("Mixcloud GraphQL errors: " + json.dumps(payload["errors"])[:500])
+    data = payload.get("data")
+    if not isinstance(data, dict):
+        raise ValueError("Mixcloud GraphQL response has no data object")
+    return data
+
 def parse_date(value: str | None) -> date | None:
     if not value:
         return None
@@ -35,51 +55,66 @@ def parse_date(value: str | None) -> date | None:
     except (ValueError, TypeError):
         return None
 
+
 def fetch_cloudcasts(username: str, since: date, until: date) -> tuple[list[dict], list[str]]:
-    """Inventory cloudcasts using supplied and canonical lowercase account keys."""
+    """Discover recent uploads using Mixcloud's current GraphQL user connection."""
     found: list[dict] = []
     errors: list[str] = []
-    accounts = list(dict.fromkeys([username.strip("/"), username.strip("/").casefold()]))
-    for account in accounts:
-        url = f"{API_ROOT}/{account}/cloudcasts/?{urlencode({'limit': 100, 'offset': 0})}"
-        visited: set[str] = set()
-        pages = 0
-        retry_account = False
-        while url and url not in visited and pages < 30:
-            visited.add(url)
-            pages += 1
-            try:
-                payload = get_json(url)
-            except (HTTPError, URLError, TimeoutError, OSError, json.JSONDecodeError) as exc:
-                errors.append(f"Mixcloud API request failed for {url}: {exc}")
-                if pages == 1 and isinstance(exc, HTTPError) and exc.code == 404 and account != accounts[-1]:
-                    retry_account = True
-                break
-            data = payload.get("data", [])
-            if not isinstance(data, list):
-                errors.append(f"Unexpected Mixcloud API response shape at {url}")
-                break
-            should_stop = False
-            for item in data:
-                if not isinstance(item, dict):
-                    continue
-                published = parse_date(item.get("created_time") or item.get("updated_time"))
-                if published and since <= published <= until:
-                    found.append(item)
-                elif published and published < since:
-                    should_stop = True
-            if should_stop:
-                break
-            next_url = payload.get("paging", {}).get("next")
-            if not next_url:
-                break
-            url = next_url
-            time.sleep(0.15)
-        if pages >= 30 and url and url not in visited:
-            errors.append("Stopped after 30 pages as a safety limit; inventory may be incomplete.")
-        if found or not retry_account:
+    cursor = None
+    visited_cursors = set()
+    pages = 0
+    while pages < 10:
+        after = f', after: "{cursor}"' if cursor else ""
+        query = """{
+          userLookup(lookup: {username: "%s"}) {
+            displayName
+            uploads(first: 100%s) {
+              edges { node { name slug url publishDate owner { username displayName } } }
+              pageInfo { endCursor hasNextPage }
+            }
+          }
+        }""" % (username.strip("/"), after)
+        try:
+            data = get_graphql(query)
+        except (HTTPError, URLError, TimeoutError, OSError, json.JSONDecodeError, ValueError) as exc:
+            errors.append(f"Mixcloud GraphQL user-upload discovery failed: {type(exc).__name__}: {exc}")
             break
-    return found, ([] if found else errors)
+        user = data.get("userLookup") or {}
+        uploads = user.get("uploads") or {}
+        edges = uploads.get("edges") or []
+        for edge in edges:
+            item = (edge or {}).get("node") or {}
+            if not isinstance(item, dict):
+                continue
+            published = parse_date(item.get("publishDate") or item.get("created_time"))
+            if not published or not (since <= published <= until):
+                continue
+            owner = item.get("owner") or {}
+            slug = str(item.get("slug") or "").strip("/")
+            url = str(item.get("url") or "").strip()
+            if not url and slug:
+                url = f"https://www.mixcloud.com/{username.strip('/')}/{slug}/"
+            found.append({
+                "name": str(item.get("name") or slug or "Riley & Coe episode"),
+                "title": str(item.get("name") or slug or "Riley & Coe episode"),
+                "url": url,
+                "key": f"/{username.strip('/')}/{slug}/" if slug else "",
+                "created_time": published.isoformat(),
+                "owner": owner,
+                "_graphql_discovery": True
+            })
+        page_info = uploads.get("pageInfo") or {}
+        if not page_info.get("hasNextPage"):
+            break
+        cursor = page_info.get("endCursor")
+        if not cursor or cursor in visited_cursors:
+            errors.append("Mixcloud GraphQL pagination returned a missing or repeated cursor.")
+            break
+        visited_cursors.add(cursor)
+        pages += 1
+    if pages >= 10:
+        errors.append("Stopped after 10 Mixcloud GraphQL upload pages; inventory may be incomplete.")
+    return found, errors
 
 class MixcloudHTMLParser(HTMLParser):
     """Capture visible page text and links for the public-HTML fallback."""
@@ -245,50 +280,72 @@ def fetch_cloudcasts_html(username: str, since: date, until: date) -> tuple[list
     return items, errors
 
 
+
 def fetch_show_comment_tracks(item: dict) -> list[dict]:
-    """Read the creator's public tracklist comment through the documented show comments endpoint."""
+    """Read numbered tracklist rows from the uploader's public GraphQL comment."""
     public_url = str(item.get("url") or "")
     prefix = "https://www.mixcloud.com/"
     if not public_url.startswith(prefix):
         return []
-    key = public_url[len(prefix):].strip("/")
-    if not key or "/" not in key:
+    parts = [part for part in urlparse(public_url).path.split("/") if part]
+    if len(parts) != 2:
         return []
+    username, slug = parts
+    query = """{
+      cloudcastLookup(lookup: {username: "%s", slug: "%s"}) {
+        name publishDate url
+        owner { username displayName }
+        comments(first: 100) {
+          edges { node { comment created user { displayName username } } }
+          totalCount
+        }
+      }
+    }""" % (username, slug)
     try:
-        payload = get_json(f"{API_ROOT}/{key}/comments/")
-    except (HTTPError, URLError, TimeoutError, OSError, json.JSONDecodeError):
+        data = get_graphql(query)
+    except (HTTPError, URLError, TimeoutError, OSError, json.JSONDecodeError, ValueError):
         return []
-    comments = payload.get("data", [])
-    if isinstance(comments, dict):
-        comments = comments.get("data", [])
-    if not isinstance(comments, list):
-        return []
+    cloudcast = data.get("cloudcastLookup") or {}
+    comments = (cloudcast.get("comments") or {}).get("edges") or []
+    owner = cloudcast.get("owner") or item.get("owner") or {}
+    creator_username = str(owner.get("username") or username).casefold()
     tracks = []
     position = 0
     import html as html_lib
     import re
-    for comment in comments:
+    for edge in comments:
+        comment = (edge or {}).get("node") or {}
         if not isinstance(comment, dict):
             continue
-        body = str(comment.get("comment") or comment.get("text") or comment.get("body") or "")
-        body = html_lib.unescape(body).replace("\r", "")
+        user = comment.get("user") or {}
+        comment_username = str(user.get("username") or "").casefold()
+        # Only trust the upload owner's comment, not listener discussion.
+        if comment_username and comment_username != creator_username:
+            continue
+        body = html_lib.unescape(str(comment.get("comment") or "")).replace("\\r", "")
         lines = [line.strip() for line in body.splitlines() if line.strip()]
+        local_rows = []
         i = 0
         while i < len(lines):
-            if re.fullmatch(r"\d{1,3}\.", lines[i]) and i + 2 < len(lines):
+            if re.fullmatch(r"\\d{1,3}\\.", lines[i]) and i + 2 < len(lines):
                 title, artist = lines[i + 1].strip(), lines[i + 2].strip()
-                if title and artist and not re.fullmatch(r"\d{1,3}\.", title):
-                    position += 1
-                    tracks.append({
-                        "episode_date": str(item.get("created_time", ""))[:10],
-                        "episode_title": str(item.get("name") or item.get("title") or ""),
-                        "episode_url": public_url, "artist": artist, "track_title": title,
-                        "track_position": str(position), "source": "Mixcloud public comments API",
-                        "verification_status": "needs_complete_visible_page_verification"
-                    })
+                if title and artist and not re.fullmatch(r"\\d{1,3}\\.", title):
+                    local_rows.append((title, artist))
                     i += 3
                     continue
             i += 1
+        # Avoid mixing multiple comments or treating unrelated comments as one list.
+        if len(local_rows) > len(tracks):
+            tracks = []
+            for title, artist in local_rows:
+                position += 1
+                tracks.append({
+                    "episode_date": str(item.get("created_time", ""))[:10],
+                    "episode_title": str(item.get("name") or item.get("title") or ""),
+                    "episode_url": public_url, "artist": artist, "track_title": title,
+                    "track_position": str(position), "source": "Mixcloud GraphQL creator comment",
+                    "verification_status": "needs_complete_visible_page_verification"
+                })
     return tracks
 
 def fetch_show_page_tracks(item: dict) -> tuple[dict, list[dict]]:
@@ -469,7 +526,7 @@ def main() -> int:
     write_csv(out / "mixcloud_episode_inventory.csv", EPISODE_FIELDS, episodes)
     write_csv(out / "mixcloud_api_track_candidates.csv", TRACK_FIELDS, tracks)
     audit = {
-        "collector": "Mixcloud public API inventory",
+        "collector": "Mixcloud GraphQL and public HTML inventory",
         "username": args.username,
         "window_start": since.isoformat(),
         "window_end": until.isoformat(),
@@ -478,8 +535,9 @@ def main() -> int:
         "episodes_marked_complete": sum(r["tracklist_status"] == "complete" for r in episodes),
         "episodes_requiring_manual_verification": sum(r["tracklist_status"] != "complete" for r in episodes),
         "errors": errors,
+        "warnings": warnings,
         "limitations": [
-            "This collector inventories Mixcloud public API data only; it does not check BBC Sounds episode coverage.",
+            "Mixcloud discovery uses the public GraphQL endpoint and HTML/search fallbacks; BBC episode coverage is audited separately.",
             "It deliberately never marks a tracklist complete from API sections alone.",
             "It does not establish the last successfully audited episode; caller must supply the date range.",
             "A run is not complete until visible tracklists and every venue calendar are independently verified."
