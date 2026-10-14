@@ -1,8 +1,10 @@
 name: Riley & Coe evidence validation
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
-  cancel-in-progress: true
+  # Isolate commit-specific validation runs. Rapid pushes must not strand a
+  # newer full evidence run behind a crawler that has hung on an older SHA.
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}-${{ github.sha }}
+  cancel-in-progress: false
 
 on:
   push:
