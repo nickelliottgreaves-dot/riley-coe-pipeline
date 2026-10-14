@@ -162,6 +162,32 @@ class EvidencePackageTests(unittest.TestCase):
             self.assertIn("https://www.songkick.com/venues/4426128-lubber-fiend/calendar",events[0]["notes"])
             self.assertIn("https://www.songkick.com/concerts/43291182-bitchin-bajas-at-lubber-fiend",events[0]["notes"])
 
+
+    def test_preserves_dated_manual_pool_gig_subset_without_claiming_full_sweep(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            matches=root/"manual_matches.csv"
+            fields=["event_date","venue","event_title","pool_artist_match","match_type","event_status","price","source_url","evidence_level","notes"]
+            with matches.open("w",newline="",encoding="utf-8") as f:
+                w=csv.DictWriter(f,fieldnames=fields); w.writeheader()
+                w.writerow({"event_date":"2026-10-15","venue":"Boiler Shop","event_title":"Heaven 17 + Peter Coyle","pool_artist_match":"Heaven 17","match_type":"normalized_exact","event_status":"sold out","source_url":"https://www.boilershop.net/events/heaven-17-15-11-26","evidence_level":"verified_official_event_page","notes":"Official event page verified"})
+                w.writerow({"event_date":"2026-10-28","venue":"Outside window","event_title":"Later gig","pool_artist_match":"Known Artist","match_type":"normalized_exact","event_status":"unknown","source_url":"https://example.org/event","evidence_level":"regional_venue_calendar_listing","notes":"Out of window"})
+            out=root/"run"
+            subprocess.run([sys.executable,str(ROOT/"scripts/assemble_run_package.py"),
+                "--start","2026-10-14","--end","2026-10-27","--manual-pool-matches",str(matches),"--out-dir",str(out)],
+                check=True,capture_output=True,text=True)
+            with (out/"manual_pool_gig_matches.csv").open(newline="",encoding="utf-8") as f:
+                rows=list(csv.DictReader(f))
+            self.assertEqual(len(rows),1)
+            self.assertEqual(rows[0]["pool_artist_match"],"Heaven 17")
+            manifest=json.loads((out/"run_manifest.json").read_text())
+            self.assertEqual(manifest["manual_pool_gig_match_rows"],1)
+            self.assertEqual(manifest["official_event_page_verified_pool_match_rows"],1)
+            self.assertEqual(manifest["manual_pool_gig_match_rows_outside_window"],1)
+            self.assertFalse(manifest["venue_sweep_complete"])
+            self.assertTrue((out/"manual_pool_gig_matches_source.csv").exists())
+            self.assertTrue((out/"manual_pool_gig_matches_outside_window.csv").exists())
+
     def test_merges_inspected_event_jsonld_as_unverified_candidates(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp)

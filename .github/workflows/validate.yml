@@ -337,6 +337,7 @@ jobs:
           MANUAL_SWEEP_ARGS=()
           MANUAL_SWEEP="artifacts/manual-review/venue-sweep-${START}.csv"
           MANUAL_COVERAGE="artifacts/manual-review/venue-sweep-coverage-${START}.csv"
+          MANUAL_POOL_MATCHES="artifacts/manual-review/verified-pool-gig-matches-${START}.csv"
           if [ -f "$MANUAL_SWEEP" ]; then
             MANUAL_SWEEP_ARGS+=(--manual-sweep "$MANUAL_SWEEP")
             echo "Including dated manual venue sweep: $MANUAL_SWEEP"
@@ -348,6 +349,12 @@ jobs:
             echo "Including dated manual venue coverage ledger: $MANUAL_COVERAGE"
           else
             echo "No matching dated manual venue coverage ledger found; uncovered venues remain not_checked."
+          fi
+          if [ -f "$MANUAL_POOL_MATCHES" ]; then
+            MANUAL_SWEEP_ARGS+=(--manual-pool-matches "$MANUAL_POOL_MATCHES")
+            echo "Including dated manual pool-matching gig subset; it does not certify the full sweep."
+          else
+            echo "No dated manual pool-match subset found for $START."
           fi
           python scripts/assemble_run_package.py \
             --start "$START" --end "$END" \
