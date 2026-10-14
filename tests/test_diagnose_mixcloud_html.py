@@ -1,9 +1,8 @@
 import sys, unittest
 from pathlib import Path
 from unittest.mock import patch
-from diagnose_mixcloud_html import inspect_page
-
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+from diagnose_mixcloud_html import inspect_page
 
 
 class MixcloudHtmlDiagnosticsTests(unittest.TestCase):
