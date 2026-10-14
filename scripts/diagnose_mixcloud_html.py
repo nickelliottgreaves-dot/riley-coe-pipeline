@@ -32,7 +32,7 @@ def inspect_page(url: str, timeout: int = 20) -> dict:
         raw = raw[:2_000_000]
         html = raw.decode("utf-8", errors="replace")
         title_match = re.search(r"<title[^>]*>(.*?)</title>", html, re.I | re.S)
-        title = re.sub(r"\\s+", " ", re.sub(r"<[^>]+>", "", title_match.group(1))).strip()[:250] if title_match else ""
+        title = re.sub(r"\s+", " ", re.sub(r"<[^>]+>", "", title_match.group(1))).strip()[:250] if title_match else ""
         markers = [m for m in ("__NEXT_DATA__", "application/ld+json", "comment", "cloudcast", "tracklist", "sections") if m.casefold() in html.casefold()]
         return {
             "url": url, "http_status": str(status), "content_type": ctype,
@@ -41,7 +41,7 @@ def inspect_page(url: str, timeout: int = 20) -> dict:
             "contains_comments_word": str("comment" in html.casefold()).lower(),
             "contains_creator_word": str("creator" in html.casefold()).lower(),
             "embedded_json_markers": ";".join(markers),
-            "sample": re.sub(r"\\s+", " ", html[:350])[:350], "error": ""
+            "sample": re.sub(r"\s+", " ", html[:350])[:350], "error": ""
         }
     except HTTPError as exc:
         body = ""
@@ -78,7 +78,7 @@ def main() -> int:
         "interpretation": "Page accessibility and marker presence are diagnostic only; neither proves a complete tracklist.",
         "pages": rows,
     }
-    (args.out_dir / "mixcloud_html_page_diagnostics.json").write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\\n", encoding="utf-8")
+    (args.out_dir / "mixcloud_html_page_diagnostics.json").write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     print(json.dumps({k:v for k,v in report.items() if k != "pages"}, indent=2))
     return 0 if report["http_successes"] else 1
 
