@@ -191,15 +191,19 @@ def main():
     write_csv(out/"tracklist_candidate_review.csv",track_review_fields,track_review_rows)
     tracklist_comparison=compare_episode_tracklists(bbc_tracks,radiofiles_tracks,bbc_rows)
     write_csv(out/"episode_tracklist_comparison.csv",TRACKLIST_COMPARISON_FIELDS,tracklist_comparison)
-    complete_tracklists={r["episode_pid"]:r for r in tracklist_comparison if r["complete_certified"]=="true"}
+    comparison_by_pid={r["episode_pid"]:r for r in tracklist_comparison}
     for episode in episode_rows:
         pid=episode_pid_from_url(episode.get("url",""))
-        verified=complete_tracklists.get(pid)
-        if not verified:
+        comparison=comparison_by_pid.get(pid)
+        if not comparison:
             continue
-        episode["tracklist_status"]="complete"
-        episode["tracks_extracted"]=str(verified["bbc_candidate_tracks"] if episode.get("source","").startswith("BBC Sounds") else verified["radiofiles_candidate_tracks"])
-        episode["notes"]=((episode.get("notes","")+" Cross-source check: official BBC track-title set matches RadioFiles for the same episode PID/date. Tracklist title coverage complete; artist credits still require review before any pool update.").strip())
+        if episode.get("source","").startswith("BBC Sounds"):
+            episode["tracks_extracted"]=str(comparison["bbc_candidate_tracks"])
+        elif episode.get("source","").startswith("RadioFiles"):
+            episode["tracks_extracted"]=str(comparison["radiofiles_candidate_tracks"])
+        if comparison["complete_certified"]=="true":
+            episode["tracklist_status"]="complete"
+            episode["notes"]=((episode.get("notes","")+" Cross-source check: official BBC track-title set matches RadioFiles for the same episode PID/date. Tracklist title coverage complete; artist credits still require review before any pool update.").strip())
     event_rows=read_csv(args.events,["event_date","venue","event_title","artist","artist_role","source_url","verified","notes"]) if args.events else []
     # Add Event JSON-LD candidates from inspected detail pages; they remain unverified.
     inspected_rows=read_csv(args.event_page_inspection,["venue","page_url","event_title","event_date","performer_names","price","currency","availability","event_jsonld_found","notes"]) if args.event_page_inspection else []
@@ -378,6 +382,7 @@ def main():
         f"Riley_Coe_venue_discovery_coverage_{run_day}.csv":"venue_discovery_coverage.csv",
         f"Riley_Coe_regression_artist_checks_{run_day}.csv":"regression_artist_checks.csv",
         f"Riley_Coe_tracklist_candidate_review_{run_day}.csv":"tracklist_candidate_review.csv",
+        f"Riley_Coe_episode_tracklist_comparison_{run_day}.csv":"episode_tracklist_comparison.csv",
     }
     for export_name, source_name in dated_exports.items():
         shutil.copy2(out/source_name,out/export_name)
