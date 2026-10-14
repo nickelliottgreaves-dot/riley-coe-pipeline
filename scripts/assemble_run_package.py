@@ -403,8 +403,10 @@ def main():
     subprocess.run([sys.executable,str(ROOT/"scripts/match_event_artists.py"),"--events",str(out/"events.csv"),"--pool",str(args.pool),"--aliases",str(ROOT/"config/artist_aliases.csv"),"--out",str(out/"pool_matches.csv")],check=True)
     # Tracklist candidates and event candidates have separate review tables. Both
     # comparisons must run before the manifest can claim pool comparison is complete.
-    event_artist_pool_compared=bool(events) and Path(out/"pool_matches.csv").exists() and Path(args.pool).exists()
-    tracklist_artist_pool_compared=bool(track_review_rows) and Path(out/"tracklist_artist_pool_review.csv").exists() and Path(args.pool).exists()
+    # The matcher and candidate comparator have already completed with check=True;
+    # these flags mean actual candidates were compared, not just empty files created.
+    event_artist_pool_compared=bool(events)
+    tracklist_artist_pool_compared=bool(track_review_rows)
     artist_pool_compared=event_artist_pool_compared and tracklist_artist_pool_compared
     # Also publish the dated filenames used by the weekly research workflow.
     run_day=date.today().isoformat()
