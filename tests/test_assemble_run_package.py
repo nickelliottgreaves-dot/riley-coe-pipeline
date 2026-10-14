@@ -104,13 +104,18 @@ class EvidencePackageTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp)
             sweep=root/"venue-sweep.csv"
+            coverage=root/"venue-coverage.csv"
+            with coverage.open("w",newline="",encoding="utf-8") as f:
+                w=csv.DictWriter(f,fieldnames=["venue","source_url","coverage_status","window_start","window_end","coverage_notes","limitations"])
+                w.writeheader()
+                w.writerow({"venue":"The Cluny","source_url":"https://thecluny.com/gigs/","coverage_status":"reviewed_official_calendar","window_start":"2026-10-14","window_end":"2026-10-27","coverage_notes":"Calendar reviewed","limitations":"Hidden support acts may be missed"})
             with sweep.open("w",newline="",encoding="utf-8") as f:
                 w=csv.DictWriter(f,fieldnames=["event_date","venue","event_title","artist","artist_role","pool_match_status","matched_pool_name","source_url","price","ticket_status","notes"])
                 w.writeheader()
-                w.writerow({"event_date":"2026-10-21","venue":"Ye Gods Venue","event_title":"Ye Gods live","artist":"Ye Gods","artist_role":"headliner","source_url":"https://example.org/calendar","price":"12.00","ticket_status":"InStock","notes":"Source-visible manual sweep row"})
+                w.writerow({"event_date":"2026-10-21","venue":"The Cluny","event_title":"Ye Gods live","artist":"Ye Gods","artist_role":"headliner","source_url":"https://thecluny.com/gigs/","price":"12.00","ticket_status":"InStock","notes":"Source-visible manual sweep row"})
             out=root/"run"
             subprocess.run([sys.executable,str(ROOT/"scripts/assemble_run_package.py"),
-                "--start","2026-10-14","--end","2026-10-27","--manual-sweep",str(sweep),"--out-dir",str(out)],
+                "--start","2026-10-14","--end","2026-10-27","--manual-sweep",str(sweep),"--manual-coverage",str(coverage),"--out-dir",str(out)],
                 check=True,capture_output=True,text=True)
             with (out/"events.csv").open(newline="",encoding="utf-8") as f:
                 events=list(csv.DictReader(f))
@@ -119,6 +124,15 @@ class EvidencePackageTests(unittest.TestCase):
             self.assertEqual(events[0]["verified"],"false")
             self.assertEqual(events[0]["price"],"12.00")
             self.assertIn("Manual source-visible venue sweep",events[0]["notes"])
+            with (out/"venue_coverage.csv").open(newline="",encoding="utf-8") as f:
+                venue_coverage=list(csv.DictReader(f))
+            cluny=next(row for row in venue_coverage if row["venue"]=="The Cluny")
+            self.assertEqual(cluny["checked"],"true")
+            self.assertEqual(cluny["status"],"checked_events_found")
+            self.assertIn("Hidden support acts may be missed",cluny["notes"])
+            manifest=json.loads((out/"run_manifest.json").read_text())
+            self.assertTrue(manifest["artist_pool_compared"])
+            self.assertFalse(manifest["venue_sweep_complete"])
             with (out/"pool_matches.csv").open(newline="",encoding="utf-8") as f:
                 matches=list(csv.DictReader(f))
             match=next(row for row in matches if row["event_artist"]=="Ye Gods")

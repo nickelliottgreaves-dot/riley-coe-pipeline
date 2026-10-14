@@ -93,7 +93,7 @@ def main():
     ap.add_argument("--start",required=True); ap.add_argument("--end",required=True)
     ap.add_argument("--previous-successful-run",default="unknown/not yet established")
     ap.add_argument("--episodes",type=Path); ap.add_argument("--bbc-episodes",type=Path); ap.add_argument("--bbc-track-candidates",type=Path); ap.add_argument("--mixcloud-track-candidates",type=Path); ap.add_argument("--radiofiles-episodes",type=Path); ap.add_argument("--radiofiles-track-candidates",type=Path); ap.add_argument("--events",type=Path)
-    ap.add_argument("--venue-audit",type=Path); ap.add_argument("--event-page-inspection",type=Path); ap.add_argument("--event-page-audit",type=Path); ap.add_argument("--manual-sweep",type=Path,help="Optional dated source-visible venue sweep CSV; candidates remain unverified."); ap.add_argument("--out-dir",type=Path,required=True)
+    ap.add_argument("--venue-audit",type=Path); ap.add_argument("--event-page-inspection",type=Path); ap.add_argument("--event-page-audit",type=Path); ap.add_argument("--manual-sweep",type=Path,help="Optional dated source-visible venue sweep CSV; candidates remain unverified."); ap.add_argument("--manual-coverage",type=Path,help="Optional dated source-visible venue coverage ledger matching the run window."); ap.add_argument("--out-dir",type=Path,required=True)
     ap.add_argument("--pool",type=Path,default=ROOT/"data/artist_pool.csv")
     args=ap.parse_args()
     start=date.fromisoformat(args.start); end=date.fromisoformat(args.end)
@@ -110,6 +110,7 @@ def main():
         ("radiofiles_track_candidates",args.radiofiles_track_candidates,True),
         ("event_candidates",args.events,True),
         ("manual_venue_sweep",args.manual_sweep,False),
+        ("manual_venue_coverage",args.manual_coverage,False),
         ("event_discovery_audit",args.venue_audit,True),
         ("event_page_inspection",args.event_page_inspection,True),
         ("event_page_crawl_audit",args.event_page_audit,True),
@@ -201,6 +202,20 @@ def main():
     # Import a dated manual source-visible sweep when one is available for this run.
     # These rows enrich the review queue but are never marked verified.
     manual_sweep_rows=read_csv(args.manual_sweep,["event_date","venue","event_title","artist","artist_role","source_url","price","ticket_status","notes"]) if args.manual_sweep else []
+    manual_coverage_rows=read_csv(args.manual_coverage,["venue","source_url","coverage_status","window_start","window_end","coverage_notes","limitations"]) if args.manual_coverage else []
+    # Never apply a manual coverage ledger from a different date window.
+    expected_window=(start.isoformat(),end.isoformat())
+    manual_coverage_by_venue={}
+    for coverage in manual_coverage_rows:
+        if (coverage.get("window_start",""),coverage.get("window_end","")) != expected_window:
+            continue
+        if not (coverage.get("coverage_status","").startswith("reviewed_") and coverage.get("source_url","").startswith(("https://","http://"))):
+            continue
+        coverage_key="".join(c.casefold() for c in coverage.get("venue","") if c.isalnum())
+        if coverage_key:
+            manual_coverage_by_venue[coverage_key]=coverage
+    if args.manual_coverage and Path(args.manual_coverage).exists():
+        shutil.copy2(args.manual_coverage,out/"manual_venue_coverage.csv")
     for item in manual_sweep_rows:
         event_rows.append({
             "event_date":item.get("event_date",""),
@@ -292,9 +307,25 @@ def main():
         name=v["venue"].strip(); key=''.join(c.casefold() for c in name if c.isalnum())
         src=source_by_venue.get(key,{})
         audit=audit_by_venue.get(key,{})
-        # A fetch-only audit is explicitly not a calendar check.
-        venue_rows.append({"venue":name,"checked":"false","source_url":audit.get("source_url") or src.get("source_url",""),
-                           "status":"not_checked","notes":"Scaffold only. A reachable page or candidate links do not prove calendar coverage. "+(audit.get("notes") or "No calendar verification evidence supplied.")})
+        # A dated, source-visible manual ledger supports a checked status, while its
+        # limitations remain explicit. It never certifies every hidden listing/support.
+        manual=manual_coverage_by_venue.get(key)
+        if manual:
+            has_relevant_manual_row=any(
+                "".join(c.casefold() for c in item.get("venue","") if c.isalnum())==key
+                and (item.get("artist_role","").casefold() not in {"non-music event","food event","comedy","musical theatre"})
+                and (item.get("artist","").strip() or item.get("artist_role","").casefold().startswith("showcase"))
+                for item in manual_sweep_rows
+            )
+            venue_status="checked_events_found" if has_relevant_manual_row else "checked_no_relevant_events"
+            notes=("Dated source-visible manual sweep recorded for "+start.isoformat()+" to "+end.isoformat()+". "+
+                (manual.get("coverage_notes","") or "")+" Known limitations: "+(manual.get("limitations","") or "not supplied")+
+                " Event rows remain candidates until their individual details are independently verified.")
+            venue_rows.append({"venue":name,"checked":"true","source_url":manual.get("source_url") or src.get("source_url",""),"status":venue_status,"notes":notes})
+        else:
+            # A fetch-only audit is explicitly not a calendar check.
+            venue_rows.append({"venue":name,"checked":"false","source_url":audit.get("source_url") or src.get("source_url",""),
+                               "status":"not_checked","notes":"Scaffold only. A reachable page or candidate links do not prove calendar coverage. "+(audit.get("notes") or "No calendar verification evidence supplied.")})
     write_csv(out/"episodes.csv",EPISODE_FIELDS,episode_rows)
     write_csv(out/"venue_coverage.csv",VENUE_FIELDS,venue_rows)
     write_csv(out/"events.csv",EVENT_FIELDS,events)
@@ -308,6 +339,9 @@ def main():
     write_csv(out/"pool_matches.csv",MATCH_FIELDS,[])
     # Run matcher to ensure every candidate artist has a corresponding pool comparison.
     subprocess.run([sys.executable,str(ROOT/"scripts/match_event_artists.py"),"--events",str(out/"events.csv"),"--pool",str(args.pool),"--aliases",str(ROOT/"config/artist_aliases.csv"),"--out",str(out/"pool_matches.csv")],check=True)
+    # The full candidate event set has now been compared against the authoritative pool.
+    # This does not verify the gigs themselves or certify complete venue discovery.
+    artist_pool_compared=bool(events) and Path(args.pool).exists()
     # Also publish the dated filenames used by the weekly research workflow.
     run_day=date.today().isoformat()
     dated_exports={
@@ -339,7 +373,7 @@ def main():
     missing_inputs=[r["input_name"] for r in input_audit if r["status"] in {"missing","not_supplied"}]
     manifest={"run_date":date.today().isoformat(),"window_start":start.isoformat(),"window_end":end.isoformat(),
               "previous_successful_run":args.previous_successful_run,"claimed_status":"PARTIAL",
-              "episode_coverage_complete":False,"venue_sweep_complete":False,"artist_pool_compared":False,"all_event_sources_verified":False,
+              "episode_coverage_complete":False,"venue_sweep_complete":False,"artist_pool_compared":artist_pool_compared,"all_event_sources_verified":False,
               "researcher_notes":"Automatically assembled evidence scaffold. Not a completed research run. BBC Sounds/visible tracklists, event detail pages, supports, prices/ticket status, regression checks, full venue coverage and safety-net searches still require verification.",
               "package_kind":"candidate_scaffold","source_episode_rows":len(episode_rows),"candidate_event_rows":len(events),"manual_sweep_rows":len(manual_sweep_rows),"unresolved_event_candidates":len(unresolved),
               "mandatory_venue_rows":len(venue_rows),"venue_calendar_checks_completed":0,"regression_artists_seeded":len(regression_rows),"regression_artist_checks_completed":0,

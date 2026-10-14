@@ -324,11 +324,18 @@ jobs:
           END=$(python -c "from datetime import date,timedelta; print((date.today()+timedelta(days=13)).isoformat())")
           MANUAL_SWEEP_ARGS=()
           MANUAL_SWEEP="artifacts/manual-review/venue-sweep-${START}.csv"
+          MANUAL_COVERAGE="artifacts/manual-review/venue-sweep-coverage-${START}.csv"
           if [ -f "$MANUAL_SWEEP" ]; then
-            MANUAL_SWEEP_ARGS=(--manual-sweep "$MANUAL_SWEEP")
+            MANUAL_SWEEP_ARGS+=(--manual-sweep "$MANUAL_SWEEP")
             echo "Including dated manual venue sweep: $MANUAL_SWEEP"
           else
             echo "No dated manual venue sweep found for $START; machine candidates remain the only event input."
+          fi
+          if [ -f "$MANUAL_COVERAGE" ]; then
+            MANUAL_SWEEP_ARGS+=(--manual-coverage "$MANUAL_COVERAGE")
+            echo "Including dated manual venue coverage ledger: $MANUAL_COVERAGE"
+          else
+            echo "No matching dated manual venue coverage ledger found; uncovered venues remain not_checked."
           fi
           python scripts/assemble_run_package.py \
             --start "$START" --end "$END" \
