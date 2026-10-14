@@ -46,6 +46,7 @@ def main() -> int:
     ap.add_argument("--run-dir", type=Path, required=True)
     ap.add_argument("--pool", type=Path, default=ROOT / "data" / "artist_pool.csv")
     ap.add_argument("--today", help="Override today's date for reproducible tests (YYYY-MM-DD)")
+    ap.add_argument("--require-complete", action="store_true", help="Exit non-zero unless the evidence package validates as COMPLETE")
     args = ap.parse_args()
     run_dir = args.run_dir if args.run_dir.is_absolute() else ROOT / args.run_dir
     errors: list[str] = []
@@ -335,8 +336,10 @@ def main() -> int:
     print(json.dumps(report, indent=2))
     if run_dir.exists():
         (run_dir / "validation_report.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
-    # A structurally valid PARTIAL package is still a successful pipeline output.
-    # The explicit PARTIAL status and warnings preserve the incomplete-coverage signal.
+    # Partial packages remain usable by default, but the scheduled evidence gate
+    # can require COMPLETE so a warning-only scaffold cannot produce a green gate.
+    if args.require_complete and status != "COMPLETE":
+        return 1
     return 0 if status in {"COMPLETE", "PARTIAL"} else 1
 
 if __name__ == "__main__":
