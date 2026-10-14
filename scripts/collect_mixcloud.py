@@ -7,12 +7,12 @@ Every candidate must be checked against the actual visible show page or another
 official source before it can be marked complete in the run evidence.
 """
 from __future__ import annotations
-import argparse, csv, json, sys, time
+import argparse, csv, json, re, sys, time
 from html.parser import HTMLParser
 from datetime import date, datetime, timezone
 from pathlib import Path
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlencode, urlparse
+from urllib.parse import urlencode, urljoin, urlparse
 from urllib.request import Request, urlopen
 
 API_ROOT = "https://api.mixcloud.com"
