@@ -40,7 +40,7 @@ jobs:
           PY
 
   mixcloud-inventory:
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/review/radiofiles-pool-compare')
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/review/radiofiles-pool-compare')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -158,7 +158,7 @@ jobs:
 
 
   radiofiles-inventory:
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/review/radiofiles-pool-compare')
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/review/radiofiles-pool-compare')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -194,7 +194,7 @@ jobs:
           retention-days: 30
 
   bbc-sounds-inventory:
-    if: always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/review/radiofiles-pool-compare'))
+    if: always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/review/radiofiles-pool-compare'))
     needs: [radiofiles-inventory]
     runs-on: ubuntu-latest
     steps:
@@ -229,7 +229,7 @@ jobs:
           retention-days: 30
 
   venue-page-inventory:
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/review/radiofiles-pool-compare')
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/review/radiofiles-pool-compare')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -248,7 +248,7 @@ jobs:
           retention-days: 30
 
   scheduled-evidence-gate:
-    if: always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/review/radiofiles-pool-compare'))
+    if: always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/review/radiofiles-pool-compare'))
     needs: [assemble-evidence-scaffold]
     runs-on: ubuntu-latest
     steps:
@@ -265,7 +265,7 @@ jobs:
         run: python scripts/validate_run.py --run-dir artifacts/evidence-package --pool data/artist_pool.csv
 
   event-candidate-discovery:
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/review/radiofiles-pool-compare')
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/review/radiofiles-pool-compare')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -290,7 +290,7 @@ jobs:
 
   event-page-inspection:
     timeout-minutes: 20
-    if: always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/review/radiofiles-pool-compare'))
+    if: always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/review/radiofiles-pool-compare'))
     needs: [event-candidate-discovery]
     runs-on: ubuntu-latest
     steps:
@@ -316,7 +316,7 @@ jobs:
           retention-days: 30
 
   assemble-evidence-scaffold:
-    if: always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/review/radiofiles-pool-compare'))
+    if: always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/review/radiofiles-pool-compare'))
     needs: [mixcloud-inventory, bbc-sounds-inventory, radiofiles-inventory, venue-page-inventory, event-candidate-discovery, event-page-inspection]
     runs-on: ubuntu-latest
     steps:
