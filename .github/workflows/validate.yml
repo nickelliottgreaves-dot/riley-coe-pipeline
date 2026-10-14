@@ -277,6 +277,7 @@ jobs:
           retention-days: 30
 
   event-page-inspection:
+    timeout-minutes: 20
     if: always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/review/radiofiles-pool-compare'))
     needs: [event-candidate-discovery]
     runs-on: ubuntu-latest

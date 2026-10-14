@@ -47,7 +47,7 @@ class Parser(HTMLParser):
 
 def fetch(url):
     req=Request(url,headers={"User-Agent":UA,"Accept":"text/html,application/xhtml+xml"})
-    with urlopen(req,timeout=20) as r:
+    with urlopen(req,timeout=10) as r:
         body=r.read(3_000_001)
         truncated=len(body)>3_000_000
         return r.status,r.headers.get("Content-Type",""),body[:3_000_000].decode("utf-8",errors="replace"),truncated
