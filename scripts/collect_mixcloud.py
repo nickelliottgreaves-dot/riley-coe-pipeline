@@ -544,13 +544,15 @@ def fetch_show_page_tracks_reader(item: dict) -> list[dict]:
     try:
         with urlopen(req, timeout=15) as response:
             text = response.read(5_000_001).decode("utf-8", errors="replace")
-    except (HTTPError, URLError, TimeoutError, OSError):
+    except (HTTPError, URLError, TimeoutError, OSError) as exc:
+        item["_reader_error"] = f"{type(exc).__name__}: {exc}"
         return []
     import html as html_lib
     lines = [html_lib.unescape(line).strip() for line in text.splitlines() if line.strip()]
     tracks = parse_visible_track_rows(item, lines, "Mixcloud public page via Jina Reader")
     item["_reader_text_line_count"] = len(lines)
     item["_reader_track_rows"] = len(tracks)
+    item["_reader_text_sample"] = " | ".join(lines[:32])[:1400]
     return tracks
 
 
@@ -596,6 +598,10 @@ def fetch_show_page_tracks(item: dict) -> tuple[dict, list[dict]]:
         return episode, browser_tracks
     if item.get("_browser_http_status") == 404:
         reader_tracks = fetch_show_page_tracks_reader(item)
+        print("Mixcloud reader diagnostics:", url, "rest_error=", item.get("_rest_detail_error", ""),
+              "graphql_error=", item.get("_graphql_comment_error", ""), "reader_error=", item.get("_reader_error", ""),
+              "reader_lines=", item.get("_reader_text_line_count", 0), "reader_rows=", item.get("_reader_track_rows", 0),
+              "sample=", item.get("_reader_text_sample", ""))
         if reader_tracks:
             episode, _ = inventory_item(item)
             episode["source"] = "Mixcloud public page via Jina Reader"
