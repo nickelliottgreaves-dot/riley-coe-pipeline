@@ -530,6 +530,31 @@ def fetch_show_page_tracks_browser(item: dict) -> list[dict]:
     item["_browser_text_sample"] = " | ".join(lines[:24])[:1200]
     return tracks
 
+
+def fetch_show_page_tracks_reader(item: dict) -> list[dict]:
+    """Fallback through Jina Reader when Mixcloud serves a bot-facing 404."""
+    url = str(item.get("url") or "")
+    if not url.startswith("https://www.mixcloud.com/"):
+        return []
+    reader_url = "https://r.jina.ai/" + url
+    req = Request(reader_url, headers={
+        "User-Agent": USER_AGENT,
+        "Accept": "text/plain"
+    })
+    try:
+        with urlopen(req, timeout=15) as response:
+            text = response.read(5_000_001).decode("utf-8", errors="replace")
+    except (HTTPError, URLError, TimeoutError, OSError):
+        return []
+    parser = MixcloudHTMLParser()
+    parser.feed(text)
+    lines = [line.strip() for line in parser.text if line.strip()]
+    tracks = parse_visible_track_rows(item, lines, "Mixcloud public page via Jina Reader")
+    item["_reader_text_line_count"] = len(lines)
+    item["_reader_track_rows"] = len(tracks)
+    return tracks
+
+
 def fetch_show_page_tracks(item: dict) -> tuple[dict, list[dict]]:
     """Try the official REST show object, creator comment, then rendered public page."""
     url = str(item.get("url") or "")
@@ -571,11 +596,19 @@ def fetch_show_page_tracks(item: dict) -> tuple[dict, list[dict]]:
         episode["notes"] = "Parsed numbered rows from the rendered uploader comment; verify that no further tracks are hidden or omitted."
         return episode, browser_tracks
     if item.get("_browser_http_status") == 404:
+        reader_tracks = fetch_show_page_tracks_reader(item)
+        if reader_tracks:
+            episode, _ = inventory_item(item)
+            episode["source"] = "Mixcloud public page via Jina Reader"
+            episode["tracks_extracted"] = str(len(reader_tracks))
+            episode["tracklist_status"] = "incomplete"
+            episode["notes"] = "Parsed track rows from a text-reader proxy of the public Mixcloud page; verify complete coverage before treating as complete."
+            return episode, reader_tracks
         episode, _ = inventory_item(item)
         episode["source"] = "Mixcloud public HTML fallback"
         episode["tracks_extracted"] = "0"
         episode["tracklist_status"] = "unavailable"
-        episode["notes"] = "Mixcloud returned HTTP 404 for the public show page; no tracklist could be inspected."
+        episode["notes"] = "Mixcloud returned HTTP 404 and the text-reader fallback exposed no numbered track rows."
         return episode, []
     req = Request(url, headers={"User-Agent": USER_AGENT, "Accept": "text/html,application/xhtml+xml"})
     with urlopen(req, timeout=8) as response:
