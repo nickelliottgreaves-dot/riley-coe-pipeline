@@ -1,0 +1,10 @@
+venue,source_url,source_status,notes
+"The Cluny","https://thecluny.com/gigs/","verified_official_calendar","Core venue; inspect both rooms"
+"Cluny 2","https://thecluny.com/gigs/","verified_official_calendar","Core room; same official calendar, identify room separately"
+"Boiler Shop","https://www.boilershop.net/","verified_official_calendar","Core venue; follow calendar links where available"
+"Wylam Brewery","https://www.wylambrewery.co.uk/events/","verified_official_calendar","Core venue"
+"The Grove","https://www.thegrovenewcastle.co.uk/","verified_official_site","Core venue; follow event listings"
+"Sage Two","https://theglasshouseicm.org/whats-on/","verified_official_calendar","Core room; identify Sage Two listings separately"
+"Cumberland Arms","https://www.thecumberlandarms.co.uk/","verified_official_site","Core venue; follow Live Events navigation"
+"Cobalt Studios","https://cobaltstudios.co.uk/","verified_official_site","Core venue; locate dated event listings"
+"Lubber Fiend","https://www.thelubberfiend.com/venue","verified_official_site","Core venue; follow current event listings"

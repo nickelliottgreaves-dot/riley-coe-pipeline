@@ -1,0 +1,228 @@
+#!/usr/bin/env python3
+"""Small, conservative first-pass gig finder for the nine core venues.
+
+This orchestrates the existing structured-data collector and compares each
+candidate performer against the current artist pool. It deliberately labels
+matches as candidates: fetching a landing page is not proof of a complete
+calendar or a verified gig.
+"""
+from __future__ import annotations
+
+import argparse
+import csv
+import json
+import subprocess
+import sys
+from datetime import date
+from pathlib import Path
+import re
+import unicodedata
+
+ROOT = Path(__file__).resolve().parents[1]
+MATCH_FIELDS = [
+    "event_date", "venue", "event_title", "event_artist", "matched_pool_artist",
+    "match_type", "source_url", "verified", "notes",
+]
+COVERAGE_FIELDS = [
+    "venue", "source_url", "source_status", "fetch_status",
+    "candidate_events", "candidate_links", "calendar_coverage_verified", "notes",
+]
+
+
+def read_csv(path: Path) -> list[dict[str, str]]:
+    with path.open(encoding="utf-8-sig", newline="") as handle:
+        return list(csv.DictReader(handle))
+
+
+def write_csv(path: Path, fields: list[str], rows: list[dict[str, str]]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fields, extrasaction="ignore")
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def normalize(value: str) -> str:
+    value = unicodedata.normalize("NFKD", (value or "").casefold())
+    value = "".join(ch for ch in value if not unicodedata.combining(ch))
+    return " ".join(re.findall(r"[a-z0-9]+", value))
+
+
+def match_candidates(
+    events: list[dict[str, str]],
+    pool_rows: list[dict[str, str]],
+    alias_rows: list[dict[str, str]],
+) -> list[dict[str, str]]:
+    pool_by_key: dict[str, list[str]] = {}
+    for row in pool_rows:
+        name = (row.get("artist") or "").strip()
+        key = normalize(name)
+        if key:
+            pool_by_key.setdefault(key, []).append(name)
+
+    aliases: dict[str, str] = {}
+    for row in alias_rows:
+        if (row.get("review_status") or "").strip().casefold() != "approved":
+            continue
+        alias = (row.get("alias") or "").strip()
+        canonical = (row.get("canonical") or "").strip()
+        if alias and canonical and normalize(canonical) in pool_by_key:
+            aliases[normalize(alias)] = canonical
+
+    matches = []
+    for event in events:
+        artist = (event.get("artist") or "").strip()
+        key = normalize(artist)
+        if not key:
+            continue
+        if key in pool_by_key and len(pool_by_key[key]) == 1:
+            matched = pool_by_key[key][0]
+            match_type = "exact"
+        elif key in aliases:
+            matched = aliases[key]
+            match_type = "approved_alias"
+        else:
+            continue
+        matches.append({
+            "event_date": (event.get("event_date") or "").strip(),
+            "venue": (event.get("venue") or "").strip(),
+            "event_title": (event.get("event_title") or "").strip(),
+            "event_artist": artist,
+            "matched_pool_artist": matched,
+            "match_type": match_type,
+            "source_url": (event.get("source_url") or "").strip(),
+            "verified": "false",
+            "notes": "Candidate pool match only; event, date, room, artist role and calendar coverage require verification.",
+        })
+    return matches
+
+
+def build_coverage(
+    core_rows: list[dict[str, str]],
+    audit_rows: list[dict[str, str]],
+    events: list[dict[str, str]],
+    link_rows: list[dict[str, str]],
+) -> list[dict[str, str]]:
+    audit_by_venue = {normalize(row.get("venue", "")): row for row in audit_rows}
+    event_counts: dict[str, int] = {}
+    link_counts: dict[str, int] = {}
+    for row in events:
+        key = normalize(row.get("venue", ""))
+        event_counts[key] = event_counts.get(key, 0) + 1
+    for row in link_rows:
+        key = normalize(row.get("venue", ""))
+        link_counts[key] = link_counts.get(key, 0) + 1
+
+    coverage = []
+    for core in core_rows:
+        venue = core["venue"].strip()
+        audit = audit_by_venue.get(normalize(venue), {})
+        fetch_status = audit.get("status", "missing_audit")
+        coverage.append({
+            "venue": venue,
+            "source_url": core.get("source_url", ""),
+            "source_status": core.get("source_status", ""),
+            "fetch_status": fetch_status,
+            "candidate_events": str(event_counts.get(normalize(venue), 0)),
+            "candidate_links": str(link_counts.get(normalize(venue), 0)),
+            "calendar_coverage_verified": "false",
+            "notes": (audit.get("notes", "") or "No audit record was produced.")
+                    + " A fetched page is not proof that the full calendar was checked.",
+        })
+    return coverage
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--start", required=True, help="Inclusive ISO date")
+    parser.add_argument("--end", required=True, help="Inclusive ISO date")
+    parser.add_argument("--out-dir", type=Path, required=True)
+    parser.add_argument("--pool", type=Path, default=ROOT / "data/artist_pool.csv")
+    parser.add_argument("--core-sources", type=Path, default=ROOT / "config/core_venues.csv")
+    parser.add_argument("--aliases", type=Path, default=ROOT / "config/artist_aliases.csv")
+    args = parser.parse_args()
+
+    start, end = date.fromisoformat(args.start), date.fromisoformat(args.end)
+    if end < start or (end - start).days > 14:
+        parser.error("Date range must be an inclusive window of at most 15 days")
+    if not args.pool.exists():
+        parser.error(f"Artist pool does not exist: {args.pool}")
+    if not args.aliases.exists():
+        parser.error(f"Alias file does not exist: {args.aliases}")
+    if not args.core_sources.exists():
+        parser.error(f"Core venue registry does not exist: {args.core_sources}")
+
+    out_dir = args.out_dir if args.out_dir.is_absolute() else ROOT / args.out_dir
+    if out_dir.exists() and any(out_dir.iterdir()):
+        parser.error(f"Refusing to overwrite non-empty output directory: {out_dir}")
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    core_rows = read_csv(args.core_sources)
+    expected = {
+        "the cluny", "cluny 2", "boiler shop", "wylam brewery", "the grove",
+        "sage two", "cumberland arms", "cobalt studios", "lubber fiend",
+    }
+    actual = {normalize(row.get("venue", "")) for row in core_rows}
+    if len(core_rows) != 9 or actual != {normalize(name) for name in expected}:
+        raise SystemExit("Core venue registry must contain exactly the nine agreed core venues/rooms.")
+
+    discovery_dir = out_dir / "discovery"
+    command = [
+        sys.executable, str(ROOT / "scripts/discover_event_candidates.py"),
+        "--sources", str(args.core_sources),
+        "--start", start.isoformat(), "--end", end.isoformat(),
+        "--out-dir", str(discovery_dir),
+    ]
+    result = subprocess.run(command, cwd=ROOT, capture_output=True, text=True, check=False)
+    event_path = discovery_dir / "event_candidates.csv"
+    audit_path = discovery_dir / "event_discovery_audit.csv"
+    link_path = discovery_dir / "event_link_candidates.csv"
+    if not event_path.exists() or not audit_path.exists() or not link_path.exists():
+        print(result.stdout)
+        print(result.stderr, file=sys.stderr)
+        raise SystemExit("Core discovery did not produce its required candidate and audit files.")
+
+    events = read_csv(event_path)
+    audit_rows = read_csv(audit_path)
+    links = read_csv(link_path)
+    pool_rows = read_csv(args.pool)
+    alias_rows = read_csv(args.aliases)
+    if not pool_rows or "artist" not in pool_rows[0]:
+        raise SystemExit("The current artist pool is empty or missing its artist column.")
+    matches = match_candidates(events, pool_rows, alias_rows)
+    coverage = build_coverage(core_rows, audit_rows, events, links)
+    write_csv(out_dir / "candidate_pool_matches.csv", MATCH_FIELDS, matches)
+    write_csv(out_dir / "core_venue_coverage.csv", COVERAGE_FIELDS, coverage)
+
+    failed_sources = sum(row["fetch_status"] != "fetched_candidates_only" for row in coverage)
+    summary = {
+        "run_date": date.today().isoformat(),
+        "window_start": start.isoformat(),
+        "window_end": end.isoformat(),
+        "artist_pool_rows_loaded": len(pool_rows),
+        "core_venues_expected": 9,
+        "core_venues_with_fetch_success": sum(row["fetch_status"] == "fetched_candidates_only" for row in coverage),
+        "core_venues_with_fetch_failure_or_missing_audit": failed_sources,
+        "candidate_event_artist_rows": len(events),
+        "candidate_pool_matches": len(matches),
+        "verified_gigs": 0,
+        "calendar_coverage_verified": False,
+        "status": "LIMITED_RESULTS",
+        "status_reason": "This first-pass collector reads structured data from configured landing pages only; it does not prove complete calendars or verify individual events.",
+        "discovery_exit_code": result.returncode,
+        "outputs": [
+            "discovery/event_candidates.csv",
+            "discovery/event_link_candidates.csv",
+            "discovery/event_discovery_audit.csv",
+            "candidate_pool_matches.csv",
+            "core_venue_coverage.csv",
+            "run_summary.json",
+        ],
+    }
+    (out_dir / "run_summary.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
+    print(json.dumps(summary, indent=2))
+    return 0 if failed_sources == 0 and result.returncode == 0 else 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
