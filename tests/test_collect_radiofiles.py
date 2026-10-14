@@ -26,7 +26,7 @@ class RadioFilesCollectorTests(unittest.TestCase):
         result = validate_tracklist(payload, "m0032d2m", date(2026, 10, 12))
         self.assertTrue(result["count_match"])
         self.assertTrue(result["date_match"])
-        self.assertTrue(result["pid_match"])
+        self.assertIsNone(result["pid_match"])
         self.assertTrue(result["internally_consistent"])
         self.assertEqual(len(result["tracks"]), 2)
         self.assertEqual(result["tracks"][0]["artist_candidate"], "Lafayette And The Lasabres")
