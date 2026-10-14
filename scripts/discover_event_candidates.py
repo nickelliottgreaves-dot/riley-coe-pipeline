@@ -76,6 +76,32 @@ def likely_event_link(href,text):
     blob=(href+" "+text).casefold()
     return bool(re.search(r"event|gig|show|concert|ticket|whats-on|whatson|live-music|performance|listing",blob))
 
+
+def third_party_location_is_local(location, venue):
+    """Reject remote/undated aggregator cards that a venue page can link to."""
+    location = " ".join((location or "").casefold().split())
+    if not location:
+        return False
+    compact = re.sub(r"[^a-z0-9]", "", location)
+    venue_compact = re.sub(r"[^a-z0-9]", "", (venue or "").casefold())
+    if venue_compact and venue_compact in compact:
+        return True
+    local_terms = (
+        "newcastle", "gateshead", "tyne", "hexham", "corbridge", "northumberland",
+        "north tyneside", "south tyneside", "whitley bay", "north shields",
+        "south shields", "blyth", "morpeth"
+    )
+    return any(term in location for term in local_terms)
+
+
+def is_songkick_nonlocal_aggregate_url(url):
+    """Songkick metro-area and live-stream pages are not venue-specific gigs."""
+    parsed = urlparse(url)
+    if not parsed.netloc.casefold().endswith("songkick.com"):
+        return False
+    path = parsed.path.casefold()
+    return path.startswith("/metro-areas/") or path.startswith("/live-stream-concerts")
+
 def main():
     ap=argparse.ArgumentParser()
     ap.add_argument("--sources",type=Path,default=Path("config/venue_sources.csv"))
