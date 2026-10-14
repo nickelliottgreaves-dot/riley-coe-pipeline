@@ -11,7 +11,7 @@ import argparse, csv, json, sys, time
 from datetime import date, datetime, timezone
 from pathlib import Path
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlparse
 from urllib.request import Request, urlopen
 
 API_ROOT = "https://api.mixcloud.com"
