@@ -493,7 +493,13 @@ def fetch_show_page_tracks_browser(item: dict) -> list[dict]:
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True, args=["--no-sandbox"])
             page = browser.new_page(user_agent=USER_AGENT)
-            page.goto(url, wait_until="domcontentloaded", timeout=20000)
+            response = page.goto(url, wait_until="domcontentloaded", timeout=12000)
+            status = response.status if response is not None else None
+            item["_browser_http_status"] = status
+            if status == 404:
+                item["_browser_error"] = "HTTP 404 from Mixcloud public show page"
+                browser.close()
+                return []
             page.wait_for_timeout(1200)
             # Lazy-load comments and expand any visible "show/load more" controls.
             for _ in range(8):
@@ -547,8 +553,15 @@ def fetch_show_page_tracks(item: dict) -> tuple[dict, list[dict]]:
         episode["tracklist_status"] = "incomplete"
         episode["notes"] = "Parsed numbered rows from the rendered uploader comment; verify that no further tracks are hidden or omitted."
         return episode, browser_tracks
+    if item.get("_browser_http_status") == 404:
+        episode, _ = inventory_item(item)
+        episode["source"] = "Mixcloud public HTML fallback"
+        episode["tracks_extracted"] = "0"
+        episode["tracklist_status"] = "unavailable"
+        episode["notes"] = "Mixcloud returned HTTP 404 for the public show page; no tracklist could be inspected."
+        return episode, []
     req = Request(url, headers={"User-Agent": USER_AGENT, "Accept": "text/html,application/xhtml+xml"})
-    with urlopen(req, timeout=25) as response:
+    with urlopen(req, timeout=8) as response:
         html = response.read(5_000_001).decode("utf-8", errors="replace")
     parser = MixcloudHTMLParser()
     parser.feed(html)
