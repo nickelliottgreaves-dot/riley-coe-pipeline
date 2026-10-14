@@ -37,7 +37,17 @@ def main() -> int:
         for source, url in (("bbc_sounds", args.bbc_url), ("radiofiles_show", args.radiofiles_url), ("radiofiles_episode", RADIOFILES_EPISODE_URL)):
             page = browser.new_page(user_agent="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/130.0.0.0 Safari/537.36")
             network = []
-            page.on("response", lambda response: network.append(f"{response.status} {response.request.method} {response.url}") if any(k in response.url.casefold() for k in ("api", "graphql", "programme", "episode", "track", "radiofiles")) else None)
+            def capture_response(response):
+                url_lower = response.url.casefold()
+                if any(k in url_lower for k in ("api", "graphql", "programme", "episode", "track", "radiofiles")):
+                    entry = f"{response.status} {response.request.method} {response.url}"
+                    if "/tracklist?" in url_lower or "/episodes?" in url_lower:
+                        try:
+                            entry += " body=" + response.text()[:6000]
+                        except Exception as exc:
+                            entry += f" body_error={type(exc).__name__}"
+                    network.append(entry)
+            page.on("response", capture_response)
             status, title, before, after, error = "", "", "", "", ""
             clicks = 0
             still_visible = False
