@@ -116,6 +116,40 @@ class EvidencePackageTests(unittest.TestCase):
             self.assertTrue(all(row["tracks_extracted"]=="2" for row in episodes))
             self.assertNotIn("authoritative artist pool", (out/"run_manifest.json").read_text())
 
+    def test_deduplicates_calendar_and_detail_candidates_for_same_event(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            machine=root/"machine_events.csv"
+            with machine.open("w",newline="",encoding="utf-8") as f:
+                w=csv.DictWriter(f,fieldnames=["event_date","venue","event_title","artist","artist_role","source_url","verified","notes"])
+                w.writeheader()
+                w.writerow({"event_date":"2026-10-21","venue":"The Lubber Fiend","event_title":"Bitchin Bajas @ The Lubber Fiend","artist":"Bitchin Bajas","artist_role":"performer_role_unverified","source_url":"https://www.songkick.com/concerts/43291182-bitchin-bajas-at-lubber-fiend","verified":"false","notes":"Songkick event-detail candidate"})
+            sweep=root/"manual_sweep.csv"
+            with sweep.open("w",newline="",encoding="utf-8") as f:
+                w=csv.DictWriter(f,fieldnames=["event_date","venue","event_title","artist","artist_role","pool_match_status","matched_pool_name","source_url","price","ticket_status","notes"])
+                w.writeheader()
+                w.writerow({"event_date":"2026-10-21","venue":"Lubber Fiend","event_title":"Bitchin Bajas","artist":"Bitchin Bajas","artist_role":"headliner","source_url":"https://www.songkick.com/venues/4426128-lubber-fiend/calendar","price":"12.00","ticket_status":"InStock","notes":"Manual source-visible calendar candidate"})
+            inspection=root/"inspection.csv"
+            with inspection.open("w",newline="",encoding="utf-8") as f:
+                w=csv.DictWriter(f,fieldnames=["venue","page_url","event_title","event_date","performer_names","price","currency","availability","event_jsonld_found","notes"])
+                w.writeheader()
+                w.writerow({"venue":"Lubber Fiend","page_url":"https://www.songkick.com/venues/4426128-lubber-fiend/calendar","event_title":"Bitchin Bajas @ The Lubber Fiend","event_date":"2026-10-21","performer_names":"Bitchin Bajas","price":"12.00","currency":"GBP","availability":"InStock","event_jsonld_found":"true","notes":"Inspected-page candidate"})
+            out=root/"run"
+            subprocess.run([sys.executable,str(ROOT/"scripts/assemble_run_package.py"),
+                "--start","2026-10-14","--end","2026-10-27","--events",str(machine),
+                "--manual-sweep",str(sweep),"--event-page-inspection",str(inspection),
+                "--out-dir",str(out)],check=True,capture_output=True,text=True)
+            with (out/"events.csv").open(newline="",encoding="utf-8") as f:
+                events=list(csv.DictReader(f))
+            self.assertEqual(len(events),1)
+            self.assertEqual(events[0]["artist"],"Bitchin Bajas")
+            self.assertEqual(events[0]["artist_role"],"headliner")
+            self.assertEqual(events[0]["price"],"12.00")
+            self.assertEqual(events[0]["ticket_status"],"InStock")
+            self.assertEqual(events[0]["verified"],"false")
+            self.assertIn("https://www.songkick.com/venues/4426128-lubber-fiend/calendar",events[0]["notes"])
+            self.assertIn("https://www.songkick.com/concerts/43291182-bitchin-bajas-at-lubber-fiend",events[0]["notes"])
+
     def test_merges_inspected_event_jsonld_as_unverified_candidates(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp)
