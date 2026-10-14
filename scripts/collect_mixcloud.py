@@ -546,9 +546,8 @@ def fetch_show_page_tracks_reader(item: dict) -> list[dict]:
             text = response.read(5_000_001).decode("utf-8", errors="replace")
     except (HTTPError, URLError, TimeoutError, OSError):
         return []
-    parser = MixcloudHTMLParser()
-    parser.feed(text)
-    lines = [line.strip() for chunk in parser.text for line in chunk.splitlines() if line.strip()]
+    import html as html_lib
+    lines = [html_lib.unescape(line).strip() for line in text.splitlines() if line.strip()]
     tracks = parse_visible_track_rows(item, lines, "Mixcloud public page via Jina Reader")
     item["_reader_text_line_count"] = len(lines)
     item["_reader_track_rows"] = len(tracks)
