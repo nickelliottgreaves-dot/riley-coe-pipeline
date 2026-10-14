@@ -141,7 +141,8 @@ class MixcloudInventoryTests(unittest.TestCase):
             candidate["_browser_http_status"] = 404
             candidate["_browser_error"] = "HTTP 404 from Mixcloud public show page"
             return []
-        with patch("scripts.collect_mixcloud.fetch_show_comment_tracks", return_value=[]), \
+        with patch("scripts.collect_mixcloud.fetch_show_detail", return_value=item), \
+             patch("scripts.collect_mixcloud.fetch_show_comment_tracks", return_value=[]), \
              patch("scripts.collect_mixcloud.fetch_show_page_tracks_browser", side_effect=browser_404), \
              patch("scripts.collect_mixcloud.urlopen", side_effect=AssertionError("must not retry a confirmed 404")):
             episode, tracks = fetch_show_page_tracks(item)
@@ -170,7 +171,7 @@ class MixcloudInventoryTests(unittest.TestCase):
         item = {"name": "Riley & Coe Wednesday 30th September 2026",
             "url": "https://www.mixcloud.com/SixMusicAlternative/riley-coe-wednesday-30th-september-2026/",
             "created_time": "2026-09-30"}
-        with patch("scripts.collect_mixcloud.get_graphql", return_value={"cloudcastLookup": {"comments": {"edges": []}}}), patch("scripts.collect_mixcloud.urlopen", return_value=response):
+        with patch("scripts.collect_mixcloud.fetch_show_detail", return_value=item), patch("scripts.collect_mixcloud.get_graphql", return_value={"cloudcastLookup": {"comments": {"edges": []}}}), patch("scripts.collect_mixcloud.urlopen", return_value=response):
             episode, tracks = fetch_show_page_tracks(item)
         self.assertEqual([(x["track_title"], x["artist"]) for x in tracks],
             [("Threadbare", "Lande Hekt"), ("New York No Wave", "Ill Ease")])
