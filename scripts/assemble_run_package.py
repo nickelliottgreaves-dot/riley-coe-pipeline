@@ -26,6 +26,23 @@ def normalized_track_title(value):
     value="".join(ch for ch in value if not unicodedata.combining(ch))
     return " ".join(re.findall(r"[a-z0-9]+",value.casefold()))
 
+def normalized_venue_name(value):
+    """Normalize trivial venue-article variants without merging distinct rooms."""
+    name=normalized_track_title(value)
+    return name[4:] if name.startswith("the ") else name
+
+def normalized_event_title(value, venue):
+    """Remove a trailing venue suffix so calendar and detail-page titles can deduplicate."""
+    title=" ".join((value or "").split())
+    venue_text=" ".join((venue or "").split())
+    aliases=[venue_text]
+    if venue_text.casefold().startswith("the "):
+        aliases.append(venue_text[4:])
+    for alias in sorted({a for a in aliases if a},key=len,reverse=True):
+        escaped=re.escape(alias)
+        title=re.sub(r"\\s*(?:@|\\bat\\b)\\s+(?:the\\s+)?"+escaped+r"\\s*$","",title,flags=re.I)
+    return normalized_track_title(title)
+
 def episode_pid_from_url(url):
     value=url or ""
     query=re.search(r"[?&]pid=(m[0-9a-z]{7,})",value,re.I)
@@ -283,8 +300,7 @@ def main():
             unresolved_row["notes"]=((r.get("notes") or "")+" Performer missing; retained for manual triage.").strip()
             unresolved.append(unresolved_row)
             continue
-        norm_key=lambda value:"".join(ch.casefold() for ch in (value or "") if ch.isalnum())
-        key=(dt,norm_key(r.get("venue","")),norm_key(r.get("event_title","")),norm_key(r.get("artist","")))
+        key=(dt,normalized_venue_name(r.get("venue","")),normalized_event_title(r.get("event_title",""),r.get("venue","")),normalized_track_title(r.get("artist","")))
         candidate={**{k:r.get(k,"") for k in EVENT_FIELDS},"event_date":dt,"verified":"false",
                    "notes":((r.get("notes") or "")+" Candidate imported; independently verify the event detail page and support bill.").strip()}
         if key in seen_event_keys:
