@@ -314,7 +314,11 @@ def main():
             if "unverified" in (existing.get("artist_role") or "").casefold() and candidate.get("artist_role"):
                 existing["artist_role"]=candidate["artist_role"]
             if candidate.get("source_url") and candidate["source_url"] != existing.get("source_url"):
-                existing["notes"]=(existing.get("notes","")+" Additional candidate source: "+candidate["source_url"]+".").strip()
+                primary_source=existing.get("source_url","")
+                if primary_source and primary_source not in existing.get("notes",""):
+                    existing["notes"]=(existing.get("notes","")+" Primary candidate source: "+primary_source+".").strip()
+                if candidate["source_url"] not in existing.get("notes",""):
+                    existing["notes"]=(existing.get("notes","")+" Additional candidate source: "+candidate["source_url"]+".").strip()
             if candidate.get("notes") and candidate["notes"] not in existing.get("notes",""):
                 existing["notes"]=(existing.get("notes","")+" "+candidate["notes"]).strip()
             continue
