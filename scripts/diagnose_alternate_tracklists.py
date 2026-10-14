@@ -68,7 +68,12 @@ def main() -> int:
                     still_visible = bool(page.get_by_role("button", name=re.compile(r"show more", re.I)).count())
                 after = page.locator("body").inner_text(timeout=10000)
                 if source == "radiofiles_episode":
-                    for endpoint in ("https://radiofiles.io/tracklist?pid=m0032d2m", "https://radiofiles.io/episodes?show=m001mf2c&dest="):
+                    for endpoint in (
+                        "https://radiofiles.io/tracklist?pid=m0032d2m",
+                        "https://radiofiles.io/episodes?show=m001mf2c&dest=",
+                        "https://rms.api.bbc.co.uk/v2/my/experience/playable/urn:bbc:radio:episode:m0032d2m?show_tracklist=true&experience=domestic",
+                        "https://rms.api.bbc.co.uk/v2/my/experience/playable/urn:bbc:radio:episode:m0032d2m?show_tracklist=true&experience=international",
+                    ):
                         try:
                             api_response = page.request.get(endpoint, timeout=15000)
                             api_body = api_response.text()
