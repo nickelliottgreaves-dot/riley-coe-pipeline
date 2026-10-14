@@ -40,7 +40,7 @@ def get_graphql(query: str, timeout: int = 25) -> dict:
         payload = json.loads(response.read().decode("utf-8"))
     if not isinstance(payload, dict):
         raise ValueError("Unexpected Mixcloud GraphQL response shape")
-    if payload.get("errors") and not payload.get("data"):
+    if payload.get("errors"):
         raise ValueError("Mixcloud GraphQL errors: " + json.dumps(payload["errors"])[:500])
     data = payload.get("data")
     if not isinstance(data, dict):
@@ -80,8 +80,13 @@ def fetch_cloudcasts(username: str, since: date, until: date) -> tuple[list[dict
             errors.append(f"Mixcloud GraphQL user-upload discovery failed: {type(exc).__name__}: {exc}")
             break
         user = data.get("userLookup") or {}
+        if not user:
+            errors.append("Mixcloud GraphQL returned no userLookup object; data keys=" + ",".join(sorted(data.keys())))
+            break
         uploads = user.get("uploads") or {}
         edges = uploads.get("edges") or []
+        if not edges and not found:
+            errors.append("Mixcloud GraphQL user lookup had no upload edges; user keys=" + ",".join(sorted(user.keys())) + "; uploads keys=" + ",".join(sorted(uploads.keys())))
         for edge in edges:
             item = (edge or {}).get("node") or {}
             if not isinstance(item, dict):
@@ -303,10 +308,15 @@ def fetch_show_comment_tracks(item: dict) -> list[dict]:
     }""" % (username, slug)
     try:
         data = get_graphql(query)
-    except (HTTPError, URLError, TimeoutError, OSError, json.JSONDecodeError, ValueError):
+    except (HTTPError, URLError, TimeoutError, OSError, json.JSONDecodeError, ValueError) as exc:
+        item["_graphql_comment_error"] = f"{type(exc).__name__}: {exc}"
         return []
     cloudcast = data.get("cloudcastLookup") or {}
+    if not cloudcast:
+        item["_graphql_comment_error"] = "GraphQL cloudcastLookup returned no object; data keys=" + ",".join(sorted(data.keys()))
+        return []
     comments = (cloudcast.get("comments") or {}).get("edges") or []
+    item["_graphql_comment_count"] = len(comments)
     owner = cloudcast.get("owner") or item.get("owner") or {}
     creator_username = str(owner.get("username") or username).casefold()
     tracks = []
@@ -396,7 +406,7 @@ def fetch_show_page_tracks(item: dict) -> tuple[dict, list[dict]]:
     episode["source"] = "Mixcloud public HTML fallback"
     episode["tracks_extracted"] = str(len(tracks))
     episode["tracklist_status"] = "incomplete" if tracks else "unavailable"
-    episode["notes"] = ("Extracted visible ordinal/title/artist rows from the public HTML page; compare with the complete visible tracklist. " if tracks else "Public HTML page yielded no clearly structured track rows; manual review required. ") + "No tracklist is certified complete automatically."
+    episode["notes"] = ("Extracted visible ordinal/title/artist rows from the public HTML page; compare with the complete visible tracklist. " if tracks else "Public HTML page yielded no clearly structured track rows; manual review required. ") + (f"GraphQL comment lookup: {item.get('_graphql_comment_error')}; comments_seen={item.get('_graphql_comment_count', 0)}. " if item.get("_graphql_comment_error") or item.get("_graphql_comment_count") is not None else "") + "No tracklist is certified complete automatically."
     return episode, tracks
 
 def fetch_show_detail(item: dict) -> dict:
