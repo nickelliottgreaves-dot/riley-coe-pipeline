@@ -1,7 +1,7 @@
 import json, sys, unittest
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
-from discover_event_candidates import event_objects, date_part, likely_event_link, PageParser
+from discover_event_candidates import event_objects, date_part, likely_event_link, PageParser, third_party_location_is_local, is_songkick_nonlocal_aggregate_url
 
 class EventCandidateTests(unittest.TestCase):
     def test_extracts_schema_event_from_graph(self):
@@ -25,5 +25,16 @@ class EventCandidateTests(unittest.TestCase):
         self.assertEqual(p.title,["Venue"])
         self.assertEqual(p.links,[("/events/abc","Artist live")])
         self.assertEqual(len(p.scripts),1)
+
+    def test_third_party_calendar_rejects_missing_or_remote_location(self):
+        self.assertFalse(third_party_location_is_local("", "Lubber Fiend"))
+        self.assertFalse(third_party_location_is_local("Black Cat, Washington, DC", "Lubber Fiend"))
+        self.assertTrue(third_party_location_is_local("The Lubber Fiend, Newcastle upon Tyne", "Lubber Fiend"))
+        self.assertTrue(third_party_location_is_local("Newcastle upon Tyne, UK", "The Globe"))
+
+    def test_songkick_aggregate_pages_are_not_event_links(self):
+        self.assertTrue(is_songkick_nonlocal_aggregate_url("https://www.songkick.com/metro-areas/1409-us-washington"))
+        self.assertTrue(is_songkick_nonlocal_aggregate_url("https://www.songkick.com/live-stream-concerts"))
+        self.assertFalse(is_songkick_nonlocal_aggregate_url("https://www.songkick.com/concerts/43291182-bitchin-bajas-at-lubber-fiend"))
 
 if __name__=="__main__": unittest.main()
