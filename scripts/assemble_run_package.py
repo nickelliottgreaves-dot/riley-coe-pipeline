@@ -51,7 +51,7 @@ def episode_pid_from_url(url):
     return match.group(1).casefold() if match else ""
 
 def compare_episode_tracklists(bbc_tracks, radiofiles_tracks, bbc_episode_rows=None):
-    """Compare candidate title sets and certify title coverage only with a dated official cross-check."""
+    """Compare BBC and RadioFiles candidates without treating them as independent completeness proof."""
     bbc_by_pid={}; radiofiles_by_pid={}
     for row in bbc_tracks:
         pid=episode_pid_from_url(row.get("episode_url",""))
@@ -84,20 +84,23 @@ def compare_episode_tracklists(bbc_tracks, radiofiles_tracks, bbc_episode_rows=N
         date_match=bool(len(bdates)==1 and len(rdates)==1 and bdates[0]==rdates[0])
         official_heading=official_heading_by_pid.get(pid,False)
         titles_match=bool(bt) and bt==rt
-        complete=bool(titles_match and date_match and official_heading)
+        # RadioFiles documents that its tracklists are sourced from BBC Sounds.
+        # Matching sets corroborate extraction consistency, not independent completeness.
+        # The required Mixcloud visible tracklist has not been verified.
+        complete=False
         if not bt: status="radiofiles_only_no_official_candidates"
         elif not rt: status="bbc_only_no_radiofiles_candidates"
         elif not date_match and bdates and rdates: status="episode_date_mismatch_review_required"
-        elif complete: status="cross_source_title_set_complete_artist_credit_review_required"
+        elif titles_match and date_match and official_heading: status="bbc_radiofiles_title_sets_match_mixcloud_verification_required"
         elif titles_match: status="title_sets_match_but_official_or_date_evidence_missing"
         elif bt<rt: status="bbc_candidate_subset_of_radiofiles"
         elif rt<bt: status="radiofiles_candidate_subset_of_bbc"
         else: status="title_sets_differ"
         note="Exact normalized title comparison; no artists are automatically imported into the authoritative pool."
-        if complete:
-            note+=" The official BBC Music Played heading was detected and its extracted track-title set exactly matches RadioFiles for the same episode PID and date. Track-title coverage is certified complete; artist-credit differences still require review before pool updates."
+        if titles_match and date_match and official_heading:
+            note+=" The official BBC Music Played heading and RadioFiles title set match for the same episode PID/date. RadioFiles states its tracklists are sourced from BBC Sounds, so this is not independent source corroboration. Mixcloud visible-page tracklist verification is still required; completeness is NOT certified."
         else:
-            note+=" Tracklist completeness is not certified; inspect official episode snapshots, date alignment and every track row."
+            note+=" Tracklist completeness is not certified; inspect official episode snapshots, date alignment and every track row, and verify the required Mixcloud visible tracklist."
         output.append({
             "episode_pid":pid,"bbc_episode_date":"; ".join(bdates),
             "radiofiles_episode_date":"; ".join(rdates),"date_match":str(date_match).lower(),

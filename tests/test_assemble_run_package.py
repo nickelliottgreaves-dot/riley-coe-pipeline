@@ -73,7 +73,7 @@ class EvidencePackageTests(unittest.TestCase):
             self.assertIn("Third Song",rows[0]["radiofiles_only_titles"])
             self.assertIn("episode_tracklist_comparison.csv",json.loads((out/"run_manifest.json").read_text())["episode_tracklist_comparison"])
 
-    def test_exact_dated_official_and_radiofiles_title_match_marks_tracklist_complete_only(self):
+    def test_exact_dated_official_and_radiofiles_title_match_still_requires_mixcloud_verification(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp)
             bbc_episodes=root/"bbc_episodes.csv"
@@ -108,11 +108,13 @@ class EvidencePackageTests(unittest.TestCase):
             self.assertEqual(comparison[0]["title_sets_match"],"true")
             self.assertEqual(comparison[0]["date_match"],"true")
             self.assertEqual(comparison[0]["official_tracklist_heading_detected"],"true")
-            self.assertEqual(comparison[0]["complete_certified"],"true")
-            self.assertIn("artist-credit differences still require review",comparison[0]["notes"])
+            self.assertEqual(comparison[0]["complete_certified"],"false")
+            self.assertEqual(comparison[0]["status"],"bbc_radiofiles_title_sets_match_mixcloud_verification_required")
+            self.assertIn("Mixcloud visible-page tracklist verification is still required",comparison[0]["notes"])
+            self.assertIn("not independent source corroboration",comparison[0]["notes"])
             with (out/"episodes.csv").open(newline="",encoding="utf-8") as f:
                 episodes=list(csv.DictReader(f))
-            self.assertTrue(all(row["tracklist_status"]=="complete" for row in episodes))
+            self.assertTrue(all(row["tracklist_status"]!="complete" for row in episodes))
             self.assertTrue(all(row["tracks_extracted"]=="2" for row in episodes))
             self.assertNotIn("authoritative artist pool", (out/"run_manifest.json").read_text())
 
