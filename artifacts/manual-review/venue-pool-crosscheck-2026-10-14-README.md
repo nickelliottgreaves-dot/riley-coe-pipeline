@@ -1,16 +1,15 @@
-# Preliminary venue-to-pool cross-check — 14–28 October 2026
+# Preliminary venue-to-pool comparison — 14–27 October 2026
 
-Status: PARTIAL / discovery sample, not a completed venue sweep.
+Status: PARTIAL. This is a discovery sample, not a completed sweep of all configured venue sources.
 
-Generated from official venue calendar pages where available, plus Gigantic's venue calendar for The Grove. Event date window is inclusive, 14–28 October 2026. Both headliners and named supports are included where the listing exposed them. Pool matching is exact after Unicode, punctuation, case and ampersand normalization; no fuzzy matches are treated as confirmed.
-
-Authoritative seed pool: data/artist_pool.csv (747 rows at time of review). This report is discovery evidence only; it does not change the pool.
-
-Important limitation: this sample covers visible listings surfaced by these sources, not every configured venue, every page, all ticket links or all possible event listings. Absence from this CSV does not mean an artist has no local show. Re-run the scheduled event discovery and page-inspection jobs for the full audited sweep.
+The report has been corrected to the inclusive 14-day window 14–27 October 2026 and revalidated against the current authoritative 747-row artist pool using proper CSV parsing and exact matching after Unicode, case, punctuation and ampersand normalization. It contains 35 artist/event entries, of which 4 are normalized exact pool matches and 31 are not found in the pool. A match confirms only that the artist string is present in the pool; it does not verify the gig. A non-match is not an automatic pool addition.
 
 Sources consulted:
 - The Cluny official calendar: https://thecluny.com/gigs/
-- The Grove listings: https://www.gigantic.com/venue/newcastle-upon-tyne/the-grove?view=grid
 - Boiler Shop official events: https://www.boilershop.net/events
-- Glasshouse official what's on: https://theglasshouseicm.org/whats-on/
+- Glasshouse official calendar: https://theglasshouseicm.org/whats-on/
 - Cumberland Arms official events: https://www.thecumberlandarms.co.uk/events/
+- The Grove ticketing calendar: https://thegrovenewcastle.gigantic.com/promoter/the-grove-newcastle-ltd
+- NewcastleGateshead live-music listings: https://newcastlegateshead.com/events/live-music
+
+Outstanding coverage: full pagination and event-detail checks for all 20 configured sources; source-by-source confirmation of headliners, support acts, prices and ticket status; and resolving sources that the automated fetch cannot access. The Globe returned HTTP 403 in the automated fetch and needs an alternate official/ticketing source. This report is not a COMPLETE-run artifact.
