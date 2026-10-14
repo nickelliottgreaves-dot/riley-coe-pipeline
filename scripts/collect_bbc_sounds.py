@@ -88,7 +88,13 @@ class ProgrammeTrackParser(HTMLParser):
                 self.in_tracklist=True
                 self.artist=""
                 self.pending_artist=False
-            elif heading.casefold() in {"broadcast","similar programmes","related programmes"}:
+            elif heading.casefold()=="broadcast":
+                # Some BBC pages place expanded "Show more" track rows after the
+                # Broadcast heading in DOM/text order. Reset the pending pair but
+                # keep scanning until the related-content section definitively ends.
+                self.artist=""
+                self.pending_artist=False
+            elif heading.casefold() in {"similar programmes","related programmes","related programme","related content","by genre"}:
                 self.in_tracklist=False
                 self.artist=""
                 self.pending_artist=False
