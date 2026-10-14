@@ -45,7 +45,7 @@ def main():
             rows.append(row); continue
         try:
             req=Request(url,headers={"User-Agent":AGENT,"Accept":"text/html,application/xhtml+xml"})
-            with urlopen(req,timeout=25) as response:
+            with urlopen(req,timeout=8) as response:
                 code=response.status; ctype=response.headers.get("Content-Type","")
                 raw=response.read(2_000_001)
             row["http_status"]=str(code); row["content_type"]=ctype
