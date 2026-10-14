@@ -160,7 +160,7 @@ def main() -> int:
                 row["tracklist_status"] = "count_and_metadata_verified_needs_crosscheck" if checked["internally_consistent"] else "inconsistent_needs_review"
                 row["notes"] = (
                     f"Source={checked['payload_source'] or 'unspecified'}; count match={checked['count_match']}; "
-                    f"date match={checked['date_match']}; PID match={checked['pid_match']}; "
+                    f"date match={checked['date_match']}; PID match={checked['pid_match'] if checked['pid_match'] is not None else 'not exposed'}; "
                     f"row errors={'; '.join(checked['row_errors']) or 'none'}. Third-party data only; cross-check before importing."
                 )
                 for track in checked["tracks"]:
