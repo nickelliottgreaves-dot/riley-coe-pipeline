@@ -40,7 +40,7 @@ def normalized_event_title(value, venue):
         aliases.append(venue_text[4:])
     for alias in sorted({a for a in aliases if a},key=len,reverse=True):
         escaped=re.escape(alias)
-        title=re.sub(r"\\s*(?:@|\\bat\\b)\\s+(?:the\\s+)?"+escaped+r"\\s*$","",title,flags=re.I)
+        title=re.sub(r"\s*(?:@|\bat\b)\s+(?:the\s+)?"+escaped+r"\s*$","",title,flags=re.I)
     return normalized_track_title(title)
 
 def episode_pid_from_url(url):
