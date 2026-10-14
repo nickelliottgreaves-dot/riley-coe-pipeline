@@ -114,4 +114,43 @@ class EvidencePackageTests(unittest.TestCase):
             self.assertNotEqual(again.returncode,0)
             self.assertIn("Refusing to overwrite",again.stderr)
 
+
+    def test_merges_radiofiles_track_candidates_as_review_only(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            episodes=root/"radiofiles_episodes.csv"
+            with episodes.open("w",newline="",encoding="utf-8") as f:
+                w=csv.DictWriter(f,fieldnames=["episode_date","episode_title","episode_pid","source_url","has_tracklist","tracklist_status","track_count_returned","notes"])
+                w.writeheader()
+                w.writerow({"episode_date":"2026-10-12","episode_title":"Riley & Coe — 12 Oct 2026","episode_pid":"m0032d2m",
+                    "source_url":"https://radiofiles.io/app?show=m001mf2c&pid=m0032d2m","has_tracklist":"true",
+                    "tracklist_status":"count_and_metadata_verified_needs_crosscheck","track_count_returned":"29","notes":"count match"})
+            candidates=root/"radiofiles_tracks.csv"
+            with candidates.open("w",newline="",encoding="utf-8") as f:
+                w=csv.DictWriter(f,fieldnames=["episode_date","episode_title","episode_pid","track_position","track_title","artist_candidate","source_url","tracklist_api_url","source","verification_status","notes"])
+                w.writeheader()
+                w.writerow({"episode_date":"2026-10-12","episode_title":"Riley & Coe — 12 Oct 2026","episode_pid":"m0032d2m",
+                    "track_position":"1","track_title":"Free Way","artist_candidate":"Lafayette And The Lasabres",
+                    "source_url":"https://radiofiles.io/app?show=m001mf2c&pid=m0032d2m",
+                    "tracklist_api_url":"https://radiofiles.io/tracklist?pid=m0032d2m","source":"RadioFiles public JSON",
+                    "verification_status":"needs_manual_crosscheck","notes":"count matched"})
+            out=root/"run"
+            subprocess.run([sys.executable,str(ROOT/"scripts/assemble_run_package.py"),
+                "--start","2026-10-01","--end","2026-10-14","--radiofiles-episodes",str(episodes),
+                "--radiofiles-track-candidates",str(candidates),"--out-dir",str(out)],check=True,capture_output=True,text=True)
+            with (out/"tracklist_candidate_review.csv").open(newline="",encoding="utf-8") as f:
+                rows=list(csv.DictReader(f))
+            self.assertEqual(len(rows),1)
+            self.assertEqual(rows[0]["artist_candidate"],"Lafayette And The Lasabres")
+            self.assertEqual(rows[0]["review_status"],"needs_manual_review")
+            self.assertEqual(rows[0]["extraction_method"],"radiofiles_json_candidate")
+            with (out/"episodes.csv").open(newline="",encoding="utf-8") as f:
+                eps=list(csv.DictReader(f))
+            radio=next(r for r in eps if r["source"]=="RadioFiles public JSON fallback")
+            self.assertEqual(radio["tracklist_status"],"not_yet_checked")
+            self.assertIn("independent completeness verification",radio["notes"])
+            with (out/"input_file_audit.csv").open(newline="",encoding="utf-8") as f:
+                audit=list(csv.DictReader(f))
+            self.assertTrue(any(r["input_name"]=="radiofiles_track_candidates" and r["status"]=="present" for r in audit))
+
 if __name__=="__main__": unittest.main()
