@@ -156,10 +156,11 @@ def main() -> int:
     if discovery_path.exists():
         discovery_rows = read_csv(discovery_path, ["venue", "source_url", "homepage_fetch_status", "structured_event_count", "candidate_link_count", "detail_pages_fetched", "detail_pages_failed", "crawl_cap_reached", "calendar_coverage_verified", "notes"], errors)
         discovery_map = {norm_venue(r.get("venue", "")): r for r in discovery_rows}
-        for required_name in required_venues:
+        discovery_required = configured_venues if manifest.get("claimed_status") == "COMPLETE" else required_venues
+        for required_name in discovery_required:
             row = discovery_map.get(norm_venue(required_name))
             if not row:
-                errors.append(f"venue_discovery_coverage.csv: missing mandatory venue row: {required_name}")
+                errors.append(f"venue_discovery_coverage.csv: missing configured venue row: {required_name}")
             elif manifest.get("claimed_status") == "COMPLETE" and not truthy(row.get("calendar_coverage_verified", "")):
                 errors.append(f"venue_discovery_coverage.csv: COMPLETE run lacks verified calendar coverage for {required_name}")
         if manifest.get("claimed_status") == "COMPLETE":
@@ -185,6 +186,24 @@ def main() -> int:
             warnings.append(f"Venue {venue} not fully checked (status={state})")
         if not row.get("source_url", "").strip():
             errors.append(f"Venue {venue}: missing evidence/source URL")
+
+    # The agreed sweep covers every configured source, not only the mandatory
+    # subset. Safety-net venues must be auditable too before a COMPLETE claim.
+    try:
+        with source_registry.open(encoding="utf-8-sig", newline="") as f:
+            configured_venues = [r["venue"].strip() for r in csv.DictReader(f) if r.get("venue", "").strip()]
+    except (OSError, KeyError, csv.Error):
+        configured_venues = []
+    if manifest.get("claimed_status") == "COMPLETE":
+        for venue in configured_venues:
+            row = venue_map.get(norm_venue(venue))
+            if not row:
+                errors.append(f"COMPLETE run missing configured venue coverage row: {venue}")
+            elif (row.get("status") or "").strip().lower() not in {"checked_events_found", "checked_no_relevant_events"}:
+                errors.append(f"COMPLETE run has not completed configured venue sweep: {venue}")
+            elif not row.get("source_url", "").strip().startswith(("https://", "http://")):
+                errors.append(f"COMPLETE run lacks HTTP(S) evidence URL for configured venue: {venue}")
+
 
     # If a venue's calendar check says events were found, at least one event
     # act row must be present for that venue. A genuinely empty window can pass
