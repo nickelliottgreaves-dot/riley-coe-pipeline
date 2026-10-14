@@ -36,8 +36,8 @@ def parse_date(value: str | None) -> date | None:
 def resolve_cloudcasts_endpoint(username: str) -> str:
     """Resolve the account's canonical cloudcasts connection from Mixcloud metadata.
 
-    The public API documents connections on the user object. Do not assume the
-    supplied display-name casing is the canonical API key.
+    Mixcloud documents connections on user objects and provides a user search
+    endpoint. Try those canonical routes before the legacy guessed URL.
     """
     requested = username.strip("/")
     candidates = list(dict.fromkeys([requested, requested.lower()]))
@@ -51,10 +51,41 @@ def resolve_cloudcasts_endpoint(username: str) -> str:
         endpoint = connections.get("cloudcasts")
         if isinstance(endpoint, str) and endpoint.startswith(API_ROOT + "/"):
             return endpoint
-    # Compatibility fallback; the caller will preserve an explicit error if
-    # this legacy endpoint is unavailable too.
-    return f"{API_ROOT}/{requested}/cloudcasts/"
+        key = str(profile.get("key") or "").strip()
+        if key.startswith("/") and key.count("/") >= 2:
+            return f"{API_ROOT}{key.rstrip('/')}/cloudcasts/"
 
+    # Resolve aliases/canonical keys via the documented public user search.
+    search_url = f"{API_ROOT}/search/?{urlencode({'q': requested, 'type': 'user'})}"
+    try:
+        results = get_json(search_url)
+    except (HTTPError, URLError, TimeoutError, OSError, json.JSONDecodeError):
+        results = {}
+    data = results.get("data", [])
+    if isinstance(data, list):
+        for item in data:
+            if not isinstance(item, dict):
+                continue
+            key = str(item.get("key") or "").strip()
+            url = str(item.get("url") or "").strip()
+            name = str(item.get("name") or "").strip()
+            slug = key.strip("/").split("/", 1)[0] if key else ""
+            if requested.casefold() not in {slug.casefold(), name.casefold()} and requested.casefold() not in url.casefold():
+                continue
+            if key.startswith("/") and key.count("/") >= 2:
+                profile_url = f"{API_ROOT}{key.rstrip('/')}/?metadata=1"
+                try:
+                    profile = get_json(profile_url)
+                    endpoint = profile.get("metadata", {}).get("connections", {}).get("cloudcasts")
+                    if isinstance(endpoint, str) and endpoint.startswith(API_ROOT + "/"):
+                        return endpoint
+                except (HTTPError, URLError, TimeoutError, OSError, json.JSONDecodeError):
+                    pass
+                return f"{API_ROOT}{key.rstrip('/')}/cloudcasts/"
+
+    # Compatibility fallback. If this route is no longer exposed, the caller
+    # records the failure rather than silently reporting an empty inventory.
+    return f"{API_ROOT}/{requested}/cloudcasts/"
 
 def fetch_cloudcasts(username: str, since: date, until: date) -> tuple[list[dict], list[str]]:
     endpoint = resolve_cloudcasts_endpoint(username)
