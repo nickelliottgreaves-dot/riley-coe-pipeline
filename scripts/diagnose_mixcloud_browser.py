@@ -26,7 +26,7 @@ def inspect_rendered_text(url: str, body: str, title: str, status: str, api_resp
     return {
         "url": url,
         "navigation_status": status,
-        "page_state": "page_not_found" if page_not_found else ("rendered_content" if len(body) > 500 else "shell_or_empty"),
+        "page_state": "page_not_found" if page_not_found else ("rendered_content" if len(body) > 500 or bool(hits) else "shell_or_empty"),
         "page_title": title,
         "body_chars": str(len(body)),
         "known_artist_hits": ";".join(hits),
