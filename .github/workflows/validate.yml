@@ -45,6 +45,13 @@ jobs:
           python-version: "3.12"
       - name: Install browser-impersonating HTTP client
         run: python -m pip install --disable-pip-version-check curl_cffi
+      - name: Diagnose Mixcloud GraphQL against documented public account
+        continue-on-error: true
+        run: |
+          python - <<'PY'
+          from scripts.collect_mixcloud import get_graphql
+          print(get_graphql('{ userLookup(lookup: {username: "spartacus"}) { displayName } }'))
+          PY
       - name: Inventory recent Mixcloud episodes
         id: collect
         run: |
