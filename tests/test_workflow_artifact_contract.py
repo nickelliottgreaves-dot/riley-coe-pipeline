@@ -21,12 +21,14 @@ class WorkflowArtifactContractTests(unittest.TestCase):
             self.assertIn(filename, WORKFLOW)
 
     def test_artifact_names_and_input_audit_are_present(self):
-        for artifact in ("riley-coe-mixcloud-inventory-", "riley-coe-bbc-sounds-inventory-", "riley-coe-event-candidates-"):
+        for artifact in ("riley-coe-mixcloud-inventory-", "riley-coe-bbc-sounds-inventory-", "riley-coe-radiofiles-inventory-", "riley-coe-event-candidates-"):
             self.assertIn(artifact, WORKFLOW)
         self.assertIn("input_file_audit.csv", ASSEMBLER)
         self.assertIn("missing_or_unsupplied_inputs", ASSEMBLER)
         self.assertIn("bbc_track_candidates.csv", WORKFLOW)
         self.assertIn("--mixcloud-track-candidates", WORKFLOW)
+        self.assertIn("--radiofiles-track-candidates", WORKFLOW)
+        self.assertIn("radiofiles_track_candidates.csv", ASSEMBLER)
         self.assertIn("mixcloud_api_track_candidates.csv", ASSEMBLER)
         self.assertIn("tracklist_candidate_review.csv", ASSEMBLER)
         self.assertIn("Riley_Coe_tracklist_candidate_review_", ASSEMBLER)
