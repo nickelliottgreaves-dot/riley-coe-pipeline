@@ -34,7 +34,7 @@ class EventPageCrawlerTests(unittest.TestCase):
     def test_shared_parent_calendar_does_not_claim_a_room_without_evidence(self):
         rows=[
             {"venue":"The Cluny","page_url":"https://thecluny.com/listing/example","page_title":"Live music","event_title":"Example band","event_date":"2026-10-20","performer_names":"Example band","status":"page_text_needs_review","notes":"candidate","_shared_aliases":["The Cluny","Cluny 2"]},
-            {"venue":"Cluny 2","page_url":"https://thecluny.com/listing/example","page_title":"Live music","event_title":"Example band","event_date":"2026-10-20","performer_names":"Example band","status":"page_text_needs_review","notes":"candidate"},
+            {"venue":"Cluny 2","page_url":"https://thecluny.com/listing/example","page_title":"Live music","event_title":"Example band","event_date":"2026-10-20","performer_names":"Example band","status":"page_text_needs_review","notes":"candidate","_shared_aliases":["The Cluny","Cluny 2"]},
         ]
         result=apply_shared_calendar_attribution(rows)
         self.assertEqual(len(result),1)
@@ -43,7 +43,7 @@ class EventPageCrawlerTests(unittest.TestCase):
         self.assertIn("Do not attribute",result[0]["notes"])
 
     def test_shared_calendar_can_resolve_explicit_room_in_page_title(self):
-        rows=[{"venue":"The Cluny","page_url":"https://thecluny.com/listing/example","page_title":"Cluny 2: Example band","event_title":"Example band","event_date":"2026-10-20","performer_names":"Example band","status":"page_text_needs_review","notes":"candidate"}]
+        rows=[{"venue":"The Cluny","page_url":"https://thecluny.com/listing/example","page_title":"Cluny 2: Example band","event_title":"Example band","event_date":"2026-10-20","performer_names":"Example band","status":"page_text_needs_review","notes":"candidate","_shared_aliases":["The Cluny","Cluny 2"]}]
         result=apply_shared_calendar_attribution(rows)
         self.assertEqual(result[0]["venue"],"Cluny 2")
         self.assertNotEqual(result[0]["status"],"shared_calendar_attribution_unresolved")
