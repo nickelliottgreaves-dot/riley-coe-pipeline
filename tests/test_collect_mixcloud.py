@@ -109,7 +109,7 @@ class MixcloudInventoryTests(unittest.TestCase):
 
     def test_public_comment_api_extracts_numbered_tracklist(self):
         payload = {"data": [
-            {"comment": "1.\\nThreadbare\\nLande Hekt\\n2.\\nNew York No Wave\\nIll Ease"}
+            {"comment": "1.\nThreadbare\nLande Hekt\n2.\nNew York No Wave\nIll Ease"}
         ]}
         item = {"name": "Riley & Coe Wednesday 30th September 2026",
             "url": "https://www.mixcloud.com/SixMusicAlternative/riley-coe-wednesday-30th-september-2026/",
@@ -126,7 +126,7 @@ class MixcloudInventoryTests(unittest.TestCase):
         item = {"name": "Riley & Coe Wednesday 30th September 2026",
             "url": "https://www.mixcloud.com/SixMusicAlternative/riley-coe-wednesday-30th-september-2026/",
             "created_time": "2026-09-30"}
-        with patch("scripts.collect_mixcloud.urlopen", return_value=response):
+        with patch("scripts.collect_mixcloud.get_json", return_value={"data": []}), patch("scripts.collect_mixcloud.urlopen", return_value=response):
             episode, tracks = fetch_show_page_tracks(item)
         self.assertEqual([(x["track_title"], x["artist"]) for x in tracks],
             [("Threadbare", "Lande Hekt"), ("New York No Wave", "Ill Ease")])
@@ -137,7 +137,7 @@ class MixcloudInventoryTests(unittest.TestCase):
         response = type("Response", (), {"__enter__": lambda self: self, "__exit__": lambda self, *args: None,
             "read": lambda self, n: html})()
         item = {"name": "Riley & Coe Tuesday 6th October 2026", "url": "https://www.mixcloud.com/SixMusicAlternative/riley-coe-tuesday-6th-october-2026/", "created_time": "2026-10-06"}
-        with patch("scripts.collect_mixcloud.urlopen", return_value=response):
+        with patch("scripts.collect_mixcloud.get_json", return_value={"data": []}), patch("scripts.collect_mixcloud.urlopen", return_value=response):
             episode, tracks = fetch_show_page_tracks(item)
         self.assertEqual(len(tracks), 2)
         self.assertEqual(tracks[0]["artist"], "Artist One")
