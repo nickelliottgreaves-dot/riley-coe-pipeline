@@ -322,14 +322,14 @@ def fetch_show_comment_tracks(item: dict) -> list[dict]:
         # Only trust the upload owner's comment, not listener discussion.
         if comment_username and comment_username != creator_username:
             continue
-        body = html_lib.unescape(str(comment.get("comment") or "")).replace("\\r", "")
+        body = html_lib.unescape(str(comment.get("comment") or "")).replace("\r", "")
         lines = [line.strip() for line in body.splitlines() if line.strip()]
         local_rows = []
         i = 0
         while i < len(lines):
-            if re.fullmatch(r"\\d{1,3}\\.", lines[i]) and i + 2 < len(lines):
+            if re.fullmatch(r"\d{1,3}\.", lines[i]) and i + 2 < len(lines):
                 title, artist = lines[i + 1].strip(), lines[i + 2].strip()
-                if title and artist and not re.fullmatch(r"\\d{1,3}\\.", title):
+                if title and artist and not re.fullmatch(r"\d{1,3}\.", title):
                     local_rows.append((title, artist))
                     i += 3
                     continue
@@ -487,7 +487,7 @@ def main() -> int:
         items = []
         errors.append(f"Unexpected collector error: {type(exc).__name__}: {exc}")
 
-    if not items and errors:
+    if not items:
         api_errors = list(errors)
         search_items, search_errors = fetch_cloudcasts_search(args.username, since, until)
         if search_items:
@@ -508,7 +508,7 @@ def main() -> int:
     episodes, tracks = [], []
     for item in items:
         try:
-            if item.get("_html_fallback"):
+            if item.get("_html_fallback") or item.get("_graphql_discovery"):
                 episode, item_tracks = fetch_show_page_tracks(item)
             else:
                 detail = fetch_show_detail(item) if not sections_from(item) else item
