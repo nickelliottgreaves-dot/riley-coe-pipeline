@@ -73,6 +73,7 @@ jobs:
         run: |
           mkdir -p artifacts/mixcloud-diagnostics
           python scripts/diagnose_mixcloud_rest.py --out-dir artifacts/mixcloud-diagnostics
+          python scripts/diagnose_mixcloud_html.py --out-dir artifacts/mixcloud-diagnostics
       - name: Preserve endpoint diagnostics even when all endpoints fail
         if: always()
         uses: actions/upload-artifact@v4
