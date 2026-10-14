@@ -67,7 +67,8 @@ def probe(username: str, slug: str, timeout: int = 20) -> dict:
         data = payload.get("data", {}) if isinstance(payload, dict) else {}
         show = data.get("cloudcastLookup") if isinstance(data, dict) else None
         if not isinstance(show, dict):
-            base["error"] = "GraphQL response did not contain data.cloudcastLookup"
+            base["error"] = "GraphQL response did not contain a show object"
+            base["sample_comment"] = json.dumps(payload, ensure_ascii=False)[:700]
             return base
         base["show_found"] = "true"
         base["show_name"] = str(show.get("name", ""))[:250]
