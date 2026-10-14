@@ -152,6 +152,12 @@ def main() -> int:
     except (OSError, csv.Error) as exc:
         errors.append(f"Cannot load config/venue_sources.csv: {exc}")
 
+    try:
+        with source_registry.open(encoding="utf-8-sig", newline="") as f:
+            configured_venues = [r["venue"].strip() for r in csv.DictReader(f) if r.get("venue", "").strip()]
+    except (OSError, KeyError, csv.Error):
+        configured_venues = []
+
     discovery_path = run_dir / "venue_discovery_coverage.csv"
     if discovery_path.exists():
         discovery_rows = read_csv(discovery_path, ["venue", "source_url", "homepage_fetch_status", "structured_event_count", "candidate_link_count", "detail_pages_fetched", "detail_pages_failed", "crawl_cap_reached", "calendar_coverage_verified", "notes"], errors)
@@ -189,11 +195,6 @@ def main() -> int:
 
     # The agreed sweep covers every configured source, not only the mandatory
     # subset. Safety-net venues must be auditable too before a COMPLETE claim.
-    try:
-        with source_registry.open(encoding="utf-8-sig", newline="") as f:
-            configured_venues = [r["venue"].strip() for r in csv.DictReader(f) if r.get("venue", "").strip()]
-    except (OSError, KeyError, csv.Error):
-        configured_venues = []
     if manifest.get("claimed_status") == "COMPLETE":
         for venue in configured_venues:
             row = venue_map.get(norm_venue(venue))
