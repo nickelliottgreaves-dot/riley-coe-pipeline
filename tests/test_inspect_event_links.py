@@ -33,10 +33,10 @@ class EventPageCrawlerTests(unittest.TestCase):
 
     def test_shared_parent_calendar_does_not_claim_a_room_without_evidence(self):
         rows=[
-            {"venue":"The Cluny","page_url":"https://thecluny.com/listing/example","page_title":"Live music","event_title":"Example band","event_date":"2026-10-20","performer_names":"Example band","status":"page_text_needs_review","notes":"candidate"},
+            {"venue":"The Cluny","page_url":"https://thecluny.com/listing/example","page_title":"Live music","event_title":"Example band","event_date":"2026-10-20","performer_names":"Example band","status":"page_text_needs_review","notes":"candidate","_shared_aliases":["The Cluny","Cluny 2"]},
             {"venue":"Cluny 2","page_url":"https://thecluny.com/listing/example","page_title":"Live music","event_title":"Example band","event_date":"2026-10-20","performer_names":"Example band","status":"page_text_needs_review","notes":"candidate"},
         ]
-        result=apply_shared_calendar_attribution(rows,{"thecluny.com":{"The Cluny","Cluny 2"}})
+        result=apply_shared_calendar_attribution(rows)
         self.assertEqual(len(result),1)
         self.assertEqual(result[0]["venue"],"Unresolved shared calendar: Cluny 2 / The Cluny")
         self.assertEqual(result[0]["status"],"shared_calendar_attribution_unresolved")
@@ -47,6 +47,15 @@ class EventPageCrawlerTests(unittest.TestCase):
         result=apply_shared_calendar_attribution(rows,{"thecluny.com":{"The Cluny","Cluny 2"}})
         self.assertEqual(result[0]["venue"],"Cluny 2")
         self.assertNotEqual(result[0]["status"],"shared_calendar_attribution_unresolved")
+
+    def test_same_host_without_shared_source_aliases_keeps_venue_attribution(self):
+        rows=[
+            {"venue":"Venue A","page_url":"https://shared-ticket-host.example/event/a","page_title":"Gig A","event_title":"Gig A","event_date":"2026-10-20","performer_names":"Artist A","status":"structured_candidate_needs_review","notes":"candidate"},
+            {"venue":"Venue B","page_url":"https://shared-ticket-host.example/event/b","page_title":"Gig B","event_title":"Gig B","event_date":"2026-10-21","performer_names":"Artist B","status":"structured_candidate_needs_review","notes":"candidate"},
+        ]
+        result=apply_shared_calendar_attribution(rows)
+        self.assertEqual({r["venue"] for r in result},{"Venue A","Venue B"})
+        self.assertTrue(all(r["status"]=="structured_candidate_needs_review" for r in result))
 
     def test_aggregate_songkick_pages_are_excluded(self):
         self.assertTrue(is_aggregate_calendar_url("https://www.songkick.com/metro-areas/24577-uk-newcastle-upon-tyne"))
