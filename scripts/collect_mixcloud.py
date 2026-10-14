@@ -386,17 +386,98 @@ def fetch_show_comment_tracks(item: dict) -> list[dict]:
                 })
     return tracks
 
+
+def parse_visible_track_rows(item: dict, lines: list[str], source: str) -> list[dict]:
+    """Parse numbered title/artist triplets from the uploader's visible comment."""
+    import re
+    start = next((i for i, line in enumerate(lines) if line.casefold() in {"tracklist", "track listing", "tracks"}), None)
+    if start is None:
+        start = next((i for i, line in enumerate(lines) if line.casefold() == "creator"), None)
+    if start is None:
+        return []
+    tracks = []
+    i = start + 1
+    while i < len(lines):
+        if lines[i].strip().casefold() in {"show more", "load more", "reply", "there is no more content to load", "listeners"}:
+            break
+        if re.fullmatch(r"\d{1,3}\.", lines[i].strip()) and i + 2 < len(lines):
+            title, artist = lines[i + 1].strip(), lines[i + 2].strip()
+            invalid = {"show more", "load more", "comments", "listeners", "creator", "favorite", "share", "add to", "more", "reply"}
+            if title and artist and title.casefold() not in invalid and artist.casefold() not in invalid and not re.fullmatch(r"\d{1,3}\.", title):
+                tracks.append({
+                    "episode_date": str(item.get("created_time", ""))[:10],
+                    "episode_title": str(item.get("name") or item.get("title") or ""),
+                    "episode_url": str(item.get("url") or ""),
+                    "artist": artist, "track_title": title,
+                    "track_position": str(len(tracks) + 1), "source": source,
+                    "verification_status": "needs_complete_visible_page_verification"
+                })
+                i += 3
+                continue
+        i += 1
+    return tracks
+
+
+def fetch_show_page_tracks_browser(item: dict) -> list[dict]:
+    """Render a public Mixcloud show and expand its creator comment in Chromium."""
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        item["_browser_error"] = "Playwright is not installed."
+        return []
+    url = str(item.get("url") or "")
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True, args=["--no-sandbox"])
+            page = browser.new_page(user_agent=USER_AGENT)
+            page.goto(url, wait_until="domcontentloaded", timeout=20000)
+            page.wait_for_timeout(1200)
+            # Lazy-load comments and expand any visible "show/load more" controls.
+            for _ in range(8):
+                clicked = False
+                for label in ("Show more", "Load more", "More comments"):
+                    try:
+                        control = page.get_by_text(label, exact=True).first
+                        if control.is_visible(timeout=300):
+                            control.click(timeout=1200)
+                            page.wait_for_timeout(350)
+                            clicked = True
+                            break
+                    except Exception:
+                        continue
+                if not clicked:
+                    break
+            page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+            page.wait_for_timeout(500)
+            lines = [line.strip() for line in page.locator("body").inner_text(timeout=10000).splitlines() if line.strip()]
+            browser.close()
+    except Exception as exc:
+        item["_browser_error"] = f"{type(exc).__name__}: {exc}"
+        return []
+    tracks = parse_visible_track_rows(item, lines, "Mixcloud rendered public creator comment")
+    item["_browser_text_line_count"] = len(lines)
+    item["_browser_track_rows"] = len(tracks)
+    return tracks
+
 def fetch_show_page_tracks(item: dict) -> tuple[dict, list[dict]]:
     """Extract public comment tracklists first, then clearly structured page rows."""
     url = str(item.get("url") or "")
     comment_tracks = fetch_show_comment_tracks(item)
     if comment_tracks:
         episode, _ = inventory_item(item)
-        episode["source"] = "Mixcloud public comments API"
+        episode["source"] = "Mixcloud GraphQL creator comment"
         episode["tracks_extracted"] = str(len(comment_tracks))
         episode["tracklist_status"] = "incomplete"
-        episode["notes"] = "Parsed numbered rows from a public creator comment; verify that this is the complete tracklist before treating it as complete."
+        episode["notes"] = "Parsed numbered rows from the uploader's public comment; verify that this is the complete tracklist before treating it as complete."
         return episode, comment_tracks
+    browser_tracks = fetch_show_page_tracks_browser(item)
+    if browser_tracks:
+        episode, _ = inventory_item(item)
+        episode["source"] = "Mixcloud rendered public HTML"
+        episode["tracks_extracted"] = str(len(browser_tracks))
+        episode["tracklist_status"] = "incomplete"
+        episode["notes"] = "Parsed numbered rows from the rendered uploader comment; verify that no further tracks are hidden or omitted."
+        return episode, browser_tracks
     req = Request(url, headers={"User-Agent": USER_AGENT, "Accept": "text/html,application/xhtml+xml"})
     with urlopen(req, timeout=25) as response:
         html = response.read(5_000_001).decode("utf-8", errors="replace")
