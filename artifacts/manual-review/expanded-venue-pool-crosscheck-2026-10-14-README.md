@@ -1,17 +1,15 @@
-# Expanded source-visible venue-to-pool comparison — 14–28 October 2026
+# Expanded venue-to-pool comparison — 14–27 October 2026
 
-Status: PARTIAL. This report is a source-visible sample, not a completed sweep of all configured sources.
+Status: PARTIAL. This is a discovery sample, not a completed sweep of all configured venue sources.
 
-The CSV has been revalidated against the current authoritative pool using proper CSV field parsing and exact matching after Unicode, case, punctuation and ampersand normalization. It contains 57 performer/event entries; 3 normalized exact matches and 54 entries not found in the pool. A match means only that the artist string is present in the pool; it does not verify event details or ticket availability. A non-match is not an automatic pool addition.
+The report has been corrected to the inclusive 14-day window 14–27 October 2026 and revalidated against the current authoritative 747-row artist pool using proper CSV parsing and exact matching after Unicode, case, punctuation and ampersand normalization. It contains 53 artist/event entries, of which 3 are normalized exact pool matches and 50 are not found in the pool. A match confirms only that the artist string is present in the pool; it does not verify the gig. A non-match is not an automatic pool addition.
 
-Sources:
+Sources consulted:
 - The Cluny official calendar: https://thecluny.com/gigs/
-- Boiler Shop official calendar: https://www.boilershop.net/events
+- Boiler Shop official events: https://www.boilershop.net/events
 - Glasshouse official calendar: https://theglasshouseicm.org/whats-on/
-- Cumberland Arms official calendar: https://www.thecumberlandarms.co.uk/events/
+- Cumberland Arms official events: https://www.thecumberlandarms.co.uk/events/
 - The Grove ticketing calendar: https://thegrovenewcastle.gigantic.com/promoter/the-grove-newcastle-ltd
 - NewcastleGateshead live-music listings: https://newcastlegateshead.com/events/live-music
 
-Coverage still outstanding: pagination and detail-page verification for all sources; Cobalt Studios, NX Newcastle, Think Tank, O2 City Hall Newcastle, Central Gateshead/Central Bar, Gosforth Civic Theatre, Newcastle University/Students' Union, Lubber Fiend, Little Buildings, Utilita Arena Newcastle and ZEROX Newcastle; plus the Globe source which returned HTTP 403 in the current automated fetch and needs an alternate official or ticketing source. The Mercury Prize Fringe Globe event still needs its named performer bill expanded.
-
-This report is not a COMPLETE-run artifact and must not be used to claim full coverage.
+Outstanding coverage: full pagination and event-detail checks for all 20 configured sources; source-by-source confirmation of headliners, support acts, prices and ticket status; and resolving sources that the automated fetch cannot access. The Globe returned HTTP 403 in the automated fetch and needs an alternate official/ticketing source. This report is not a COMPLETE-run artifact.
