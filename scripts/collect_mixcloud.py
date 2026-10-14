@@ -271,13 +271,13 @@ def fetch_show_comment_tracks(item: dict) -> list[dict]:
         if not isinstance(comment, dict):
             continue
         body = str(comment.get("comment") or comment.get("text") or comment.get("body") or "")
-        body = html_lib.unescape(body).replace("\\r", "")
+        body = html_lib.unescape(body).replace("\r", "")
         lines = [line.strip() for line in body.splitlines() if line.strip()]
         i = 0
         while i < len(lines):
-            if re.fullmatch(r"\\d{1,3}\\.", lines[i]) and i + 2 < len(lines):
+            if re.fullmatch(r"\d{1,3}\.", lines[i]) and i + 2 < len(lines):
                 title, artist = lines[i + 1].strip(), lines[i + 2].strip()
-                if title and artist and not re.fullmatch(r"\\d{1,3}\\.", title):
+                if title and artist and not re.fullmatch(r"\d{1,3}\.", title):
                     position += 1
                     tracks.append({
                         "episode_date": str(item.get("created_time", ""))[:10],
