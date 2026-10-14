@@ -232,11 +232,59 @@ def find_episodes(html,base):
         out.setdefault(eid,{"url":absolute,"title":title})
     return list(out.values())
 
+def merge_episode_fallbacks(episodes, fallback_rows, start, end):
+    """Add/annotate BBC episode PIDs discovered from a fallback inventory."""
+    by_id={episode_id(row.get("url","")):row for row in episodes if episode_id(row.get("url",""))}
+    for fallback in fallback_rows:
+        pid=(fallback.get("episode_pid") or "").strip()
+        if not re.fullmatch(r"m[0-9a-z]{7,}",pid,re.I):
+            continue
+        raw_date=(fallback.get("episode_date") or "").strip()
+        try:
+            episode_day=date.fromisoformat(raw_date)
+        except ValueError:
+            continue
+        if not (start <= episode_day <= end):
+            continue
+        title=(fallback.get("episode_title") or "").strip()
+        existing=by_id.get(pid)
+        if existing:
+            existing["fallback_date"]=episode_day.isoformat()
+            existing["fallback_title"]=title
+            existing["fallback_source"]="RadioFiles episode inventory; discovery/date cross-check only"
+        else:
+            row={"episode_id":pid,"url":f"{ROOT_URL}/sounds/play/{pid}",
+                 "title":title,"listing_source_url":"RadioFiles episode inventory fallback",
+                 "fallback_date":episode_day.isoformat(),"fallback_title":title,
+                 "fallback_source":"RadioFiles episode inventory; discovery/date cross-check only"}
+            episodes.append(row); by_id[pid]=row
+    return episodes
+
+
+def resolve_episode_date(ep, page_text):
+    """Prefer an explicit episode-title date, then fallback inventory date, then page text."""
+    title_date=parse_date(ep.get("title",""))
+    fallback_title_date=parse_date(ep.get("fallback_title",""))
+    fallback_date=(ep.get("fallback_date") or fallback_title_date or "").strip()
+    page_date=parse_date(page_text)
+    if title_date:
+        return title_date, ""
+    if fallback_date:
+        note="Episode date provisionally taken from RadioFiles episode inventory; verify against official broadcast metadata."
+        if page_date and page_date != fallback_date:
+            note+=f" BBC page text parser suggested {page_date}; RadioFiles inventory says {fallback_date}. Fallback date used pending manual verification."
+        return fallback_date, note
+    if page_date:
+        return page_date, ""
+    return "", "Could not reliably extract broadcast date; manual date check required."
+
+
 def main():
     ap=argparse.ArgumentParser()
     ap.add_argument("--start",required=True); ap.add_argument("--end",required=True)
     ap.add_argument("--out-dir",type=Path,required=True)
     ap.add_argument("--listing-url",default=SERIES_URL)
+    ap.add_argument("--episode-ids-file",type=Path,help="Optional RadioFiles episode inventory used only to discover PIDs/dates; track content is still fetched from BBC pages.")
     args=ap.parse_args(); start=date.fromisoformat(args.start); end=date.fromisoformat(args.end)
     if end<start: ap.error("--end must not precede --start")
     out=args.out_dir; snaps=out/"snapshots"; snaps.mkdir(parents=True,exist_ok=True)
@@ -260,6 +308,11 @@ def main():
         except (HTTPError,URLError,TimeoutError,OSError,ValueError) as exc:
             errors.append(f"Listing {next_url}: {type(exc).__name__}: {exc}"); listing_failed=True; break
     pagination_status="listing_fetch_failed" if listing_failed else ("page_cap_reached" if next_url and pages>=12 else "next_link_not_exposed_or_listing_exhausted")
+    fallback_rows=[]
+    if args.episode_ids_file and args.episode_ids_file.exists():
+        with args.episode_ids_file.open(encoding="utf-8-sig",newline="") as f:
+            fallback_rows=list(csv.DictReader(f))
+        episodes=merge_episode_fallbacks(episodes,fallback_rows,start,end)
     rows=[]; linkrows=[]; trackrows=[]
     for ep in episodes:
         url=ep["url"]
@@ -275,15 +328,13 @@ def main():
                 content_url=url
             if status!=200 or "html" not in ctype.lower(): raise ValueError(f"Unexpected episode response: {status} {ctype}")
             p=TextParser(); p.feed(html); text="\n".join(p.text)
-            episode_title=ep["title"] or " ".join(p.title).strip()
-            # Avoid guessing the episode date from track titles; parse the page title or explicit broadcast date.
-            dt=parse_date(text)
+            episode_title=ep.get("title") or ep.get("fallback_title") or " ".join(p.title).strip()
+            # Do not let an incidental date inside a track title override the
+            # episode title or the independently discovered episode inventory.
+            dt,note=resolve_episode_date(ep,text)
             has_heading=bool(re.search(r"Music Played|Tracklist",text,re.I))
             page_status="fetched"
             if dt and not (start<=date.fromisoformat(dt)<=end): continue
-            if not dt:
-                note="Could not reliably extract broadcast date; manual date check required."
-            else: note=""
             snap=snaps/(episode_id(url)+".txt")
             snap.write_text("SOURCE: "+url+"\nTRACKLIST_CONTENT_SOURCE: "+content_url+"\nLISTING: "+ep["listing_source_url"]+"\n\n"+text+"\n",encoding="utf-8")
             state="visible_tracklist_heading_detected_needs_review" if has_heading else "tracklist_not_detected_needs_review"
