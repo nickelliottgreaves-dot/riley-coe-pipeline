@@ -114,7 +114,7 @@ class MixcloudInventoryTests(unittest.TestCase):
         item = {"name": "Riley & Coe Wednesday 30th September 2026",
             "url": "https://www.mixcloud.com/SixMusicAlternative/riley-coe-wednesday-30th-september-2026/",
             "created_time": "2026-09-30"}
-        with patch("scripts.collect_mixcloud.get_json", return_value=payload):
+        with patch("scripts.collect_mixcloud.get_graphql", return_value=payload):
             tracks = fetch_show_comment_tracks(item)
         self.assertEqual([(x["track_title"], x["artist"]) for x in tracks],
             [("Threadbare", "Lande Hekt"), ("New York No Wave", "Ill Ease")])
@@ -126,7 +126,7 @@ class MixcloudInventoryTests(unittest.TestCase):
         item = {"name": "Riley & Coe Wednesday 30th September 2026",
             "url": "https://www.mixcloud.com/SixMusicAlternative/riley-coe-wednesday-30th-september-2026/",
             "created_time": "2026-09-30"}
-        with patch("scripts.collect_mixcloud.get_json", return_value={"data": []}), patch("scripts.collect_mixcloud.urlopen", return_value=response):
+        with patch("scripts.collect_mixcloud.get_graphql", return_value={"cloudcastLookup": {"comments": {"edges": []}}}), patch("scripts.collect_mixcloud.urlopen", return_value=response):
             episode, tracks = fetch_show_page_tracks(item)
         self.assertEqual([(x["track_title"], x["artist"]) for x in tracks],
             [("Threadbare", "Lande Hekt"), ("New York No Wave", "Ill Ease")])
@@ -144,20 +144,19 @@ class MixcloudInventoryTests(unittest.TestCase):
         self.assertEqual(episode["tracklist_status"], "incomplete")
         self.assertTrue(all(t["verification_status"] == "needs_complete_visible_page_verification" for t in tracks))
 
-    def test_api_falls_back_to_lowercase_account_key_after_404(self):
-        from urllib.error import HTTPError
-        payload = {"data": [
-            {"name": "Riley & Coe Tuesday 6th October 2026",
-             "url": "https://www.mixcloud.com/SixMusicAlternative/riley-coe-tuesday-6th-october-2026/",
-             "created_time": "2026-10-06T20:00:00Z", "sections": [{"artist": "British Birds", "song": "Stuck In A Room"}]}
-        ], "paging": {}}
-        with patch("scripts.collect_mixcloud.get_json", side_effect=[
-            HTTPError("https://api.mixcloud.com/SixMusicAlternative/cloudcasts/", 404, "Not Found", {}, None),
-            payload
-        ]) as mock_get:
+    def test_graphql_upload_discovery_extracts_recent_shows(self):
+        payload = {"userLookup": {"displayName": "The 6 Music Archive", "uploads": {
+            "edges": [{"node": {"name": "Riley & Coe Tuesday 6th October 2026",
+                "slug": "riley-coe-tuesday-6th-october-2026",
+                "url": "https://www.mixcloud.com/SixMusicAlternative/riley-coe-tuesday-6th-october-2026/",
+                "publishDate": "2026-10-06T20:00:00Z",
+                "owner": {"username": "SixMusicAlternative", "displayName": "The 6 Music Archive"}}}],
+            "pageInfo": {"endCursor": None, "hasNextPage": False}}}}
+        with patch("scripts.collect_mixcloud.get_graphql", return_value=payload):
             items, errors = fetch_cloudcasts("SixMusicAlternative", date(2026, 10, 6), date(2026, 10, 13))
         self.assertEqual(len(items), 1)
-        self.assertIn("/sixmusicalternative/cloudcasts/", mock_get.call_args_list[1].args[0])
+        self.assertEqual(items[0]["created_time"], "2026-10-06")
+        self.assertTrue(items[0]["_graphql_discovery"])
         self.assertEqual(errors, [])
 
     def test_date_parser(self):
