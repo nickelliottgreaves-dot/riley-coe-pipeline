@@ -26,6 +26,10 @@ class WorkflowArtifactContractTests(unittest.TestCase):
         self.assertIsNotNone(match, "Workflow must configure the event-page crawl budget explicitly")
         self.assertGreaterEqual(int(match.group(1)), 15, "Five pages per venue starves event-detail candidates on large calendars")
 
+    def test_scheduled_gate_requires_complete_evidence(self):
+        self.assertIn("--require-complete", WORKFLOW)
+        self.assertIn('ap.add_argument("--require-complete"', (ROOT / "scripts/validate_run.py").read_text(encoding="utf-8"))
+
     def test_artifact_names_and_input_audit_are_present(self):
         for artifact in ("riley-coe-mixcloud-inventory-", "riley-coe-bbc-sounds-inventory-", "riley-coe-radiofiles-inventory-", "riley-coe-event-candidates-"):
             self.assertIn(artifact, WORKFLOW)
