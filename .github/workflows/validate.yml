@@ -44,7 +44,9 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install browser-impersonating HTTP client
-        run: python -m pip install --disable-pip-version-check curl_cffi
+        run: |
+          python -m pip install --disable-pip-version-check curl_cffi playwright
+          python -m playwright install --with-deps chromium
       - name: Diagnose Mixcloud GraphQL account aliases
         continue-on-error: true
         run: |
