@@ -114,9 +114,9 @@ class CloudcastLinkParser(HTMLParser):
 def episode_date_from_text(value: str) -> date | None:
     """Parse dates in visible Mixcloud show titles and URL slugs."""
     match = re.search(
-        r"(?i)(\d{1,2})(?:st|nd|rd|th)?[\\s_-]+"
+        r"(?i)(\d{1,2})(?:st|nd|rd|th)?[\s_-]+"
         r"(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|"
-        r"jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)[\\s_-]+(20\\d{2})",
+        r"jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)[\s_-]+(20\\d{2})",
         value,
     )
     if not match:
