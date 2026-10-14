@@ -43,6 +43,35 @@ class EvidencePackageTests(unittest.TestCase):
                 audit=list(csv.DictReader(f))
             self.assertTrue(any(r["input_name"]=="bbc_track_candidates" and r["status"]=="present" for r in audit))
 
+    def test_compares_official_and_radiofiles_track_titles_without_certifying_completeness(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            bbc=root/"bbc_tracks.csv"
+            with bbc.open("w",newline="",encoding="utf-8") as f:
+                w=csv.DictWriter(f,fieldnames=["episode_date","episode_title","episode_url","artist_candidate","track_title","extraction_method","review_status","evidence_text","notes"])
+                w.writeheader()
+                for artist,title in [("Official Duo","First Song"),("Official Artist","Second Song")]:
+                    w.writerow({"episode_date":"2026-10-12","episode_title":"Example","episode_url":"https://www.bbc.co.uk/sounds/play/m0032d2m","artist_candidate":artist,"track_title":title,"extraction_method":"official_page","review_status":"needs_manual_review","evidence_text":title,"notes":"candidate"})
+            radio=root/"radiofiles_tracks.csv"
+            with radio.open("w",newline="",encoding="utf-8") as f:
+                w=csv.DictWriter(f,fieldnames=["episode_date","episode_title","episode_pid","track_position","track_title","artist_candidate","source_url","tracklist_api_url","source","verification_status","notes"])
+                w.writeheader()
+                for artist,title in [("Primary Artist","First Song"),("Official Artist","Second Song"),("Extra Artist","Third Song")]:
+                    w.writerow({"episode_date":"2026-10-12","episode_title":"Example","episode_pid":"m0032d2m","track_position":"1","track_title":title,"artist_candidate":artist,"source_url":"https://radiofiles.io/app?pid=m0032d2m","source":"RadioFiles","verification_status":"candidate","notes":"candidate"})
+            out=root/"run"
+            subprocess.run([sys.executable,str(ROOT/"scripts/assemble_run_package.py"),
+                "--start","2026-10-13","--end","2026-10-26","--bbc-track-candidates",str(bbc),
+                "--radiofiles-track-candidates",str(radio),"--out-dir",str(out)],check=True,capture_output=True,text=True)
+            with (out/"episode_tracklist_comparison.csv").open(newline="",encoding="utf-8") as f:
+                rows=list(csv.DictReader(f))
+            self.assertEqual(len(rows),1)
+            self.assertEqual(rows[0]["episode_pid"],"m0032d2m")
+            self.assertEqual(rows[0]["shared_title_count"],"2")
+            self.assertEqual(rows[0]["status"],"bbc_candidate_subset_of_radiofiles")
+            self.assertEqual(rows[0]["complete_certified"],"false")
+            self.assertIn("Third Song",rows[0]["radiofiles_only_titles"])
+            self.assertIn("episode_tracklist_comparison.csv",json.loads((out/"run_manifest.json").read_text())["episode_tracklist_comparison"])
+
     def test_merges_inspected_event_jsonld_as_unverified_candidates(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp)
