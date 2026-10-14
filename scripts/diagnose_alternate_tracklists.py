@@ -12,6 +12,7 @@ from pathlib import Path
 
 BBC_URL = "https://www.bbc.co.uk/sounds/play/m0032d2m"
 RADIOFILES_URL = "https://radiofiles.io/show/riley-coe"
+RADIOFILES_EPISODE_URL = "https://radiofiles.io/app?show=m001mf2c&pid=m0032d2m"
 FIELDS = ["source", "url", "http_status", "page_title", "body_chars_before", "body_chars_after",
           "show_more_clicks", "show_more_still_visible", "tracklist_heading", "numbered_track_markers",
           "links", "network_requests", "body_excerpt", "error"]
@@ -33,7 +34,7 @@ def main() -> int:
     rows = []
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
-        for source, url in (("bbc_sounds", args.bbc_url), ("radiofiles", args.radiofiles_url)):
+        for source, url in (("bbc_sounds", args.bbc_url), ("radiofiles_show", args.radiofiles_url), ("radiofiles_episode", RADIOFILES_EPISODE_URL)):
             page = browser.new_page(user_agent="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/130.0.0.0 Safari/537.36")
             network = []
             page.on("response", lambda response: network.append(f"{response.status} {response.request.method} {response.url}") if any(k in response.url.casefold() for k in ("api", "graphql", "programme", "episode", "track", "radiofiles")) else None)
@@ -88,13 +89,14 @@ def main() -> int:
         "sources_probed": len(rows),
         "bbc_show_more_clicks": next((int(r["show_more_clicks"]) for r in rows if r["source"] == "bbc_sounds"), 0),
         "bbc_numbered_track_markers_after_expansion": next((int(r["numbered_track_markers"]) for r in rows if r["source"] == "bbc_sounds"), 0),
-        "radiofiles_page_accessible": next((r["http_status"].startswith("2") and len(r["body_excerpt"]) > 100 for r in rows if r["source"] == "radiofiles"), False),
+        "radiofiles_show_page_accessible": next((r["http_status"].startswith("2") and len(r["body_excerpt"]) > 100 for r in rows if r["source"] == "radiofiles_show"), False),
+        "radiofiles_episode_page_track_markers": next((int(r["numbered_track_markers"]) for r in rows if r["source"] == "radiofiles_episode"), 0),
         "artists_imported": 0, "tracklists_certified_complete": 0,
         "interpretation": "Diagnostic only. Page visibility, click count and numbered markers are not proof of a complete tracklist."
     }
     (args.out_dir / "alternate_tracklist_diagnostics.json").write_text(json.dumps({**report, "pages": rows}, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     print(json.dumps(report, indent=2))
-    return 0 if len(rows) == 2 else 1
+    return 0 if len(rows) == 3 else 1
 
 
 if __name__ == "__main__":
