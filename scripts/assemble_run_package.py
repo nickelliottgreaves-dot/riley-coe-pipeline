@@ -19,7 +19,7 @@ MATCH_FIELDS=["event_artist","matched_pool_artist","candidate_pool_artist","matc
 REGRESSION_FIELDS=["artist","searched","result","evidence_url","notes"]
 INPUT_AUDIT_FIELDS=["input_name","path","status","size_bytes","notes"]
 DISCOVERY_COVERAGE_FIELDS=["venue","source_url","homepage_fetch_status","http_status","structured_event_count","candidate_link_count","detail_pages_fetched","detail_pages_failed","crawl_cap_reached","calendar_coverage_verified","notes"]
-TRACKLIST_COMPARISON_FIELDS=["episode_pid","bbc_episode_date","radiofiles_episode_date","bbc_candidate_tracks","radiofiles_candidate_tracks","shared_title_count","bbc_only_titles","radiofiles_only_titles","title_sets_match","status","complete_certified","notes"]
+TRACKLIST_COMPARISON_FIELDS=["episode_pid","bbc_episode_date","radiofiles_episode_date","date_match","official_tracklist_heading_detected","bbc_candidate_tracks","radiofiles_candidate_tracks","shared_title_count","bbc_only_titles","radiofiles_only_titles","title_sets_match","status","complete_certified","notes"]
 
 def normalized_track_title(value):
     value=unicodedata.normalize("NFKD",value or "")
@@ -33,8 +33,8 @@ def episode_pid_from_url(url):
     match=re.search(r"/(?:sounds/play|programmes)/(m[0-9a-z]{7,})",value,re.I)
     return match.group(1).casefold() if match else ""
 
-def compare_episode_tracklists(bbc_tracks, radiofiles_tracks):
-    """Compare candidate track-title sets; never certify completeness or alter the pool."""
+def compare_episode_tracklists(bbc_tracks, radiofiles_tracks, bbc_episode_rows=None):
+    """Compare candidate title sets and certify title coverage only with a dated official cross-check."""
     bbc_by_pid={}; radiofiles_by_pid={}
     for row in bbc_tracks:
         pid=episode_pid_from_url(row.get("episode_url",""))
@@ -52,27 +52,45 @@ def compare_episode_tracklists(bbc_tracks, radiofiles_tracks):
             group=radiofiles_by_pid.setdefault(pid,{"date":set(),"titles":{}})
             if row.get("episode_date"): group["date"].add(row["episode_date"])
             group["titles"].setdefault(key,title)
+    official_heading_by_pid={}
+    for row in (bbc_episode_rows or []):
+        pid=episode_pid_from_url(row.get("episode_url",""))
+        if pid:
+            state=(row.get("tracklist_status") or "").casefold()
+            official_heading_by_pid[pid]="visible_tracklist_heading_detected" in state
     output=[]
     for pid in sorted(set(bbc_by_pid)|set(radiofiles_by_pid)):
         b=bbc_by_pid.get(pid,{"date":set(),"titles":{}})
         r=radiofiles_by_pid.get(pid,{"date":set(),"titles":{}})
         bt,rt=set(b["titles"]),set(r["titles"]); shared=bt&rt
+        bdates=sorted(b["date"]); rdates=sorted(r["date"])
+        date_match=bool(len(bdates)==1 and len(rdates)==1 and bdates[0]==rdates[0])
+        official_heading=official_heading_by_pid.get(pid,False)
+        titles_match=bool(bt) and bt==rt
+        complete=bool(titles_match and date_match and official_heading)
         if not bt: status="radiofiles_only_no_official_candidates"
         elif not rt: status="bbc_only_no_radiofiles_candidates"
-        elif bt==rt: status="title_sets_match_artist_credit_review_required"
+        elif not date_match and bdates and rdates: status="episode_date_mismatch_review_required"
+        elif complete: status="cross_source_title_set_complete_artist_credit_review_required"
+        elif titles_match: status="title_sets_match_but_official_or_date_evidence_missing"
         elif bt<rt: status="bbc_candidate_subset_of_radiofiles"
         elif rt<bt: status="radiofiles_candidate_subset_of_bbc"
         else: status="title_sets_differ"
+        note="Exact normalized title comparison; no artists are automatically imported into the authoritative pool."
+        if complete:
+            note+=" The official BBC Music Played heading was detected and its extracted track-title set exactly matches RadioFiles for the same episode PID and date. Track-title coverage is certified complete; artist-credit differences still require review before pool updates."
+        else:
+            note+=" Tracklist completeness is not certified; inspect official episode snapshots, date alignment and every track row."
         output.append({
-            "episode_pid":pid,"bbc_episode_date":"; ".join(sorted(b["date"])),
-            "radiofiles_episode_date":"; ".join(sorted(r["date"])),
+            "episode_pid":pid,"bbc_episode_date":"; ".join(bdates),
+            "radiofiles_episode_date":"; ".join(rdates),"date_match":str(date_match).lower(),
+            "official_tracklist_heading_detected":str(official_heading).lower(),
             "bbc_candidate_tracks":len(bt),"radiofiles_candidate_tracks":len(rt),
             "shared_title_count":len(shared),
             "bbc_only_titles":"; ".join(b["titles"][k] for k in sorted(bt-rt)),
             "radiofiles_only_titles":"; ".join(r["titles"][k] for k in sorted(rt-bt)),
-            "title_sets_match":str(bool(bt) and bt==rt).lower(),"status":status,
-            "complete_certified":"false",
-            "notes":"Exact normalized track-title comparison only. Candidate equality does not certify visible-list completeness or artist-credit identity; review official episode page and all track rows."
+            "title_sets_match":str(titles_match).lower(),"status":status,
+            "complete_certified":str(complete).lower(),"notes":note
         })
     return output
 
@@ -171,8 +189,17 @@ def main():
             "evidence_text":track.get("tracklist_api_url",""),
             "notes":((track.get("notes") or "")+" RadioFiles third-party JSON candidate; cross-check against another complete source before importing.").strip()})
     write_csv(out/"tracklist_candidate_review.csv",track_review_fields,track_review_rows)
-    tracklist_comparison=compare_episode_tracklists(bbc_tracks,radiofiles_tracks)
+    tracklist_comparison=compare_episode_tracklists(bbc_tracks,radiofiles_tracks,bbc_rows)
     write_csv(out/"episode_tracklist_comparison.csv",TRACKLIST_COMPARISON_FIELDS,tracklist_comparison)
+    complete_tracklists={r["episode_pid"]:r for r in tracklist_comparison if r["complete_certified"]=="true"}
+    for episode in episode_rows:
+        pid=episode_pid_from_url(episode.get("url",""))
+        verified=complete_tracklists.get(pid)
+        if not verified:
+            continue
+        episode["tracklist_status"]="complete"
+        episode["tracks_extracted"]=str(verified["bbc_candidate_tracks"] if episode.get("source","").startswith("BBC Sounds") else verified["radiofiles_candidate_tracks"])
+        episode["notes"]=((episode.get("notes","")+" Cross-source check: official BBC track-title set matches RadioFiles for the same episode PID/date. Tracklist title coverage complete; artist credits still require review before any pool update.").strip())
     event_rows=read_csv(args.events,["event_date","venue","event_title","artist","artist_role","source_url","verified","notes"]) if args.events else []
     # Add Event JSON-LD candidates from inspected detail pages; they remain unverified.
     inspected_rows=read_csv(args.event_page_inspection,["venue","page_url","event_title","event_date","performer_names","price","currency","availability","event_jsonld_found","notes"]) if args.event_page_inspection else []
