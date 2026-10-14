@@ -40,13 +40,7 @@ def main() -> int:
             def capture_response(response):
                 url_lower = response.url.casefold()
                 if any(k in url_lower for k in ("api", "graphql", "programme", "episode", "track", "radiofiles")):
-                    entry = f"{response.status} {response.request.method} {response.url}"
-                    if "/tracklist?" in url_lower or "/episodes?" in url_lower:
-                        try:
-                            entry += " body=" + response.text()[:6000]
-                        except Exception as exc:
-                            entry += f" body_error={type(exc).__name__}"
-                    network.append(entry)
+                    network.append(f"{response.status} {response.request.method} {response.url}")
             page.on("response", capture_response)
             status, title, before, after, error = "", "", "", "", ""
             clicks = 0
@@ -73,6 +67,14 @@ def main() -> int:
                             break
                     still_visible = bool(page.get_by_role("button", name=re.compile(r"show more", re.I)).count())
                 after = page.locator("body").inner_text(timeout=10000)
+                if source == "radiofiles_episode":
+                    for endpoint in ("https://radiofiles.io/tracklist?pid=m0032d2m", "https://radiofiles.io/episodes?show=m001mf2c&dest="):
+                        try:
+                            api_response = page.request.get(endpoint, timeout=15000)
+                            api_body = api_response.text()
+                            network.append(f"PROBE {api_response.status} {endpoint} content_type={api_response.headers.get('content-type', '')} body={api_body[:6000]}")
+                        except Exception as exc:
+                            network.append(f"PROBE_ERROR {endpoint} {type(exc).__name__}: {exc}")
             except Exception as exc:
                 error = f"{type(exc).__name__}: {exc}"
                 try:
