@@ -42,6 +42,8 @@ class MixcloudInventoryTests(unittest.TestCase):
     def test_episode_date_from_mixcloud_title_or_slug(self):
         self.assertEqual(episode_date_from_text("riley-coe-tuesday-6th-october-2026").isoformat(), "2026-10-06")
         self.assertEqual(episode_date_from_text("Riley & Coe Monday 5th October 2026").isoformat(), "2026-10-05")
+        self.assertEqual(episode_date_from_text("riley-coe-2026-10-06").isoformat(), "2026-10-06")
+        self.assertEqual(episode_date_from_text("Riley & Coe October 6, 2026").isoformat(), "2026-10-06")
         self.assertIsNone(episode_date_from_text("Riley & Coe - no date"))
 
     def test_date_parser(self):
