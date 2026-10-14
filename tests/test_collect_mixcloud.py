@@ -127,7 +127,7 @@ class MixcloudInventoryTests(unittest.TestCase):
         item = {"name": "Riley & Coe Wednesday 30th September 2026",
             "url": "https://www.mixcloud.com/SixMusicAlternative/riley-coe-wednesday-30th-september-2026/",
             "created_time": "2026-09-30"}
-        with patch("scripts.collect_mixcloud.get_graphql", return_value=payload):
+        with patch("scripts.collect_mixcloud.GRAPHQL_CLOUDCAST_LOOKUP_AVAILABLE", True), patch("scripts.collect_mixcloud.get_graphql", return_value=payload):
             tracks = fetch_show_comment_tracks(item)
         self.assertEqual([(x["track_title"], x["artist"]) for x in tracks],
             [("Threadbare", "Lande Hekt"), ("New York No Wave", "Ill Ease")])
