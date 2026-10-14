@@ -48,6 +48,9 @@ class ValidatorTests(unittest.TestCase):
             self.assertEqual(result.returncode,0,result.stdout+result.stderr)
             self.assertIn('"status": "PARTIAL"',result.stdout)
             self.assertNotIn('"status": "COMPLETE"',result.stdout)
+            gated=subprocess.run([sys.executable,str(VALIDATOR),"--run-dir",str(p),"--require-complete"],capture_output=True,text=True)
+            self.assertNotEqual(gated.returncode,0,"The scheduled evidence gate must reject PARTIAL packages")
+            self.assertIn('"status": "PARTIAL"',gated.stdout)
 
     def test_missing_manifest_fails(self):
         with tempfile.TemporaryDirectory() as tmp:
