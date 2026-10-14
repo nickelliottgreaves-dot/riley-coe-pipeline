@@ -1,17 +1,17 @@
 # Expanded source-visible venue-to-pool comparison — 14–28 October 2026
 
-Status: PARTIAL. This is a larger source-visible sample, not a completed full sweep of all 20 configured sources.
+Status: PARTIAL. This report is a source-visible sample, not a completed sweep of all configured sources.
 
-Method: compared listed performers against the current 747-row authoritative pool using Unicode/case/punctuation/ampersand normalization. No fuzzy matching is counted as confirmed. A match means the normalized artist string exists in the pool; it does not certify the gig or ticket details. Missing artists are not automatically added.
+The CSV has been revalidated against the current authoritative pool using proper CSV field parsing and exact matching after Unicode, case, punctuation and ampersand normalization. It contains 57 performer/event entries; 3 normalized exact matches and 54 entries not found in the pool. A match means only that the artist string is present in the pool; it does not verify event details or ticket availability. A non-match is not an automatic pool addition.
 
 Sources:
-- Cluny official calendar: https://thecluny.com/gigs/
+- The Cluny official calendar: https://thecluny.com/gigs/
 - Boiler Shop official calendar: https://www.boilershop.net/events
-- Glasshouse official calendar: https://theglasshouseicm.org/whats-on/?genre=contemporary-music
+- Glasshouse official calendar: https://theglasshouseicm.org/whats-on/
 - Cumberland Arms official calendar: https://www.thecumberlandarms.co.uk/events/
-- The Grove listings (ticketing calendar): https://thegrovenewcastle.gigantic.com/promoter/the-grove-newcastle-ltd
-- NewcastleGateshead live music listings: https://newcastlegateshead.com/events/live-music
+- The Grove ticketing calendar: https://thegrovenewcastle.gigantic.com/promoter/the-grove-newcastle-ltd
+- NewcastleGateshead live-music listings: https://newcastlegateshead.com/events/live-music
 
-Coverage still outstanding: Cobalt Studios, NX Newcastle, Think Tank, O2 City Hall Newcastle, Central Gateshead/Central Bar, Gosforth Civic Theatre, Newcastle University/Students' Union, Lubber Fiend, Little Buildings, Utilita Arena Newcastle and ZEROX; plus pagination/detail-page verification for all sources. Some Glasshouse listings are sourced from the official calendar, while Alison Moyet/Shawn Colvin are corroborated via the regional event calendar. The Mercury Fringe Globe event has no individual performer names in this row and must be expanded before artist matching.
+Coverage still outstanding: pagination and detail-page verification for all sources; Cobalt Studios, NX Newcastle, Think Tank, O2 City Hall Newcastle, Central Gateshead/Central Bar, Gosforth Civic Theatre, Newcastle University/Students' Union, Lubber Fiend, Little Buildings, Utilita Arena Newcastle and ZEROX Newcastle; plus the Globe source which returned HTTP 403 in the current automated fetch and needs an alternate official or ticketing source. The Mercury Prize Fringe Globe event still needs its named performer bill expanded.
 
 This report is not a COMPLETE-run artifact and must not be used to claim full coverage.
