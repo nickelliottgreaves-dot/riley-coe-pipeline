@@ -27,7 +27,7 @@ def inspect_rendered_text(url: str, body: str, title: str, status: str, api_resp
         "tracklist_heading": str(any(term in lower for term in ("tracklist", "comments"))).lower(),
         "creator_comment_text_found": str("creator" in lower and any(name.casefold() in lower for name in KNOWN)).lower(),
         "api_responses": " | ".join(api_responses[:40])[:4000],
-        "body_excerpt": re.sub(r"\\s+", " ", body[:1800])[:1800], "error": error,
+        "body_excerpt": re.sub(r"\s+", " ", body[:1800])[:1800], "error": error,
     }
 
 
@@ -66,13 +66,14 @@ def main() -> int:
     report = {
         "created_utc": datetime.now(timezone.utc).isoformat(),
         "pages_probed": len(rows),
-        "pages_with_known_tracklist_artists": sum(bool(r["known_artist_hits"]) for r in rows),\n        "pages_returning_not_found": sum(r["page_state"] == "page_not_found" for r in rows),
+        "pages_with_known_tracklist_artists": sum(bool(r["known_artist_hits"]) for r in rows),
+        "pages_returning_not_found": sum(r["page_state"] == "page_not_found" for r in rows),
         "artist_rows_extracted": 0,
         "tracklists_certified_complete": 0,
         "interpretation": "Rendered text and network response evidence only; no tracklist completeness claim.",
         "pages": rows,
     }
-    (args.out_dir / "mixcloud_browser_diagnostics.json").write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\\n", encoding="utf-8")
+    (args.out_dir / "mixcloud_browser_diagnostics.json").write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     print(json.dumps({k:v for k,v in report.items() if k != "pages"}, indent=2))
     return 0 if any(r["navigation_status"].startswith("2") for r in rows) else 1
 
