@@ -28,7 +28,7 @@ class EventPageCrawlerTests(unittest.TestCase):
             empty=next(r for r in venue_audit if r["venue"]=="Empty venue")
             self.assertEqual(empty["status"],"PARTIAL")
             self.assertEqual(empty["seed_candidate_links"],"1")
-            self.assertEqual(empty["pages_failed"],"1")
+            self.assertEqual(empty["pages_fetched"],"1")
             self.assertIn("source calendar",empty["notes"])
 
     def test_aggregate_songkick_pages_are_excluded(self):
