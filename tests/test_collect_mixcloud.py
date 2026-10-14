@@ -2,7 +2,7 @@ import unittest
 from datetime import date
 from unittest.mock import patch
 from io import BytesIO
-from scripts.collect_mixcloud import inventory_item, parse_date, parse_mixcloud_title_date, fetch_cloudcasts, fetch_cloudcasts_html, fetch_show_page_tracks, fetch_cloudcasts_search, fetch_show_comment_tracks
+from scripts.collect_mixcloud import inventory_item, parse_date, parse_mixcloud_title_date, fetch_cloudcasts, fetch_cloudcasts_html, fetch_show_page_tracks, fetch_cloudcasts_search, fetch_show_comment_tracks, parse_visible_track_rows
 
 class MixcloudInventoryTests(unittest.TestCase):
     def test_no_sections_is_unavailable_not_complete(self):
@@ -106,6 +106,15 @@ class MixcloudInventoryTests(unittest.TestCase):
         self.assertEqual(len(items), 1)
         self.assertIn("6th-october-2026", items[0]["url"])
         self.assertEqual(errors, [])
+
+    def test_parse_rendered_creator_comment_tracklist(self):
+        lines = ["Comments", "The 6 Music Archive", "Pro User", "Creator", "[Button: 47:24] 4 months ago",
+            "1.", "Wrecked (6 Music Session, 13 April 2026)", "HOUSE Of ALL",
+            "2.", "Perfect Skin", "Lloyd Cole & The Commotions", "Reply", "There is no more content to load"]
+        item = {"name": "Riley & Coe", "url": "https://www.mixcloud.com/SixMusicAlternative/riley-coe-monday-13th-april-2026/", "created_time": "2026-04-13"}
+        tracks = parse_visible_track_rows(item, lines, "Mixcloud rendered public creator comment")
+        self.assertEqual([(x["track_title"], x["artist"]) for x in tracks],
+            [("Wrecked (6 Music Session, 13 April 2026)", "HOUSE Of ALL"), ("Perfect Skin", "Lloyd Cole & The Commotions")])
 
     def test_public_comment_api_extracts_numbered_tracklist(self):
         payload = {"cloudcastLookup": {"owner": {"username": "SixMusicAlternative"}, "comments": {"edges": [
