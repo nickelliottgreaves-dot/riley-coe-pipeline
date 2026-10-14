@@ -1,5 +1,7 @@
 import csv, json, subprocess, sys, tempfile, unittest
 from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+from inspect_event_links import is_aggregate_calendar_url
 ROOT=Path(__file__).resolve().parents[1]
 
 class EventPageCrawlerTests(unittest.TestCase):
@@ -24,8 +26,15 @@ class EventPageCrawlerTests(unittest.TestCase):
             with (d/"out/event_page_crawl_audit.csv").open(newline="") as f: venue_audit=list(csv.DictReader(f))
             self.assertEqual({r["venue"] for r in venue_audit},{"Test","Empty venue"})
             empty=next(r for r in venue_audit if r["venue"]=="Empty venue")
-            self.assertEqual(empty["status"],"NO_SEED_LINKS")
-            self.assertEqual(empty["seed_candidate_links"],"0")
-            self.assertIn("discovery gap",empty["notes"])
+            self.assertEqual(empty["status"],"PARTIAL")
+            self.assertEqual(empty["seed_candidate_links"],"1")
+            self.assertEqual(empty["pages_failed"],"1")
+            self.assertIn("source calendar",empty["notes"])
+
+    def test_aggregate_songkick_pages_are_excluded(self):
+        self.assertTrue(is_aggregate_calendar_url("https://www.songkick.com/metro-areas/24577-uk-newcastle-upon-tyne"))
+        self.assertTrue(is_aggregate_calendar_url("https://www.songkick.com/live-stream-concerts"))
+        self.assertFalse(is_aggregate_calendar_url("https://www.songkick.com/venues/4426128-lubber-fiend/calendar"))
+        self.assertFalse(is_aggregate_calendar_url("https://www.boilershop.net/events/"))
 
 if __name__=="__main__": unittest.main()
