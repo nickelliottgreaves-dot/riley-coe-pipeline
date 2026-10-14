@@ -20,16 +20,22 @@ FIELDS = ["url", "navigation_status", "page_state", "page_title", "body_chars", 
 
 def inspect_rendered_text(url: str, body: str, title: str, status: str, api_responses: list[str], error: str = "") -> dict:
     lower = body.casefold()
+    title_lower = title.casefold()
+    page_not_found = "page not found" in lower or "page not found" in title_lower
     hits = [name for name in KNOWN if name.casefold() in lower]
     return {
-        "url": url, "navigation_status": status, "page_title": title, "body_chars": str(len(body)),
+        "url": url,
+        "navigation_status": status,
+        "page_state": "page_not_found" if page_not_found else ("rendered_content" if len(body) > 500 else "shell_or_empty"),
+        "page_title": title,
+        "body_chars": str(len(body)),
         "known_artist_hits": ";".join(hits),
         "tracklist_heading": str(any(term in lower for term in ("tracklist", "comments"))).lower(),
-        "creator_comment_text_found": str("creator" in lower and any(name.casefold() in lower for name in KNOWN)).lower(),
+        "creator_comment_text_found": str("creator" in lower and bool(hits)).lower(),
         "api_responses": " | ".join(api_responses[:40])[:4000],
-        "body_excerpt": re.sub(r"\s+", " ", body[:1800])[:1800], "error": error,
+        "body_excerpt": re.sub(r"\\s+", " ", body[:1800])[:1800],
+        "error": error,
     }
-
 
 def main() -> int:
     ap = argparse.ArgumentParser()
@@ -43,7 +49,7 @@ def main() -> int:
         for url in SHOWS:
             page = browser.new_page(user_agent="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/130.0.0.0 Safari/537.36")
             api_responses = []
-            page.on("response", lambda response: api_responses.append(f"{response.status} {response.url}") if any(x in response.url.casefold() for x in ("graphql", "cloudcast", "comment", "api/")) else None)
+            page.on("response", lambda response: api_responses.append(f"{response.status} {response.request.method} {response.url} payload={str(response.request.post_data or '')[:500]}") if any(x in response.url.casefold() for x in ("graphql", "cloudcast", "comment", "api/")) else None)
             status, title, body, error = "", "", "", ""
             try:
                 response = page.goto(url, wait_until="domcontentloaded", timeout=45000)
