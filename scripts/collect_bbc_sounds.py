@@ -89,11 +89,10 @@ class ProgrammeTrackParser(HTMLParser):
                 self.artist=""
                 self.pending_artist=False
             elif heading.casefold()=="broadcast":
-                # Some BBC pages place expanded "Show more" track rows after the
-                # Broadcast heading in DOM/text order. Reset the pending pair but
-                # keep scanning until the related-content section definitively ends.
-                self.artist=""
-                self.pending_artist=False
+                # "Broadcast" is both a BBC section heading and a real artist
+                # credit on some episodes (e.g. Broadcast — Look Outside).
+                self.artist=heading
+                self.pending_artist=True
             elif heading.casefold() in {"similar programmes","related programmes","related programme","related content","by genre"}:
                 self.in_tracklist=False
                 self.artist=""
@@ -106,7 +105,15 @@ class ProgrammeTrackParser(HTMLParser):
             title=" ".join(" ".join(self.paragraph_buf).split()).strip()
             self.paragraph_buf=None
             if self.in_tracklist and self.artist and self.pending_artist and title:
-                self.pairs.append((self.artist,title))
+                broadcast_metadata = self.artist.casefold()=="broadcast" and bool(
+                    re.fullmatch(r"(?:last\\s+)?(?:mon|tue|wed|thu|fri|sat|sun)(?:day)?(?:\\s+\\d{1,2}\\s+[A-Za-z]{3,9}\\s+20\\d{2})?",title,re.I)
+                    or re.fullmatch(r"\\d{1,2}/\\d{1,2}/20\\d{2}",title)
+                    or re.fullmatch(r"\\d{1,2}:\\d{2}",title)
+                    or title.casefold()=="bbc radio 6 music"
+                    or title.casefold() in {"today","yesterday"}
+                )
+                if not broadcast_metadata:
+                    self.pairs.append((self.artist,title))
                 self.pending_artist=False
 
 def parse_date(text):

@@ -305,7 +305,7 @@ def main():
             continue
         key=(dt,normalized_venue_name(r.get("venue","")),normalized_event_title(r.get("event_title",""),r.get("venue","")),normalized_track_title(r.get("artist","")))
         candidate={**{k:r.get(k,"") for k in EVENT_FIELDS},"event_date":dt,"verified":"false",
-                   "notes":((r.get("notes") or "")+" Candidate imported; independently verify the event detail page and support bill.").strip()}
+                   "notes":((r.get("notes") or "")+" Candidate imported; independently verify the event detail page and support bill. Source URL: "+(r.get("source_url") or "")+".").strip()}
         if key in seen_event_keys:
             existing=events[seen_event_keys[key]]
             for field in ("price","ticket_status"):

@@ -42,18 +42,21 @@ class BBCProgrammeParserTests(unittest.TestCase):
         self.assertEqual(dt,"2026-10-13")
         self.assertEqual(note,"")
 
-    def test_broadcast_heading_does_not_truncate_expanded_tracklist(self):
+    def test_broadcast_heading_can_be_artist_but_broadcast_metadata_is_ignored(self):
         html = """
         <h2>Music Played</h2>
         <h3>Artist One</h3><p>Track One</p>
-        <h2>Broadcast</h2>
+        <h2>Broadcast</h2><p>Look Outside</p><p>Warp.</p>
         <h4>Artist Two</h4><p>Track Two</p>
+        <h2>Broadcast</h2><p>Thu 8 Oct 2026</p><p>21:00</p><p>BBC Radio 6 Music</p>
         <h2>Related Content</h2><h3>Similar programmes</h3>
         <h4>Related Artist</h4><p>Do not collect</p>
         """
         parser = ProgrammeTrackParser()
         parser.feed(html)
-        self.assertEqual(parser.pairs, [("Artist One", "Track One"), ("Artist Two", "Track Two")])
+        self.assertEqual(parser.pairs, [
+            ("Artist One", "Track One"), ("Broadcast", "Look Outside"), ("Artist Two", "Track Two")
+        ])
 
     def test_extracts_artist_title_pairs_across_track_heading_levels(self):
         html = """
