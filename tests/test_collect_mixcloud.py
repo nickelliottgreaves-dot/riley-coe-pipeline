@@ -2,7 +2,7 @@ import unittest
 from datetime import date
 from unittest.mock import patch
 from io import BytesIO
-from scripts.collect_mixcloud import inventory_item, parse_date, parse_mixcloud_title_date, fetch_cloudcasts, fetch_cloudcasts_html, fetch_show_page_tracks, fetch_cloudcasts_search
+from scripts.collect_mixcloud import inventory_item, parse_date, parse_mixcloud_title_date, fetch_cloudcasts, fetch_cloudcasts_html, fetch_show_page_tracks, fetch_cloudcasts_search, fetch_show_comment_tracks
 
 class MixcloudInventoryTests(unittest.TestCase):
     def test_no_sections_is_unavailable_not_complete(self):
@@ -106,6 +106,18 @@ class MixcloudInventoryTests(unittest.TestCase):
         self.assertEqual(len(items), 1)
         self.assertIn("6th-october-2026", items[0]["url"])
         self.assertEqual(errors, [])
+
+    def test_public_comment_api_extracts_numbered_tracklist(self):
+        payload = {"data": [
+            {"comment": "1.\\nThreadbare\\nLande Hekt\\n2.\\nNew York No Wave\\nIll Ease"}
+        ]}
+        item = {"name": "Riley & Coe Wednesday 30th September 2026",
+            "url": "https://www.mixcloud.com/SixMusicAlternative/riley-coe-wednesday-30th-september-2026/",
+            "created_time": "2026-09-30"}
+        with patch("scripts.collect_mixcloud.get_json", return_value=payload):
+            tracks = fetch_show_comment_tracks(item)
+        self.assertEqual([(x["track_title"], x["artist"]) for x in tracks],
+            [("Threadbare", "Lande Hekt"), ("New York No Wave", "Ill Ease")])
 
     def test_show_page_parser_reads_numbered_creator_comment_tracklist(self):
         html = b'<div>Comments</div><div>The 6 Music Archive</div><div>Creator</div><div>Button: 00:00</div><div>1.</div><div>Threadbare</div><div>Lande Hekt</div><div>2.</div><div>New York No Wave</div><div>Ill Ease</div><div>Reply</div>'
