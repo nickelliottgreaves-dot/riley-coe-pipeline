@@ -6,6 +6,7 @@ artists to the pool or certify tracklists complete.
 """
 from __future__ import annotations
 import argparse, csv, json, time
+from urllib.parse import urlencode
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.error import HTTPError, URLError
@@ -15,6 +16,7 @@ ENDPOINT = "https://app.mixcloud.com/graphql"
 SHOWS = [
     ("SixMusicAlternative", "riley-coe-wednesday-30th-september-2026"),
     ("SixMusicAlternative", "riley-coe-tuesday-1st-september-2026"),
+    ("SixMusicAlternative", "riley-coe-monday-12th-october-2026-gid-solo"),
 ]
 QUERY = """query {
   cloudcastLookup(lookup: {username: "%s", slug: "%s"}) {
@@ -28,21 +30,26 @@ QUERY = """query {
     featuringArtistList
   }
 }"""
-FIELDS = ["username", "slug", "url", "http_status", "content_type", "json_valid",
+FIELDS = ["username", "slug", "method", "url", "http_status", "content_type", "json_valid",
           "graphql_errors", "show_found", "show_name", "owner_username", "comment_total",
           "comments_returned", "creator_comment_count", "numbered_lines_in_creator_comments",
           "sample_comment", "error"]
 UA = "Mozilla/5.0 (compatible; riley-coe-pipeline/0.6; public GraphQL diagnostics)"
 
 
-def probe(username: str, slug: str, timeout: int = 20) -> dict:
+def probe(username: str, slug: str, timeout: int = 20, method: str = "POST") -> dict:
     query = QUERY % (username, slug)
-    body = json.dumps({"query": query}).encode("utf-8")
-    req = Request(ENDPOINT, data=body, headers={
-        "User-Agent": UA, "Accept": "application/json", "Content-Type": "application/json",
+    headers = {
+        "User-Agent": UA, "Accept": "application/json",
         "Origin": "https://www.mixcloud.com", "Referer": f"https://www.mixcloud.com/{username}/{slug}/"
-    }, method="POST")
-    base = {"username": username, "slug": slug,
+    }
+    if method == "GET":
+        req = Request(ENDPOINT + "?" + urlencode({"query": query}), headers=headers, method="GET")
+    else:
+        body = json.dumps({"query": query}).encode("utf-8")
+        headers["Content-Type"] = "application/json"
+        req = Request(ENDPOINT, data=body, headers=headers, method="POST")
+    base = {"username": username, "slug": slug, "method": method,
             "url": f"https://www.mixcloud.com/{username}/{slug}/",
             "http_status": "", "content_type": "", "json_valid": "",
             "graphql_errors": "", "show_found": "false", "show_name": "",
@@ -106,13 +113,17 @@ def main() -> int:
     args.out_dir.mkdir(parents=True, exist_ok=True)
     rows = []
     for username, slug in SHOWS:
-        rows.append(probe(username, slug))
-        time.sleep(.2)
+        for method in ("GET", "POST"):
+            rows.append(probe(username, slug, method=method))
+            time.sleep(.2)
     with (args.out_dir / "mixcloud_graphql_diagnostics.csv").open("w", encoding="utf-8", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=FIELDS); writer.writeheader(); writer.writerows(rows)
     report = {
         "created_utc": datetime.now(timezone.utc).isoformat(),
-        "shows_probed": len(rows),
+        "shows_probed": len(SHOWS),
+        "requests_made": len(rows),
+        "get_successes": sum(r["method"] == "GET" and r["http_status"].startswith("2") for r in rows),
+        "post_successes": sum(r["method"] == "POST" and r["http_status"].startswith("2") for r in rows),
         "http_successes": sum(r["http_status"].startswith("2") for r in rows),
         "shows_found": sum(r["show_found"] == "true" for r in rows),
         "creator_comments_found": sum(int(r["creator_comment_count"] or 0) > 0 for r in rows),
