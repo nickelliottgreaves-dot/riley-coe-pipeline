@@ -55,7 +55,7 @@ def validate_tracklist(payload: dict, expected_pid: str, expected_date: date) ->
         raise ValueError("Tracklist JSON has no tracks array")
     reported_count = payload.get("count")
     count_match = isinstance(reported_count, int) and reported_count == len(tracks)
-    payload_pid = str(payload.get("pid") or payload.get("episode_pid") or expected_pid)
+    payload_pid = str(payload.get("pid") or payload.get("episode_pid") or payload.get("id") or "").strip()
     payload_date = parse_episode_date(str(payload.get("date") or ""))
     row_errors = []
     normalized = []
@@ -70,8 +70,8 @@ def validate_tracklist(payload: dict, expected_pid: str, expected_date: date) ->
             continue
         normalized.append({"track_position": position, "track_title": title, "artist_candidate": artist})
     date_match = payload_date == expected_date if payload_date else False
-    pid_match = payload_pid == expected_pid
-    internally_consistent = count_match and len(normalized) == len(tracks) and date_match and pid_match and not row_errors
+    pid_match = payload_pid == expected_pid if payload_pid else None
+    internally_consistent = count_match and len(normalized) == len(tracks) and date_match and pid_match is not False and not row_errors
     return {
         "tracks": normalized,
         "reported_count": reported_count if isinstance(reported_count, int) else "",
