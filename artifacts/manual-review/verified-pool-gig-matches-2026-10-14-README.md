@@ -4,7 +4,7 @@
 
 ## Findings
 
-The manually assembled event-candidate set contained 112 distinct artist strings. Quote-aware CSV parsing and Unicode/punctuation normalization against all 747 pool rows produced five exact normalized artist matches: Courtney Barnett, Heaven 17, The Wedding Present, Radhika and Fat White Family. The four event entries below include both The Wedding Present and its support Radhika on one row. This candidate set is not proof that all venue events were discovered, so do not interpret the result as a complete sweep or as evidence that no other matches exist.
+The manually assembled comparison set contained 112 distinct artist strings gathered from venue calendars and regional safety-net listings. It was used as a focused cross-check, not as a complete or fully verified list of every event in the date window; some peripheral listings still need date/venue validation. Quote-aware CSV parsing and Unicode/punctuation normalization against all 747 pool rows produced five exact normalized artist matches in that comparison set: Courtney Barnett, Heaven 17, The Wedding Present, Radhika and Fat White Family. The four event entries below include both The Wedding Present and its support Radhika on one row. This result is not proof that all venue events were discovered, so do not interpret it as a complete sweep or as evidence that no other matches exist.
 
 - Courtney Barnett + Body Type — 14 October, The Glasshouse (Sage One), from £35.80, limited availability; official venue event page.
 - Heaven 17 + Peter Coyle — 15 October, Boiler Shop; official page says sold out.
