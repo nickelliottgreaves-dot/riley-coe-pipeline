@@ -78,12 +78,11 @@ def is_aggregate_calendar_url(url):
     path=parsed.path.casefold()
     return path.startswith("/metro-areas/") or path.startswith("/live-stream-concerts")
 
-def apply_shared_calendar_attribution(rows, shared_host_groups):
+def apply_shared_calendar_attribution(rows):
     """Avoid assigning a shared parent calendar's events to every room alias."""
     grouped={}
     for row in rows:
-        host=urlparse(row.get("page_url","")).netloc.casefold()
-        aliases=sorted(shared_host_groups.get(host,set()))
+        aliases=sorted(set(row.pop("_shared_aliases",[]) or []))
         if len(aliases)>1:
             title_blob=" ".join([row.get("page_title",""),row.get("event_title","")]).casefold()
             room_aliases=[name for name in aliases
@@ -95,7 +94,8 @@ def apply_shared_calendar_attribution(rows, shared_host_groups):
                 row["venue"]="Unresolved shared calendar: "+" / ".join(aliases)
                 row["status"]="shared_calendar_attribution_unresolved"
                 row["notes"]=(row.get("notes","")+" Shared calendar serves multiple venue/room labels; title does not establish the room. Do not attribute this candidate to a specific room without event-level evidence.").strip()
-        key=(row.get("page_url",""),row.get("event_title",""),row.get("event_date",""),row.get("performer_names",""))
+        key=(row.get("page_url",""),row.get("event_title",""),row.get("event_date",""),row.get("performer_names",""),
+             tuple(aliases) if len(aliases)>1 else row.get("venue",""))
         if key not in grouped:
             grouped[key]=row
         elif row.get("venue","")!=grouped[key].get("venue",""):
@@ -103,7 +103,6 @@ def apply_shared_calendar_attribution(rows, shared_host_groups):
             grouped[key]["status"]="shared_calendar_attribution_unresolved"
             grouped[key]["notes"]=(grouped[key].get("notes","")+" Duplicate detail page was reached through multiple venue aliases; venue/room attribution remains unresolved.").strip()
     return list(grouped.values())
-
 
 def main():
     ap=argparse.ArgumentParser()
