@@ -26,6 +26,14 @@ class WorkflowArtifactContractTests(unittest.TestCase):
         self.assertIsNotNone(match, "Workflow must configure the event-page crawl budget explicitly")
         self.assertGreaterEqual(int(match.group(1)), 15, "Five pages per venue starves event-detail candidates on large calendars")
 
+    def test_complete_gate_covers_all_configured_venues(self):
+        validator = (ROOT / "scripts/validate_run.py").read_text(encoding="utf-8")
+        assembler = ASSEMBLER
+        self.assertIn("COMPLETE run missing configured venue coverage row", validator)
+        self.assertIn("COMPLETE run has not completed configured venue sweep", validator)
+        self.assertIn("for v in sources:", assembler)
+        self.assertIn('calendar_coverage_verified":str(key in manual_coverage_by_venue).lower()', assembler)
+
     def test_scheduled_gate_requires_complete_evidence(self):
         self.assertIn("--require-complete", WORKFLOW)
         self.assertIn('ap.add_argument("--require-complete"', (ROOT / "scripts/validate_run.py").read_text(encoding="utf-8"))
