@@ -596,7 +596,9 @@ def fetch_show_page_tracks(item: dict) -> tuple[dict, list[dict]]:
         episode["tracklist_status"] = "incomplete"
         episode["notes"] = "Parsed numbered rows from the rendered uploader comment; verify that no further tracks are hidden or omitted."
         return episode, browser_tracks
-    if item.get("_browser_http_status") == 404:
+    browser_text = str(item.get("_browser_text_sample") or "")
+    browser_page_missing = item.get("_browser_http_status") == 404 or "Page Not Found" in browser_text
+    if browser_page_missing:
         reader_tracks = fetch_show_page_tracks_reader(item)
         print("Mixcloud reader diagnostics:", url, "rest_error=", item.get("_rest_detail_error", ""),
               "graphql_error=", item.get("_graphql_comment_error", ""), "reader_error=", item.get("_reader_error", ""),
