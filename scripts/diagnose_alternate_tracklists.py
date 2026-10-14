@@ -15,7 +15,7 @@ RADIOFILES_URL = "https://radiofiles.io/show/riley-coe"
 RADIOFILES_EPISODE_URL = "https://radiofiles.io/app?show=m001mf2c&pid=m0032d2m"
 FIELDS = ["source", "url", "http_status", "page_title", "body_chars_before", "body_chars_after",
           "show_more_clicks", "show_more_still_visible", "tracklist_heading", "numbered_track_markers",
-          "links", "network_requests", "body_excerpt", "error"]
+          "links", "network_requests", "api_probe_results", "body_excerpt", "error"]
 
 
 def count_numbered_markers(text: str) -> int:
@@ -37,6 +37,7 @@ def main() -> int:
         for source, url in (("bbc_sounds", args.bbc_url), ("radiofiles_show", args.radiofiles_url), ("radiofiles_episode", RADIOFILES_EPISODE_URL)):
             page = browser.new_page(user_agent="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/130.0.0.0 Safari/537.36")
             network = []
+            probe_results = []
             def capture_response(response):
                 url_lower = response.url.casefold()
                 if any(k in url_lower for k in ("api", "graphql", "programme", "episode", "track", "radiofiles")):
@@ -78,9 +79,9 @@ def main() -> int:
                         try:
                             api_response = page.request.get(endpoint, timeout=15000)
                             api_body = api_response.text()
-                            network.append(f"PROBE {api_response.status} {endpoint} content_type={api_response.headers.get('content-type', '')} body={api_body[:6000]}")
+                            probe_results.append(f"PROBE {api_response.status} {endpoint} content_type={api_response.headers.get('content-type', '')} body={api_body[:3500]}")
                         except Exception as exc:
-                            network.append(f"PROBE_ERROR {endpoint} {type(exc).__name__}: {exc}")
+                            probe_results.append(f"PROBE_ERROR {endpoint} {type(exc).__name__}: {exc}")
             except Exception as exc:
                 error = f"{type(exc).__name__}: {exc}"
                 try:
@@ -96,6 +97,7 @@ def main() -> int:
                 "numbered_track_markers": str(count_numbered_markers(after)),
                 "links": json.dumps(links, ensure_ascii=False)[:12000],
                 "network_requests": " | ".join(network[:100])[:10000],
+                "api_probe_results": " | ".join(probe_results)[:20000],
                 "body_excerpt": re.sub(r"\s+", " ", after[:5000])[:5000], "error": error
             })
             page.close()
