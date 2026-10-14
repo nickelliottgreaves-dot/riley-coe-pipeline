@@ -19,7 +19,7 @@ from urllib.request import Request, urlopen
 API_ROOT = "https://api.mixcloud.com"
 GRAPHQL_CLOUDCAST_LOOKUP_AVAILABLE: bool | None = None
 DEFAULT_USER = "SixMusicAlternative"
-USER_AGENT = "riley-coe-pipeline/0.1 (research evidence collector)"
+USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
 EPISODE_FIELDS = ["episode_date", "episode_title", "source", "url", "tracklist_status", "tracks_extracted", "notes"]
 TRACK_FIELDS = ["episode_date", "episode_title", "episode_url", "artist", "track_title", "track_position", "source", "verification_status"]
 
