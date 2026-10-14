@@ -30,7 +30,7 @@ class RepositoryDataContractTests(unittest.TestCase):
             for row in required
             if row["mandatory"].strip().casefold() == "true"
         }
-        self.assertEqual(len(mandatory), 16, "Mandatory venue sweep changed; review coverage requirements")
+        self.assertEqual(len(mandatory), 20, "Mandatory venue sweep changed; review coverage requirements")
 
         sources = read_csv(ROOT / "config/venue_sources.csv")
         configured = {normalize_venue(row["venue"]) for row in sources}

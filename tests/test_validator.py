@@ -33,7 +33,7 @@ class ValidatorTests(unittest.TestCase):
             self.assertIn(norm(venue), sources, f"Missing source registry entry: {venue}")
             row = sources[norm(venue)]
             self.assertTrue(row["source_url"].startswith("https://"), f"Missing URL for {venue}")
-            self.assertIn(row["source_status"], {"verified_official_calendar", "verified_official_site", "verified_official_social_listing"})
+            self.assertIn(row["source_status"], {"verified_official_calendar", "verified_official_site", "verified_official_social_listing", "verified_ticketing_calendar", "verified_third_party_calendar"})
 
     def test_false_complete_flags_fail(self):
         with tempfile.TemporaryDirectory() as tmp:

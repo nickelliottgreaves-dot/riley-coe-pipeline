@@ -273,7 +273,7 @@ def main():
             if status!=200 or "html" not in ctype.lower(): raise ValueError(f"Unexpected episode response: {status} {ctype}")
             p=TextParser(); p.feed(html); text="\n".join(p.text)
             # Avoid guessing the episode date from an episode title; parse explicit page date only.
-            dt=parse_date(text) or parse_date(static_text)
+            dt=parse_date(text)
             has_heading=bool(re.search(r"Music Played|Tracklist",text,re.I))
             page_status="fetched"
             if dt and not (start<=date.fromisoformat(dt)<=end): continue
