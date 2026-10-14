@@ -209,6 +209,14 @@ def main():
             "evidence_text":track.get("tracklist_api_url",""),
             "notes":((track.get("notes") or "")+" RadioFiles third-party JSON candidate; cross-check against another complete source before importing.").strip()})
     write_csv(out/"tracklist_candidate_review.csv",track_review_fields,track_review_rows)
+    # Compare all discovered music-played artist candidates (BBC Sounds, RadioFiles,
+    # Mixcloud) against the authoritative pool. This produces review suggestions only;
+    # it never adds names to the pool or certifies tracklist completeness.
+    subprocess.run([sys.executable,str(ROOT/"scripts/compare_radiofiles_artist_pool.py"),
+        "--pool",str(args.pool),"--candidates",str(out/"tracklist_candidate_review.csv"),
+        "--aliases",str(ROOT/"config/artist_aliases.csv"),"--out-dir",str(out),
+        "--output-name","tracklist_artist_pool_review.csv",
+        "--source-label","Combined BBC Sounds, RadioFiles and Mixcloud candidates"],check=True)
     tracklist_comparison=compare_episode_tracklists(bbc_tracks,radiofiles_tracks,bbc_rows)
     write_csv(out/"episode_tracklist_comparison.csv",TRACKLIST_COMPARISON_FIELDS,tracklist_comparison)
     comparison_by_pid={r["episode_pid"]:r for r in tracklist_comparison}
@@ -393,9 +401,11 @@ def main():
     write_csv(out/"pool_matches.csv",MATCH_FIELDS,[])
     # Run matcher to ensure every candidate artist has a corresponding pool comparison.
     subprocess.run([sys.executable,str(ROOT/"scripts/match_event_artists.py"),"--events",str(out/"events.csv"),"--pool",str(args.pool),"--aliases",str(ROOT/"config/artist_aliases.csv"),"--out",str(out/"pool_matches.csv")],check=True)
-    # The full candidate event set has now been compared against the authoritative pool.
-    # This does not verify the gigs themselves or certify complete venue discovery.
-    artist_pool_compared=bool(events) and Path(args.pool).exists()
+    # Tracklist candidates and event candidates have separate review tables. Both
+    # comparisons must run before the manifest can claim pool comparison is complete.
+    event_artist_pool_compared=Path(out/"pool_matches.csv").exists() and Path(args.pool).exists()
+    tracklist_artist_pool_compared=Path(out/"tracklist_artist_pool_review.csv").exists() and Path(args.pool).exists()
+    artist_pool_compared=event_artist_pool_compared and tracklist_artist_pool_compared
     # Also publish the dated filenames used by the weekly research workflow.
     run_day=date.today().isoformat()
     dated_exports={
@@ -406,6 +416,7 @@ def main():
         f"Riley_Coe_regression_artist_checks_{run_day}.csv":"regression_artist_checks.csv",
         f"Riley_Coe_tracklist_candidate_review_{run_day}.csv":"tracklist_candidate_review.csv",
         f"Riley_Coe_episode_tracklist_comparison_{run_day}.csv":"episode_tracklist_comparison.csv",
+        f"Riley_Coe_tracklist_artist_pool_review_{run_day}.csv":"tracklist_artist_pool_review.csv",
     }
     for export_name, source_name in dated_exports.items():
         shutil.copy2(out/source_name,out/export_name)
@@ -428,11 +439,13 @@ def main():
     missing_inputs=[r["input_name"] for r in input_audit if r["status"] in {"missing","not_supplied"}]
     manifest={"run_date":date.today().isoformat(),"window_start":start.isoformat(),"window_end":end.isoformat(),
               "previous_successful_run":args.previous_successful_run,"claimed_status":"PARTIAL",
-              "episode_coverage_complete":False,"venue_sweep_complete":False,"artist_pool_compared":artist_pool_compared,"all_event_sources_verified":False,
+              "episode_coverage_complete":False,"venue_sweep_complete":False,"artist_pool_compared":artist_pool_compared,
+              "event_artist_pool_compared":event_artist_pool_compared,"tracklist_artist_pool_compared":tracklist_artist_pool_compared,
+              "all_event_sources_verified":False,
               "researcher_notes":"Automatically assembled evidence scaffold. Not a completed research run. BBC Sounds/visible tracklists, event detail pages, supports, prices/ticket status, regression checks, full venue coverage and safety-net searches still require verification.",
               "package_kind":"candidate_scaffold","source_episode_rows":len(episode_rows),"candidate_event_rows":len(events),"manual_sweep_rows":len(manual_sweep_rows),"unresolved_event_candidates":len(unresolved),
               "mandatory_venue_rows":len(venue_rows),"venue_calendar_checks_completed":sum(1 for r in venue_rows if (r.get("checked") or "").casefold()=="true"),"regression_artists_seeded":len(regression_rows),"regression_artist_checks_completed":0,
-              "input_file_audit":"input_file_audit.csv","venue_discovery_coverage":"venue_discovery_coverage.csv","tracklist_candidate_review":"tracklist_candidate_review.csv","episode_tracklist_comparison":"episode_tracklist_comparison.csv","dated_exports":list(dated_exports)+[dedup_path.name],"missing_or_unsupplied_inputs":missing_inputs,"input_files_present":sum(r["status"]=="present" for r in input_audit)}
+              "input_file_audit":"input_file_audit.csv","venue_discovery_coverage":"venue_discovery_coverage.csv","tracklist_candidate_review":"tracklist_candidate_review.csv","tracklist_artist_pool_review":"tracklist_artist_pool_review.csv","episode_tracklist_comparison":"episode_tracklist_comparison.csv","dated_exports":list(dated_exports)+[dedup_path.name],"missing_or_unsupplied_inputs":missing_inputs,"input_files_present":sum(r["status"]=="present" for r in input_audit)}
     (out/"run_manifest.json").write_text(json.dumps(manifest,indent=2)+"\n",encoding="utf-8")
     summary={"output_directory":str(out),"status":"PARTIAL","episode_rows":len(episode_rows),"event_candidate_rows":len(events),"manual_sweep_rows":len(manual_sweep_rows),"unresolved_event_candidates":len(unresolved),"mandatory_venue_rows":len(venue_rows),"regression_artists_seeded":len(regression_rows),"regression_artist_checks_completed":0,"complete_claimed":False,"missing_or_unsupplied_inputs":missing_inputs}
     (out/"package_assembly_summary.json").write_text(json.dumps(summary,indent=2)+"\n",encoding="utf-8")

@@ -37,6 +37,16 @@ class EvidencePackageTests(unittest.TestCase):
             self.assertEqual(len(review),2)
             self.assertEqual({row["artist_candidate"] for row in review},{"Example Artist","Mix Artist"})
             self.assertTrue(all(row["review_status"]=="needs_manual_review" for row in review))
+            with (out/"tracklist_artist_pool_review.csv").open(newline="",encoding="utf-8") as f:
+                pool_review={row["artist_candidate"]:row for row in csv.DictReader(f)}
+            self.assertEqual(set(pool_review),{"Example Artist","Mix Artist"})
+            self.assertIn("visible_text_title_by_artist",pool_review["Example Artist"]["candidate_sources"])
+            self.assertIn("mixcloud_api_candidate",pool_review["Mix Artist"]["candidate_sources"])
+            manifest=json.loads((out/"run_manifest.json").read_text())
+            self.assertTrue(manifest["tracklist_artist_pool_compared"])
+            self.assertTrue(manifest["event_artist_pool_compared"])
+            self.assertTrue(manifest["artist_pool_compared"])
+            self.assertEqual(manifest["tracklist_artist_pool_review"],"tracklist_artist_pool_review.csv")
             self.assertTrue((out/"mixcloud_api_track_candidates.csv").exists())
             self.assertTrue(any(name.startswith("Riley_Coe_tracklist_candidate_review_") for name in json.loads((out/"run_manifest.json").read_text())["dated_exports"]))
             self.assertTrue(any(name.startswith("Riley_Coe_episode_tracklist_comparison_") for name in json.loads((out/"run_manifest.json").read_text())["dated_exports"]))

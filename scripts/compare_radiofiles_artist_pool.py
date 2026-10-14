@@ -31,6 +31,8 @@ def main() -> int:
     ap.add_argument("--candidates", type=Path, required=True)
     ap.add_argument("--aliases", type=Path)
     ap.add_argument("--out-dir", type=Path, required=True)
+    ap.add_argument("--output-name", default="radiofiles_artist_pool_review.csv", help="Review CSV filename.")
+    ap.add_argument("--source-label", default="RadioFiles public JSON", help="Source label for the review queue.")
     args = ap.parse_args()
     if not args.pool.is_file() or not args.candidates.is_file():
         ap.error("pool and candidates must be existing files")
@@ -54,14 +56,17 @@ def main() -> int:
         name = " ".join((row.get("artist_candidate") or "").split())
         if not name: continue
         key = norm(name)
-        g = grouped.setdefault(key, {"display": name, "tracks": 0, "dates": set(), "titles": set(), "sources": set()})
+        g = grouped.setdefault(key, {"display": name, "tracks": 0, "dates": set(), "titles": set(), "sources": set(), "candidate_sources": set()})
         g["tracks"] += 1
         if row.get("episode_date"): g["dates"].add(row["episode_date"])
         if row.get("track_title"): g["titles"].add(row["track_title"])
-        if row.get("source_url"): g["sources"].add(row["source_url"])
+        source_url=(row.get("source_url") or row.get("episode_url") or "").strip()
+        if source_url: g["sources"].add(source_url)
+        candidate_source=(row.get("source") or row.get("extraction_method") or args.source_label).strip()
+        if candidate_source: g["candidate_sources"].add(candidate_source)
     fields = ["artist_candidate", "candidate_track_rows", "episode_dates", "sample_track_titles",
               "pool_match_status", "matched_pool_artist", "other_close_pool_suggestions",
-              "source_episode_urls", "review_decision", "notes"]
+              "source_episode_urls", "candidate_sources", "review_decision", "notes"]
     output = []
     for key, g in sorted(grouped.items(), key=lambda x: x[1]["display"].casefold()):
         name = g["display"]
@@ -86,16 +91,17 @@ def main() -> int:
             "pool_match_status": status, "matched_pool_artist": matched,
             "other_close_pool_suggestions": "; ".join(suggestions),
             "source_episode_urls": "; ".join(sorted(g["sources"])),
+            "candidate_sources": "; ".join(sorted(g["candidate_sources"])),
             "review_decision": "needs_manual_review",
-            "notes": note + " RadioFiles is a third-party mirror; candidate evidence is not proof of a complete tracklist."
+            "notes": note + f" {args.source_label} evidence is review-only; it does not prove tracklist completeness or artist identity."
         })
     args.out_dir.mkdir(parents=True, exist_ok=True)
-    review_path = args.out_dir / "radiofiles_artist_pool_review.csv"
+    review_path = args.out_dir / args.output_name
     write_csv(review_path, fields, output)
     counts = defaultdict(int)
     for row in output: counts[row["pool_match_status"]] += 1
     summary = {
-        "status": "REVIEW_ONLY", "pool_rows_read": len(pool_rows),
+        "status": "REVIEW_ONLY", "source_label": args.source_label, "pool_rows_read": len(pool_rows),
         "distinct_candidate_artists": len(output), "candidate_track_rows_read": len(candidate_rows),
         "match_status_counts": dict(sorted(counts.items())),
         "authoritative_pool_modified": False, "artists_added_to_pool": 0,
@@ -108,7 +114,8 @@ def main() -> int:
             "This script does not write to or change the authoritative artist pool."
         ]
     }
-    (args.out_dir / "radiofiles_artist_pool_review_summary.json").write_text(json.dumps(summary, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    summary_path = args.out_dir / (Path(args.output_name).stem + "_summary.json")
+    summary_path.write_text(json.dumps(summary, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     print(json.dumps(summary, indent=2, ensure_ascii=False))
     return 0
 

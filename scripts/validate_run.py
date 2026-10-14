@@ -299,6 +299,8 @@ def main() -> int:
         ("episode_coverage_complete", "episode_coverage_complete"),
         ("venue_sweep_complete", "venue_sweep_complete"),
         ("artist_pool_compared", "artist_pool_compared"),
+        ("event_artist_pool_compared", "event_artist_pool_compared"),
+        ("tracklist_artist_pool_compared", "tracklist_artist_pool_compared"),
         ("all_event_sources_verified", "all_event_sources_verified"),
     ):
         if manifest.get(flag) is not True:

@@ -23,7 +23,8 @@ class ValidatorTests(unittest.TestCase):
                 "run_date":"2026-10-14","window_start":"2026-10-14","window_end":"2026-10-27",
                 "previous_successful_run":"unknown/not yet established","researcher_notes":"Partial fixture",
                 "claimed_status":"PARTIAL","episode_coverage_complete":False,"venue_sweep_complete":False,
-                "artist_pool_compared":False,"all_event_sources_verified":False
+                "artist_pool_compared":False,"event_artist_pool_compared":False,
+                "tracklist_artist_pool_compared":False,"all_event_sources_verified":False
             }))
             def write(name,fields,rows):
                 with (p/name).open("w",newline="",encoding="utf-8") as f:
@@ -79,6 +80,8 @@ class ValidatorTests(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("episode_coverage_complete is not true", result.stdout)
             self.assertIn("venue_sweep_complete is not true", result.stdout)
+            self.assertIn("event_artist_pool_compared is not true", result.stdout)
+            self.assertIn("tracklist_artist_pool_compared is not true", result.stdout)
             self.assertIn("Missing venue_discovery_coverage.csv for COMPLETE run", result.stdout)
 
 if __name__ == "__main__":
