@@ -72,5 +72,6 @@ def main():
     audit={"sources_configured":len(rows),"pages_fetched":sum(bool(r["text_file"]) for r in rows),"pages_failed_or_unconfigured":sum(not r["text_file"] for r in rows),"venue_calendar_checks_completed":0,"errors":errors,"important_limit":"A successful HTTP fetch is not a venue calendar coverage check. Do not use this file as venue_coverage.csv or claim the venue gate passed."}
     (a.out_dir/"venue_page_collection_audit.json").write_text(json.dumps(audit,indent=2)+"\n",encoding="utf-8")
     print(json.dumps(audit,indent=2))
-    return 0 if not errors else 1
+    # Source fetch failures are audit data, not collector crashes.
+    return 0
 if __name__=="__main__": raise SystemExit(main())

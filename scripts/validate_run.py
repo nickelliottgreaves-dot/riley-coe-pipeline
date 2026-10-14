@@ -295,19 +295,27 @@ def main() -> int:
         errors.append("No episode coverage rows: cannot establish tracklist coverage")
     if not venue_rows:
         errors.append("No venue coverage rows: cannot establish venue-first sweep")
-    if manifest.get("episode_coverage_complete") is not True:
-        errors.append("Manifest episode_coverage_complete is not true")
-    if manifest.get("venue_sweep_complete") is not True:
-        errors.append("Manifest venue_sweep_complete is not true")
-    if manifest.get("artist_pool_compared") is not True:
-        errors.append("Manifest artist_pool_compared is not true")
-    if manifest.get("all_event_sources_verified") is not True:
-        errors.append("Manifest all_event_sources_verified is not true")
+    for flag, label in (
+        ("episode_coverage_complete", "episode_coverage_complete"),
+        ("venue_sweep_complete", "venue_sweep_complete"),
+        ("artist_pool_compared", "artist_pool_compared"),
+        ("all_event_sources_verified", "all_event_sources_verified"),
+    ):
+        if manifest.get(flag) is not True:
+            message=f"Manifest {label} is not true"
+            if manifest.get("claimed_status") == "COMPLETE":
+                errors.append(message)
+            else:
+                warnings.append(message)
 
     # Any inaccessible/not-checked mandatory venue blocks COMPLETE even if a user
     # has accidentally set the manifest booleans to true.
     if any((venue_map.get(norm_venue(v), {}).get("status", "").strip().lower() in {"inaccessible", "not_checked"}) for v in required_venues):
-        errors.append("At least one mandatory venue was inaccessible or not checked")
+        message="At least one mandatory venue was inaccessible or not checked"
+        if manifest.get("claimed_status") == "COMPLETE":
+            errors.append(message)
+        else:
+            warnings.append(message)
 
     status = "FAILED" if errors else ("PARTIAL" if warnings else "COMPLETE")
     report = {
@@ -324,7 +332,9 @@ def main() -> int:
     print(json.dumps(report, indent=2))
     if run_dir.exists():
         (run_dir / "validation_report.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
-    return 0 if status == "COMPLETE" else 1
+    # A structurally valid PARTIAL package is still a successful pipeline output.
+    # The explicit PARTIAL status and warnings preserve the incomplete-coverage signal.
+    return 0 if status in {"COMPLETE", "PARTIAL"} else 1
 
 if __name__ == "__main__":
     sys.exit(main())

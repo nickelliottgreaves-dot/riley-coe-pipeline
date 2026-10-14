@@ -12,6 +12,42 @@ class ValidatorTests(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertIn('"status": "FAILED"', result.stdout)
 
+    def test_structurally_valid_partial_package_is_accepted_as_partial(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            p=Path(tmp)
+            with (ROOT/"config/required_venues.csv").open(encoding="utf-8-sig",newline="") as f:
+                required=[r["venue"] for r in csv.DictReader(f) if r["mandatory"].strip().lower()=="true"]
+            with (ROOT/"config/venue_sources.csv").open(encoding="utf-8-sig",newline="") as f:
+                sources={r["venue"]:r for r in csv.DictReader(f)}
+            (p/"run_manifest.json").write_text(json.dumps({
+                "run_date":"2026-10-14","window_start":"2026-10-14","window_end":"2026-10-27",
+                "previous_successful_run":"unknown/not yet established","researcher_notes":"Partial fixture",
+                "claimed_status":"PARTIAL","episode_coverage_complete":False,"venue_sweep_complete":False,
+                "artist_pool_compared":False,"all_event_sources_verified":False
+            }))
+            def write(name,fields,rows):
+                with (p/name).open("w",newline="",encoding="utf-8") as f:
+                    w=csv.DictWriter(f,fieldnames=fields);w.writeheader();w.writerows(rows)
+            write("episodes.csv",["episode_date","source","url","tracklist_status","tracks_extracted","notes"],[
+                {"episode_date":"2026-10-13","source":"BBC Sounds","url":"https://www.bbc.co.uk/programmes/example","tracklist_status":"not_yet_checked","tracks_extracted":"0","notes":"Needs review"}
+            ])
+            write("venue_coverage.csv",["venue","checked","source_url","status","notes"],[
+                {"venue":name,"checked":"false","source_url":sources[name]["source_url"],"status":"not_checked","notes":"Partial fixture"}
+                for name in required
+            ])
+            write("events.csv",["event_date","venue","event_title","artist","artist_role","source_url","verified","notes"],[])
+            write("pool_matches.csv",["event_artist","matched_pool_artist","candidate_pool_artist","match_type","source_url","verified","notes"],[])
+            with (ROOT/"config/regression_artists.csv").open(encoding="utf-8-sig",newline="") as f:
+                seeds=list(csv.DictReader(f))
+            write("regression_artist_checks.csv",["artist","searched","result","evidence_url","notes"],[
+                {"artist":r["artist"],"searched":"false","result":"not_checked","evidence_url":"","notes":"Not yet checked"}
+                for r in seeds
+            ])
+            result=subprocess.run([sys.executable,str(VALIDATOR),"--run-dir",str(p)],capture_output=True,text=True)
+            self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+            self.assertIn('"status": "PARTIAL"',result.stdout)
+            self.assertNotIn('"status": "COMPLETE"',result.stdout)
+
     def test_missing_manifest_fails(self):
         with tempfile.TemporaryDirectory() as tmp:
             p = Path(tmp)

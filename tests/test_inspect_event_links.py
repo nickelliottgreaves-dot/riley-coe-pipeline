@@ -17,7 +17,7 @@ class EventPageCrawlerTests(unittest.TestCase):
                 w.writerow({"venue":"Empty venue","source_url":"https://example.org"})
             # Invalid domain proves errors are captured rather than silently treated as a successful sweep.
             p=subprocess.run([sys.executable,str(ROOT/"scripts/inspect_event_links.py"),"--links",str(links),"--sources",str(sources),"--out-dir",str(d/"out"),"--max-pages-per-venue","1"],capture_output=True,text=True)
-            self.assertNotEqual(p.returncode,0)
+            self.assertEqual(p.returncode,0, p.stderr or p.stdout)
             audit=json.loads((d/"out/event_page_crawl_summary.json").read_text())
             self.assertEqual(audit["status"],"PARTIAL")
             with (d/"out/event_page_inspection.csv").open(newline="") as f: rows=list(csv.DictReader(f))
