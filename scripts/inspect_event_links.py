@@ -689,6 +689,20 @@ def allowed_source_scoped_url(source_url, target_url, venue):
     if target.scheme not in {"http", "https"} or target.netloc.casefold() != source.netloc.casefold():
         return False
     host = source.netloc.casefold().removeprefix("www.")
+    if host.endswith("skiddle.com"):
+        # Skiddle venue calendars contain global navigation links to city feeds
+        # and other Newcastle venues. Following those under the configured venue
+        # label creates false local gigs (e.g. Cardiff/Birmingham events assigned
+        # to Lubber Fiend). Stay within the same city + venue path only.
+        source_skiddle = re.match(r"^/whats-on/([^/]+)/([^/]+)/?$", source.path, re.I)
+        if not source_skiddle:
+            return target.path.rstrip("/").casefold() == source.path.rstrip("/").casefold()
+        target_skiddle = re.match(r"^/whats-on/([^/]+)/([^/]+)(?:/.*)?$", target.path, re.I)
+        return bool(
+            target_skiddle
+            and source_skiddle.group(1).casefold() == target_skiddle.group(1).casefold()
+            and source_skiddle.group(2).casefold() == target_skiddle.group(2).casefold()
+        )
     if not host.endswith("songkick.com"):
         return True
 
