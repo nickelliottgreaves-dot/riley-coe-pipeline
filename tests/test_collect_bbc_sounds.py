@@ -24,7 +24,7 @@ class BBCCollectorTests(unittest.TestCase):
                  patch("collect_bbc_sounds.time.sleep"), \
                  patch("sys.argv", ["collect_bbc_sounds.py", "--start", "2026-09-24", "--end", "2026-10-15", "--out-dir", tmp]):
                 self.assertEqual(main(), 0)
-            summary=json.loads((Path(tmp)/"bbc_collection_summary.json").read_text())
+            summary=json.loads((Path(tmp)/"bbc_collection_audit.json").read_text())
             self.assertEqual(summary["listing_pages_fetched"], 3)
             self.assertEqual(summary["episodes_discovered"], 2)
             self.assertEqual(summary["listing_pagination_status"], "sequential_page_fallback_exhausted")
