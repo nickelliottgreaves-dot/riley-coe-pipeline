@@ -229,19 +229,50 @@ def main() -> int:
             "returned_track_count": len(target_tracks),
             "tracks": [{"position": t["track_position"], "title": t["track_title"], "artist": t["artist_candidate"]} for t in target_tracks],
         }
+    radiofiles_pids = {
+        str(item.get("pid") or "").strip()
+        for item in radiofiles_episodes
+        if isinstance(item, dict) and str(item.get("pid") or "").strip()
+    }
+    bbc_pids_in_window = {
+        row["episode_pid"] for row in episodes
+        if row["episode_pid"] and row["episode_pid"] not in radiofiles_pids
+    }
+    radiofiles_dates_in_window = {
+        parsed.isoformat()
+        for item in radiofiles_episodes
+        if isinstance(item, dict)
+        for parsed in [parse_episode_date(str(item.get("date") or ""))]
+        if parsed and since <= parsed <= until
+    }
+    bbc_dates_in_window = {
+        row["episode_date"] for row in episodes
+        if row["episode_date"] and row["episode_pid"] in bbc_pids_in_window
+    }
     audit = {
         "target_episode_details": target_episode_details,
-        "collector": "RadioFiles public JSON fallback",
+        "collector": "RadioFiles public JSON with official BBC inventory reconciliation",
         "show_id": args.show_id,
         "window_start": since.isoformat(),
         "window_end": until.isoformat(),
         "episode_list_endpoint": list_url,
         "episodes_returned_by_source": len(radiofiles_episodes),
+        "radiofiles_episode_pids_in_window": sorted(
+            str(item.get("pid") or "").strip()
+            for item in radiofiles_episodes
+            if isinstance(item, dict)
+            and str(item.get("pid") or "").strip()
+            and (dt := parse_episode_date(str(item.get("date") or "")))
+            and since <= dt <= until
+        ),
         "bbc_inventory_rows_considered": bbc_inventory_rows,
+        "bbc_only_episode_pids_in_window": sorted(bbc_pids_in_window),
+        "bbc_only_episode_count_in_window": len(bbc_pids_in_window),
+        "radiofiles_and_bbc_episode_date_union": sorted(radiofiles_dates_in_window | bbc_dates_in_window),
         "episode_discovery_sources": ["RadioFiles public episode listing"] + (["official BBC episode inventory"] if args.bbc_inventory else []),
         "earliest_episode_returned": earliest_returned.isoformat() if earliest_returned else "",
         "latest_episode_returned": latest_returned.isoformat() if latest_returned else "",
-        "episode_list_covers_requested_start_date": episode_list_covers_start,
+        "radiofiles_public_list_covers_requested_start_date": episode_list_covers_start,
         "episodes_in_window": len(episodes),
         "episodes_with_tracklists_reported": sum(r["has_tracklist"] == "true" for r in episodes),
         "episodes_with_count_and_metadata_validated_tracklists": verified_counts,
