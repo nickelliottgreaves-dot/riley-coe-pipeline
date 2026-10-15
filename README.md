@@ -6,7 +6,7 @@ Private repository for building an auditable, fail-closed weekly Riley & Coe art
 
 This repository contains a versioned artist pool, a mandatory venue registry, a fail-closed evidence validator, regression tests, and scheduled/manual collectors for official BBC Sounds episode pages, RadioFiles tracklist fallback, official venue page discovery, and bounded event-page inspection. BBC and RadioFiles tracklists are cross-checked before any new artist can be proposed for the pool. Episode rows are marked `complete` only when track counts and every position/title match across the official BBC embedded tracklist and RadioFiles, with artist credits compatible at each position (RadioFiles may store the primary artist while BBC lists a fuller collaboration credit); mismatches become `incomplete`, and episodes with no usable tracklist become `unavailable`. Exact-matched track rows are marked `verified_full_tracklist_match` in the review CSV, while mismatches remain review-only. The validator independently requires an `EXACT_FULL_TRACKLIST_MATCH` row for every episode marked complete; a manually edited status cell cannot satisfy the evidence gate. A `COMPLETE` claim also fails if any episode is incomplete, any mandatory venue is unchecked/partial, or any event row remains unverified. The assembler creates a dated `PARTIAL` evidence package and exports the requested CSV families.
 
-**Important limitation:** this is still not a complete weekly gig-research service. The collectors do not prove full tracklist or venue-calendar coverage, do not reliably extract all support acts, and do not complete independent safety-net searches. No run may be described as complete until the evidence is reviewed and the validator passes.
+**Important limitation:** the workflow is reproducible, but its output remains a candidate report until the bounded evidence checks are complete. A green Actions run means the collectors, tests and evidence assembly executed without integrity errors; it does not mean every venue calendar is exhaustive or every event is verified. The report remains `PARTIAL` whenever a venue reaches a crawl cap, a source is unavailable, or any event/tracklist needs review.
 
 ## What counts as a valid run
 
@@ -52,14 +52,18 @@ The matching engine is `scripts/match_event_artists.py`. Given an event CSV and 
 
 Do not approve an alias without a source/reason. Fuzzy candidates never become positive matches automatically.
 
-## What is still missing before a genuinely complete run
+## Finite implementation exit criteria
 
-- BBC Sounds coverage and a reliable saved last-successful-run cursor.
-- Position-by-position verification of each full BBC embedded tracklist against RadioFiles before artist promotion.
-- Calendar-aware event extraction, pagination/detail-page traversal, 14-day filtering, support-act extraction, prices/ticket status, and a regional safety-net search.
-- End-to-end creation of the dated run package and proof that all required outputs can be read back.
+This implementation phase has a fixed finish point. Stop making exploratory parser changes once **one full-sweep run on the latest branch head** satisfies all of these:
+1. Unit tests pass on that exact commit.
+2. BBC Sounds, RadioFiles, venue inventory, event discovery, event-page inspection, assembly and the evidence gate all finish without a data-integrity error.
+3. The run uploads a dated evidence artifact containing the episode cross-check, dated event candidates, all configured venue-coverage rows, pool comparisons and source audit files.
+4. Every row in the authoritative artist pool has exactly one explicit searched result; no missing row is interpreted as a negative result.
+5. The evidence gate reports the actual state honestly. It may exit successfully with status `PARTIAL`; it must not call the report `COMPLETE` while required venue coverage or event verification is missing.
 
-Until these stages exist and pass the evidence gate, the evidence report must remain `PARTIAL`. A structurally valid PARTIAL package exits successfully so the scheduled workflow can deliver its review artifacts; data-integrity errors still fail, and a `COMPLETE` claim remains blocked until every evidence gate passes.
+After those criteria pass, the workflow assembly milestone is done. Further changes require a concrete failing test or a documented missing source/venue, not another open-ended round of general improvements. Producing a genuinely `COMPLETE` gig report is a separate, bounded research deliverable for a specific 14-day window: it requires checking every mandatory venue's calendar/pagination, reviewing event title/date/room/billing/support/price/ticket status, resolving pool matches, and recording evidence for each result. If any source cannot be exhausted, publish `PARTIAL` with the gaps listed instead of looping indefinitely.
+
+The workflow currently compares official BBC embedded tracklists with RadioFiles by position, title and compatible artist credits, and only applies artist additions supported by exact full-list matches. Its latest authoritative pool has 833 names (747 baseline names retained plus 86 evidence-backed additions); 15 fuzzy collisions and three mismatched episodes remain review-only. The latest full sweep searched all 833 pool names against captured page text, but those text mentions are discovery hints, not verified gigs. Venue crawl caps and incomplete calendar coverage still keep the report `PARTIAL`. A structurally valid PARTIAL package exits successfully so Actions can deliver review artifacts; data-integrity errors still fail, and any `COMPLETE` claim remains blocked until every evidence gate passes.
 
 ## Event-candidate discovery milestone
 
