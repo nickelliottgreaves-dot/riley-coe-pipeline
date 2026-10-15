@@ -59,14 +59,14 @@ class PoolWindowEventMatchTests(unittest.TestCase):
             pool=d/"pool.csv"
             with pool.open("w",newline="",encoding="utf-8") as f:
                 w=csv.DictWriter(f,fieldnames=["artist"]);w.writeheader();w.writerow({"artist":"Fat White Family"})
-            event_url="https://www.songkick.com/concerts/43156793-fat-white-family-at-utilita-arena-newcastle"
-            calendar_url="https://www.songkick.com/venues/29167-utilita-arena-newcastle/calendar"
+            event_url="https://www.songkick.com/concerts/43156793-fat-white-family-at-cluny"
+            calendar_url="https://www.songkick.com/venues/17634-cluny/calendar"
             events=d/"events.csv"
             with events.open("w",newline="",encoding="utf-8") as f:
                 w=csv.DictWriter(f,fieldnames=["event_date","venue","event_title","artist","source_url","price","ticket_status","notes"])
                 w.writeheader()
-                w.writerow({"event_date":"2026-10-25","venue":"Utilita Arena Newcastle",
-                    "event_title":"Fat White Family @ Utilita Arena Newcastle","artist":"Fat White Family",
+                w.writerow({"event_date":"2026-10-25","venue":"The Cluny",
+                    "event_title":"Fat White Family @ The Cluny","artist":"Fat White Family",
                     "source_url":event_url,"notes":"Structured candidate."})
             inspected=d/"inspected.csv"
             with inspected.open("w",newline="",encoding="utf-8") as f:
