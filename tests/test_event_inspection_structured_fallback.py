@@ -185,7 +185,7 @@ class StructuredDataFallbackTests(unittest.TestCase):
                 for i in range(20):
                     w.writerow({
                         "venue": "The Cluny",
-                        "candidate_url": f"https://blocked.example/listing/act-{i}/",
+                        "candidate_url": f"https://blocked.example/gigs/act-{i}/",
                         "link_text": f"Act {i}",
                     })
             with sources.open("w", encoding="utf-8", newline="") as f:
