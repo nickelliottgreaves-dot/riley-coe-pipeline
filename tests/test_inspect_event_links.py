@@ -1,8 +1,15 @@
 import csv, json, subprocess, sys, tempfile, unittest
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
+sys.path.insert(0,str(ROOT/"scripts"))
+from inspect_event_links import is_calendar_navigation
 
 class EventPageCrawlerTests(unittest.TestCase):
+    def test_calendar_pagination_is_prioritized_over_detail_pages(self):
+        self.assertTrue(is_calendar_navigation("/gigs/page/2/", "Next"))
+        self.assertTrue(is_calendar_navigation("/events/?page=3", "3"))
+        self.assertFalse(is_calendar_navigation("/listing/ben-quad/", "Ben Quad"))
+
     def test_crawler_preserves_unverified_status_and_audit(self):
         with tempfile.TemporaryDirectory() as tmp:
             d=Path(tmp); links=d/"links.csv"
