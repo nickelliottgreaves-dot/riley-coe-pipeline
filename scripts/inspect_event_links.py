@@ -692,8 +692,8 @@ def allowed_source_scoped_url(source_url, target_url, venue):
     if not host.endswith("songkick.com"):
         return True
 
-    source_match = re.match(r"^/venues/(\\d+)(?:-|/|$)", source.path, re.I)
-    target_match = re.match(r"^/venues/(\\d+)(?:-|/|$)", target.path, re.I)
+    source_match = re.match(r"^/venues/(\d+)(?:-|/|$)", source.path, re.I)
+    target_match = re.match(r"^/venues/(\d+)(?:-|/|$)", target.path, re.I)
     if source_match and target_match and source_match.group(1) == target_match.group(1):
         return True
     if not target.path.casefold().startswith("/concerts/"):
