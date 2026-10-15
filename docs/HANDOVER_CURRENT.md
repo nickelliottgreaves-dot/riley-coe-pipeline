@@ -414,11 +414,17 @@ The gig-finder runner now ensures the failure ledger exists even if the inspecti
 
 Latest tests-only run [38741789201](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38741789201) passed: **138 tests**. This is code validation, not live acceptance of the new ledger.
 
-This handover commit intentionally triggers a fresh normal full sweep on the latest code. Check the artifact and confirm:
-1. `event_page_fetch_failures.csv` exists and has exactly as many rows as the summed `pages_failed` counts in `event_page_crawl_audit.csv`.
-2. Every failure row contains a URL and an error message; HTTP status is preserved when known.
-3. The report validator passes with the new ledger present.
-4. The 20-source / 847-artist coverage, seven candidate matches and zero out-of-scope rows remain stable.
-5. The report remains PARTIAL; do not imply the six partial venue sources are complete.
+Live acceptance run [38742152167](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38742152167) passed with the new failure ledger:
+- `event_page_fetch_failures.csv`: 24 rows; summed `pages_failed` in the venue crawl audit: 24.
+- Every failure row includes the URL and error message, and HTTP status is retained when known.
+- The validator passed; the report remained PARTIAL with 20 sources, 847 artist comparison rows, seven candidate matches, zero out-of-scope rows, and six partial sources.
 
-After this normal sweep, run one simulated-Cobalt failure against the same ledger implementation to verify failure handling. Do not merge to `main` or mark the research COMPLETE.
+Inspection of those 24 failures showed that three were same-host image files on The Globe's website. These are not HTML event pages and should not have been crawled or counted as failures. Added `is_non_html_asset_url` filtering for obvious image/video/audio/CSS/JS/font assets in both seed and discovered links. Added a regression test to ensure media URLs are skipped and do not appear in the failure ledger. The first test commit had a fixture quoting error; that was fixed. Latest test run [38742724507](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38742724507) passed: **139 tests**.
+
+This handover commit intentionally triggers a new normal full sweep. Verify that:
+1. The failure ledger still matches the crawl audit count exactly.
+2. The Globe's three media-asset failures have disappeared; other genuine failures remain explicitly listed.
+3. The 20-source / 847-artist coverage, seven candidate matches and zero out-of-scope rows remain stable.
+4. The report validator passes and the result remains PARTIAL.
+
+After that normal sweep, run one simulated-Cobalt failure against the current ledger implementation. Do not merge to `main` or mark the research COMPLETE.
