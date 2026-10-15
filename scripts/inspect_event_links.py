@@ -377,7 +377,7 @@ def extract_visible_listing_events(visible_text, default_venue="", start_date=No
     reporting_venues={re.sub(r"[^a-z0-9]+","",name.casefold()) for name in [
         "The Cluny","Cluny 2","Boiler Shop","Wylam Brewery","The Grove",
         "Glasshouse International Centre for Music","Sage One","Sage Two",
-        "Cumberland Arms","Cobalt Studios","The Lubber Fiend","Think Tank? NCL",
+        "Cumberland Arms","The Cumberland Arms","Cobalt Studios","The Lubber Fiend","Think Tank? NCL",
         "Newcastle University Students' Union","Little Buildings","O2 City Hall Newcastle",
         "Riverside Newcastle","ZEROX Newcastle","The Newgate Social","Head of Steam Newcastle"
     ]}
@@ -444,7 +444,7 @@ def extract_visible_listing_events(visible_text, default_venue="", start_date=No
             if dt and title:
                 title_parts=[part.strip() for part in re.split(r"\s+\+\s+",title) if part.strip()]
                 if title_parts:
-                    title_parts[0]=re.sub(r"(?i)^(?:generator\\s*&\\s*)?byker grave(?: presents?)?\\s*:\\s*","",title_parts[0]).strip()
+                    title_parts[0]=re.sub(r"(?i)^(?:generator\s*&\s*)?byker grave(?: presents?)?\s*:\s*","",title_parts[0]).strip()
                 price=""; availability="not_checked"
                 for extra in lines[i+1:min(len(lines),i+6)]:
                     if inline_date_title.match(extra) or date_pattern.search(extra): break
@@ -560,7 +560,8 @@ def extract_visible_listing_events(visible_text, default_venue="", start_date=No
             possible_key=re.sub(r"[^a-z0-9]+","",possible_venue.casefold())
             if possible_key in known_venues:
                 explicit_card_venue=possible_venue
-        date_title_venue=bool(next_line and explicit_card_venue)
+        next_key=next_line.casefold().rstrip(":").strip()
+        date_title_venue=bool(next_line and next_key not in categories and next_key not in generic and not is_page_furniture(next_line) and explicit_card_venue)
         category_first=bool(default_key and next_line.casefold().rstrip(":") in categories and i+2<len(lines))
         if date_title_venue:
             title=next_line.strip(" -–—:")
@@ -1099,7 +1100,7 @@ def main():
                                         return False
                                     if matched_candidates and all(has_complete_structured_match(candidate) for candidate in matched_candidates):
                                         continue
-                            elif (event_objects or visible_event_found) and not navigation:
+                            elif event_objects and not navigation:
                                 continue
                             elif not event_objects and not likely(href,txt):
                                 continue
