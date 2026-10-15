@@ -8,10 +8,16 @@ from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
-from verify_event_candidates import main
+from verify_event_candidates import main, report_venue
 
 
 class VerifyEventCandidatesTests(unittest.TestCase):
+    def test_cluny_rooms_are_consolidated_in_report_venue(self):
+        self.assertEqual(report_venue("The Cluny"), "The Cluny")
+        self.assertEqual(report_venue("Cluny 2"), "The Cluny")
+        self.assertEqual(report_venue("Cluny Two"), "The Cluny")
+        self.assertEqual(report_venue("Boiler Shop"), "Boiler Shop")
+
     def write_csv(self, path, fields, rows):
         with path.open("w", encoding="utf-8", newline="") as stream:
             writer = csv.DictWriter(stream, fieldnames=fields)
