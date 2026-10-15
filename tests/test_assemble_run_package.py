@@ -47,22 +47,26 @@ class EvidencePackageTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp)
             inspection=root/"inspection.csv"
-            fields=["venue","page_url","event_title","event_date","performer_names","price","currency","availability","event_jsonld_found","notes"]
+            fields=["venue","page_url","event_title","event_date","performer_names","price","currency","availability","event_jsonld_found","status","notes"]
             with inspection.open("w",newline="",encoding="utf-8") as f:
                 w=csv.DictWriter(f,fieldnames=fields); w.writeheader()
                 w.writerow({"venue":"The Cluny","page_url":"https://thecluny.com/gigs/example","event_title":"Example Live","event_date":"2026-10-20T19:00:00+01:00","performer_names":"Example Artist; Support Artist","price":"18.00","currency":"GBP","availability":"InStock","event_jsonld_found":"true","notes":"Structured candidate only"})
                 w.writerow({"venue":"The Cluny","page_url":"https://thecluny.com/gigs/unresolved","event_title":"Unresolved Live","event_date":"2026-10-21","performer_names":"","event_jsonld_found":"true","notes":"No performer metadata"})
                 w.writerow({"venue":"The Cluny","page_url":"https://thecluny.com/gigs/undated","event_title":"Undated Live","event_date":"","performer_names":"Undated Artist","event_jsonld_found":"true","notes":"No date metadata"})
+                w.writerow({"venue":"The Cluny","page_url":"https://thecluny.com/listing/visible-live","event_title":"Visible Live","event_date":"2026-10-22","performer_names":"Visible Artist; Visible Support","price":"18.00","currency":"GBP","availability":"not_checked","event_jsonld_found":"false","status":"visible_event_candidate_needs_review","notes":"Extracted from visible Date/Venue labels"})
             out=root/"run"
             subprocess.run([sys.executable,str(ROOT/"scripts/assemble_run_package.py"),
                 "--start","2026-10-13","--end","2026-10-26","--event-page-inspection",str(inspection),
                 "--out-dir",str(out)],check=True,capture_output=True,text=True)
             with (out/"events.csv").open(newline="",encoding="utf-8") as f:
                 events=list(csv.DictReader(f))
-            self.assertEqual({row["artist"] for row in events},{"Example Artist","Support Artist"})
+            self.assertEqual({row["artist"] for row in events},{"Example Artist","Support Artist","Visible Artist","Visible Support"})
             self.assertTrue(all(row["verified"]=="false" for row in events))
             self.assertTrue(all(row["artist_role"]=="performer_role_unverified" for row in events))
             self.assertTrue(all(row["price"]=="18.00 GBP" for row in events))
+            visible_rows=[row for row in events if row["discovery_method"]=="visible_event_text"]
+            self.assertEqual(len(visible_rows),2)
+            self.assertTrue(all("Visible event-text candidate" in row["notes"] for row in visible_rows))
             with (out/"unresolved_event_candidates.csv").open(newline="",encoding="utf-8") as f:
                 unresolved=list(csv.DictReader(f))
             self.assertEqual(len(unresolved),2)
