@@ -137,6 +137,37 @@ class EvidencePackageTests(unittest.TestCase):
             self.assertEqual(manifest["artist_pool_page_text_matches"],1)
             self.assertIs(manifest["artist_pool_compared_against_captured_pages"],False)
 
+    def test_full_pool_page_search_requires_every_artist_name(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp); search=root/"pool_search.csv"; out=root/"run"
+            with (ROOT/"data/artist_pool.csv").open(encoding="utf-8-sig",newline="") as f:
+                pool=list(csv.DictReader(f))
+            with search.open("w",newline="",encoding="utf-8") as f:
+                w=csv.DictWriter(f,fieldnames=["artist","searched","result","evidence_url","notes"]); w.writeheader()
+                for row in pool:
+                    w.writerow({"artist":row["artist"],"searched":"true","result":"not_found_in_collected_pages",
+                        "evidence_url":"https://venue.example/calendar","notes":"Bounded corpus search."})
+            subprocess.run([sys.executable,str(ROOT/"scripts/assemble_run_package.py"),
+                "--start","2026-10-15","--end","2026-10-28","--pool-venue-page-matches",str(search),"--out-dir",str(out)],
+                check=True,capture_output=True,text=True)
+            manifest=json.loads((out/"run_manifest.json").read_text())
+            self.assertIs(manifest["artist_pool_compared_against_captured_pages"],True)
+            self.assertEqual(manifest["artist_pool_page_search_completed"],len(pool))
+            # Removing a pool row makes the search incomplete even if all
+            # remaining rows are marked searched.
+            out2=root/"run-missing-row"
+            short= root/"pool_search_short.csv"
+            with short.open("w",newline="",encoding="utf-8") as f:
+                w=csv.DictWriter(f,fieldnames=["artist","searched","result","evidence_url","notes"]); w.writeheader()
+                for row in pool[:-1]:
+                    w.writerow({"artist":row["artist"],"searched":"true","result":"not_found_in_collected_pages",
+                        "evidence_url":"https://venue.example/calendar","notes":"Bounded corpus search."})
+            subprocess.run([sys.executable,str(ROOT/"scripts/assemble_run_package.py"),
+                "--start","2026-10-15","--end","2026-10-28","--pool-venue-page-matches",str(short),"--out-dir",str(out2)],
+                check=True,capture_output=True,text=True)
+            manifest2=json.loads((out2/"run_manifest.json").read_text())
+            self.assertIs(manifest2["artist_pool_compared_against_captured_pages"],False)
+
     def test_creates_partial_package_and_refuses_overwrite(self):
         with tempfile.TemporaryDirectory() as tmp:
             out=Path(tmp)/"run"
@@ -148,7 +179,9 @@ class EvidencePackageTests(unittest.TestCase):
             self.assertIs(manifest["venue_sweep_complete"],False)
             self.assertIs(manifest["artist_pool_compared"],False)
             self.assertIs(manifest["artist_pool_compared_against_captured_pages"],False)
-            self.assertEqual(manifest["artist_pool_page_search_rows"],833)
+            with (ROOT/"data/artist_pool.csv").open(encoding="utf-8-sig",newline="") as f:
+                expected_pool_rows=list(csv.DictReader(f))
+            self.assertEqual(manifest["artist_pool_page_search_rows"],len(expected_pool_rows))
             self.assertEqual(manifest["artist_pool_page_search_completed"],0)
             self.assertEqual(manifest["artist_pool_page_text_matches"],0)
             self.assertIs(manifest["all_event_sources_verified"],False)
