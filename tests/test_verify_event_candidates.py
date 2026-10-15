@@ -79,7 +79,7 @@ class VerifyEventCandidatesTests(unittest.TestCase):
                 {"venue": "The Lubber Fiend", "source_url": "https://www.thelubberfiend.com/venue",
                  "source_status": "configured_official_site"},
                 {"venue": "O2 City Hall Newcastle", "source_url": "https://www.academymusicgroup.com/o2cityhallnewcastle/events",
-                 "source_type": "configured_official_calendar"},
+                 "source_status": "configured_official_calendar"},
             ])
             self.write_csv(secondary, ["venue", "source_url", "source_status"], [
                 {"venue": "The Lubber Fiend", "source_url": "https://soundbitenortheast.com/newcastle-gigs/",
@@ -115,7 +115,7 @@ class VerifyEventCandidatesTests(unittest.TestCase):
             self.assertEqual(rows["Ye Gods"]["verification_status"], "candidate_needs_manual_review")
             summary = json.loads(out.with_suffix(".summary.json").read_text(encoding="utf-8"))
             self.assertEqual(summary["verified_events"], 2)
-            self.assertEqual(summary["unverified_candidate_match_rows"], 1)
+            self.assertEqual(summary["unverified_candidate_match_rows"], 2)
             self.assertEqual(summary["status"], "LIMITED")
 
 
@@ -150,11 +150,11 @@ class VerifyEventCandidatesTests(unittest.TestCase):
                 "performer_names": "The Wedding Present",
                 "notes": "Explicit regression seed page; parser coverage only.",
             }])
-            self.write_csv(primary, ["venue", "source_url", "source_type"], [{
+            self.write_csv(primary, ["venue", "source_url", "source_status"], [{
                 "venue": "Boiler Shop", "source_url": "https://venue.example/events",
-                "source_type": "configured_official_calendar",
+                "source_status": "configured_official_calendar",
             }])
-            self.write_csv(secondary, ["venue", "source_url", "source_type"], [])
+            self.write_csv(secondary, ["venue", "source_url", "source_status"], [])
             # The seeded event URL appears only as the source page for a
             # different candidate, not as a naturally discovered event URL.
             self.write_csv(natural, ["candidate_url", "source_page_url"], [{

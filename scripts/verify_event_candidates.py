@@ -257,9 +257,9 @@ def main() -> int:
     args.out.parent.mkdir(parents=True, exist_ok=True)
     fields = list(matches[0].keys()) if matches else [
         "artist_pool_name", "event_date", "venue", "event_title", "matched_performer",
-        "source_url", "source_kind", "match_basis", "candidate_status", "price", "ticket_status", "verified", "notes"
+        "source_url", "source_kind", "match_basis", "candidate_status", "price", "ticket_status", "notes"
     ]
-    fields += ["verification_status", "verified_event_title", "official_evidence_count", "independent_source_count", "evidence_urls", "verification_notes"]
+    fields = list(dict.fromkeys(fields + ["verified", "verification_status", "verified_event_title", "official_evidence_count", "independent_source_count", "evidence_urls", "verification_notes"]))
     with args.out.open("w", encoding="utf-8", newline="") as stream:
         writer = csv.DictWriter(stream, fieldnames=fields, extrasaction="ignore")
         writer.writeheader()
