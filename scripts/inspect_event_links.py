@@ -417,7 +417,9 @@ def extract_visible_listing_events(visible_text, default_venue=""):
             if venue_key not in known_venues:
                 continue
             j+=1
-        if (not title or title.casefold() in generic or len(title)>180
+        title_key=re.sub(r"[^a-z0-9]+","",title.casefold())
+        if (not title or title.casefold() in generic or title_key in known_venues
+                or title_key==default_key or len(title)>180
                 or re.fullmatch(r"(?i)\d{1,2}(?:[:.]\d{2})?\s*(?:am|pm)?(?:\s*(?:[-–—]|to)\s*\d{1,2}(?:[:.]\d{2})?\s*(?:am|pm)?)?",title.strip())
                 or re.match(r"(?i)^(?:age|doors|interval|timings?|what they say|the guardian|your visit|plan your journey|parking|eat and drink|access info|more info|take a listen|about)\b",title.strip())):
             continue
