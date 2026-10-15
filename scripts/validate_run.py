@@ -8,6 +8,7 @@ from __future__ import annotations
 import argparse, csv, json, sys
 from datetime import date, timedelta
 from pathlib import Path
+from urllib.parse import parse_qs, urlparse
 
 ROOT = Path(__file__).resolve().parents[1]
 REQUIRED_VENUES_FILE = ROOT / "config" / "required_venues.csv"
@@ -19,7 +20,7 @@ REQUIRED_FILES = {
     "regression_artist_checks.csv": ["artist", "searched", "result", "evidence_url", "notes"],
 }
 TRACKLIST_STATES = {"complete", "incomplete", "unavailable", "not_yet_checked"}
-VENUE_STATES = {"checked_events_found", "checked_no_relevant_events", "inaccessible", "not_checked"}
+VENUE_STATES = {"checked_events_found", "checked_no_relevant_events", "inaccessible", "not_checked", "partial"}
 
 def read_csv(path: Path, required: list[str], errors: list[str]) -> list[dict[str, str]]:
     if not path.exists():
@@ -40,6 +41,13 @@ def read_csv(path: Path, required: list[str], errors: list[str]) -> list[dict[st
 
 def truthy(value: str) -> bool:
     return (value or "").strip().lower() in {"true", "yes", "1", "y"}
+
+def episode_pid_from_url(value: str) -> str:
+    parsed=urlparse(value or "")
+    query=parse_qs(parsed.query)
+    if query.get("pid"):
+        return query["pid"][0].strip()
+    return parsed.path.rstrip("/").rsplit("/",1)[-1]
 
 def main() -> int:
     ap = argparse.ArgumentParser()
@@ -109,13 +117,35 @@ def main() -> int:
         if status not in TRACKLIST_STATES:
             errors.append(f"episodes.csv row {i}: invalid tracklist_status {status!r}")
         if status != "complete":
-            warnings.append(f"Episode row {i} is {status or 'blank'}; coverage cannot be complete")
+            message=f"Episode row {i} is {status or 'blank'}; coverage cannot be complete"
+            if manifest.get("claimed_status")=="COMPLETE":
+                errors.append(message)
+            else:
+                warnings.append(message)
         if status == "complete" and (not row.get("url", "").strip() or not row.get("source", "").strip()):
             errors.append(f"episodes.csv row {i}: complete episode lacks source and URL")
         try:
             date.fromisoformat(row.get("episode_date", ""))
         except ValueError:
             errors.append(f"episodes.csv row {i}: invalid episode_date")
+
+    # A row marked complete must be backed by the actual BBC–RadioFiles
+    # position/title/artist crosscheck, not just a manually edited status cell.
+    crosscheck_path=run_dir/"bbc_radiofiles_episode_crosscheck.csv"
+    complete_episode_rows=[(i,row) for i,row in enumerate(episodes,2)
+        if (row.get("tracklist_status") or "").strip().lower()=="complete"]
+    crosscheck_by_pid={}
+    if crosscheck_path.exists():
+        crosscheck_rows=read_csv(crosscheck_path,["episode_pid","crosscheck_status"],errors)
+        crosscheck_by_pid={row.get("episode_pid","").strip():row for row in crosscheck_rows if row.get("episode_pid","").strip()}
+    if complete_episode_rows and not crosscheck_path.exists():
+        errors.append("episodes.csv marks tracklists complete but bbc_radiofiles_episode_crosscheck.csv is missing")
+    else:
+        for row_number,row in complete_episode_rows:
+            pid=episode_pid_from_url(row.get("url",""))
+            crosscheck=crosscheck_by_pid.get(pid)
+            if not pid or not crosscheck or crosscheck.get("crosscheck_status")!="EXACT_FULL_TRACKLIST_MATCH":
+                errors.append(f"episodes.csv row {row_number}: complete status lacks an EXACT_FULL_TRACKLIST_MATCH crosscheck for PID {pid or '(missing)'}")
 
     venue_rows = tables.get("venue_coverage.csv", [])
     try:
@@ -137,7 +167,7 @@ def main() -> int:
                 errors.append(f"Mandatory venue missing from config/venue_sources.csv: {required_name}")
             elif not source.get("source_url", "").strip().startswith(("https://", "http://")):
                 errors.append(f"Mandatory venue has no verified source URL in venue_sources.csv: {required_name}")
-            elif source.get("source_status", "").strip() not in {"verified_official_calendar", "verified_official_site", "verified_official_social_listing"}:
+            elif source.get("source_status", "").strip() not in {"verified_official_calendar", "verified_official_site", "verified_official_social_listing", "verified_external_calendar"}:
                 errors.append(f"Mandatory venue source is not verified: {required_name}")
     except (OSError, csv.Error) as exc:
         errors.append(f"Cannot load config/venue_sources.csv: {exc}")
@@ -172,7 +202,13 @@ def main() -> int:
         if state not in VENUE_STATES:
             errors.append(f"Venue {venue}: invalid status {state!r}")
         if state in {"inaccessible", "not_checked"}:
-            warnings.append(f"Venue {venue} not fully checked (status={state})")
+            message=f"Venue {venue} not fully checked (status={state})"
+            if manifest.get("claimed_status")=="COMPLETE": errors.append(message)
+            else: warnings.append(message)
+        elif state == "partial":
+            message=f"Venue {venue} has bounded discovery evidence but calendar coverage is not certified"
+            if manifest.get("claimed_status")=="COMPLETE": errors.append(message)
+            else: warnings.append(message)
         if not row.get("source_url", "").strip():
             errors.append(f"Venue {venue}: missing evidence/source URL")
 
@@ -201,7 +237,9 @@ def main() -> int:
         if row.get("source_url", "").strip() and not row.get("source_url", "").strip().startswith(("https://", "http://")):
             errors.append(f"events.csv row {i}: source_url is not an HTTP(S) URL")
         if not truthy(row.get("verified", "")):
-            warnings.append(f"Event row {i} is not marked verified")
+            message=f"Event row {i} is not marked verified"
+            if manifest.get("claimed_status")=="COMPLETE": errors.append(message)
+            else: warnings.append(message)
         window_events.append(row)
 
     matches = tables.get("pool_matches.csv", [])
@@ -286,19 +324,33 @@ def main() -> int:
         errors.append("No episode coverage rows: cannot establish tracklist coverage")
     if not venue_rows:
         errors.append("No venue coverage rows: cannot establish venue-first sweep")
-    if manifest.get("episode_coverage_complete") is not True:
-        errors.append("Manifest episode_coverage_complete is not true")
-    if manifest.get("venue_sweep_complete") is not True:
-        errors.append("Manifest venue_sweep_complete is not true")
-    if manifest.get("artist_pool_compared") is not True:
-        errors.append("Manifest artist_pool_compared is not true")
-    if manifest.get("all_event_sources_verified") is not True:
-        errors.append("Manifest all_event_sources_verified is not true")
+    # A correctly assembled PARTIAL package is a successful collection run,
+    # not a successful research-completeness claim. Record missing coverage as
+    # warnings so weekly artifacts remain available; if the manifest claims
+    # COMPLETE, each missing gate is a hard validation error.
+    gate_flags=(
+        ("episode_coverage_complete","episode coverage"),
+        ("venue_sweep_complete","venue sweep"),
+        ("artist_pool_compared","artist-pool event comparison"),
+        ("all_event_sources_verified","event-source verification"),
+    )
+    for flag,label in gate_flags:
+        if manifest.get(flag) is not True:
+            message=f"Manifest {flag} is not true"
+            if manifest.get("claimed_status")=="COMPLETE":
+                errors.append(message)
+            else:
+                warnings.append(f"{message}; {label} remains partial and cannot be reported COMPLETE")
 
     # Any inaccessible/not-checked mandatory venue blocks COMPLETE even if a user
     # has accidentally set the manifest booleans to true.
-    if any((venue_map.get(norm_venue(v), {}).get("status", "").strip().lower() in {"inaccessible", "not_checked"}) for v in required_venues):
-        errors.append("At least one mandatory venue was inaccessible or not checked")
+    unchecked_venues=[v for v in required_venues if venue_map.get(norm_venue(v), {}).get("status", "").strip().lower() in {"inaccessible", "not_checked"}]
+    if unchecked_venues:
+        message="At least one mandatory venue was inaccessible or not checked: "+", ".join(unchecked_venues)
+        if manifest.get("claimed_status")=="COMPLETE":
+            errors.append(message)
+        else:
+            warnings.append(message+"; this run remains PARTIAL")
 
     status = "FAILED" if errors else ("PARTIAL" if warnings else "COMPLETE")
     report = {
@@ -315,7 +367,11 @@ def main() -> int:
     print(json.dumps(report, indent=2))
     if run_dir.exists():
         (run_dir / "validation_report.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
-    return 0 if status == "COMPLETE" else 1
+    # Exit successfully for a structurally valid PARTIAL package. This keeps
+    # the scheduled evidence collection usable while the report remains explicit
+    # that it is not complete. Structural/data-integrity errors still fail, and
+    # any false gate under a claimed COMPLETE manifest is an error above.
+    return 1 if status == "FAILED" else 0
 
 if __name__ == "__main__":
     sys.exit(main())

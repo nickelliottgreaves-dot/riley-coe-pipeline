@@ -1,0 +1,17 @@
+{
+  "generated_on": "2026-10-15",
+  "source_workflow_run": 38693528645,
+  "baseline_pool_rows": 747,
+  "exact_full_tracklist_episodes": 8,
+  "episodes_with_mismatches_held_for_review": 3,
+  "bbc_embedded_track_rows": 282,
+  "radiofiles_track_rows": 263,
+  "verified_new_artists_applied": 86,
+  "fuzzy_candidates_held_for_manual_review": 15,
+  "updated_pool_rows": 833,
+  "baseline_backup": "data/artist_pool_backup_20261015.csv",
+  "additions_file": "data/artist_pool_additions_20261015.csv",
+  "ambiguous_review_file": "data/artist_pool_ambiguous_review_20261015.csv",
+  "independent_verification": "PASS: 747 baseline rows preserved; 833 proposed names unique; all 86 additions have BBC and RadioFiles URLs; 15 fuzzy collisions excluded.",
+  "pool_update": "Applied only candidates from 8 exact position-by-position BBC/RadioFiles full-tracklist matches; mismatched episodes and fuzzy collisions were not promoted."
+}

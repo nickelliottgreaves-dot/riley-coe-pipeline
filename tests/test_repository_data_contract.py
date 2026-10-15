@@ -19,9 +19,14 @@ class RepositoryDataContractTests(unittest.TestCase):
     def test_artist_pool_has_expected_size_and_unique_normalized_names(self):
         rows = read_csv(ROOT / "data/artist_pool.csv")
         names = [row["artist"].strip().casefold() for row in rows]
-        self.assertEqual(len(rows), 747, "Seed pool size changed; review and document before updating the contract")
+        self.assertGreaterEqual(len(rows), 747, "Artist pool unexpectedly shrank below the preserved baseline")
         self.assertEqual(len(names), len(set(names)), "Artist pool contains duplicate normalized names")
         self.assertTrue(all(row["artist"].strip() and row["status"].strip() for row in rows))
+        backup_path = ROOT / "data/artist_pool_backup_20261015.csv"
+        if backup_path.exists():
+            backup = read_csv(backup_path)
+            backup_names = {row["artist"].strip().casefold() for row in backup}
+            self.assertTrue(backup_names.issubset(set(names)), "Updated pool dropped names from the preserved 747-row baseline")
 
     def test_required_venues_and_safety_net_sources_are_registered(self):
         required = read_csv(ROOT / "config/required_venues.csv")
@@ -30,7 +35,7 @@ class RepositoryDataContractTests(unittest.TestCase):
             for row in required
             if row["mandatory"].strip().casefold() == "true"
         }
-        self.assertEqual(len(mandatory), 16, "Mandatory venue sweep changed; review coverage requirements")
+        self.assertEqual(len(mandatory), 20, "Mandatory venue sweep changed; review coverage requirements")
 
         sources = read_csv(ROOT / "config/venue_sources.csv")
         configured = {normalize_venue(row["venue"]) for row in sources}

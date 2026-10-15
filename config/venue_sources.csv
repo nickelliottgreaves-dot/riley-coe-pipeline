@@ -1,21 +1,21 @@
 venue,source_url,source_status,notes
-The Cluny,https://thecluny.com/gigs/,verified_official_calendar,Official Gigs calendar; inspect all pages and both rooms
-Cluny 2,https://thecluny.com/gigs/,verified_official_calendar,Same official calendar; identify room separately
+The Cluny,https://www.songkick.com/venues/17634-cluny/calendar,verified_external_calendar,Venue-specific Songkick safety-net calendar because the official site returned empty HTTP 202 responses to the crawler; official site still needs manual cross-check for non-concert listings
+Cluny 2,https://www.songkick.com/venues/454131-cluny-2/calendar,verified_external_calendar,Separate venue-specific Songkick safety-net calendar because the official site returned empty HTTP 202 responses to the crawler; official site still needs manual cross-check
 Boiler Shop,https://www.boilershop.net/,verified_official_calendar,Official calendar on homepage; follow View Full Calendar and pagination
 Wylam Brewery,https://www.wylambrewery.co.uk/events/,verified_official_calendar,Official What's On calendar
-The Grove,https://www.thegrovenewcastle.co.uk/,verified_official_site,Follow Events navigation and inspect the full calendar
+The Grove,https://thegrovenewcastle.gigantic.com/promoter/the-grove-newcastle-ltd?view=grid,verified_official_calendar,Venue-specific promoter ticket calendar; use this event feed because the venue homepage exposed no parseable event cards
 Glasshouse International Centre for Music,https://theglasshouseicm.org/whats-on/,verified_official_calendar,Check all result pages and date filters
 Sage Two,https://theglasshouseicm.org/whats-on/,verified_official_calendar,Same official calendar; record Sage Two room separately
-Cumberland Arms,https://www.thecumberlandarms.co.uk/,verified_official_site,Follow Live Events navigation; verify full listing
+Cumberland Arms,https://www.thecumberlandarms.co.uk/events/,verified_official_calendar,Direct official live music and events calendar
 Cobalt Studios,https://cobaltstudios.co.uk/,verified_official_site,Official site; find current events page and seasonal schedule
 NX Newcastle,https://www.nxnewcastle.com/whats-on/live-events/,verified_official_calendar,Official live events listing
 Think Tank,https://www.thinktankncl.co.uk/shows/,verified_official_calendar,Official Think Tank? NCL shows listing
 O2 City Hall Newcastle,https://www.academymusicgroup.com/o2cityhallnewcastle/events,verified_official_calendar,Official Academy Music Group event calendar
 Central Gateshead / Central Bar,https://linktr.ee/central.bar,verified_official_social_listing,Official venue Linktree with upcoming listings; verify individual event links
 Gosforth Civic Theatre,https://www.gosforthcivictheatre.co.uk/whats-on,verified_official_calendar,Official What's On calendar
-Newcastle University / Students' Union,https://nusu.co.uk/,verified_official_site,Follow official events calendar; also check university venue listings
-Lubber Fiend,https://www.thelubberfiend.com/venue,verified_official_site,Official venue page; locate full events listing
+Newcastle University / Students' Union,https://nusu.co.uk/whatson/calendar,verified_official_calendar,Direct official What's On calendar; JavaScript-rendered event results may require a secondary source
+Lubber Fiend,https://www.skiddle.com/whats-on/Newcastle-on-Tyne/The-Lubber-Fiend/,verified_external_calendar,"Venue-specific Skiddle calendar used as a safety net because the official venue page yielded no parseable dated event links. The currently indexed listing has no clearly in-window event; do not infer an empty calendar. Original official venue page for manual cross-check: https://www.thelubberfiend.com/venue. Previous note: Official venue page; locate full events listing."
 The Globe,https://theglobenewcastle.bar/whats-on/,verified_official_calendar,Safety-net grassroots live-music venue; check dated listings and ticket links
-Little Buildings,https://www.littlebuildingslive.com/,verified_official_site,Safety-net grassroots live-music venue; inspect current What's On listings and linked ticket pages
-Utilita Arena Newcastle,https://www.utilitaarena.co.uk/events,verified_official_calendar,Safety-net for major touring acts and arena support bills
-ZEROX Newcastle,https://www.zeroxbar.com/,verified_official_site,Safety-net alternative live-music venue; inspect official event and ticket links
+Little Buildings,https://www.skiddle.com/whats-on/Newcastle-on-Tyne/Little-Buildings-Venue-And-Rehearsal-Rooms-/,verified_external_calendar,"Venue-specific Skiddle calendar used as a safety net because the official homepage yielded no parseable dated event links. Its indexed event appears stale/out of the reporting window, so manual cross-check is still required. Original official venue site: https://www.littlebuildingslive.com/. Previous note: Safety-net grassroots live-music venue; inspect current What's On listings and linked ticket pages."
+Utilita Arena Newcastle,https://www.songkick.com/venues/29167-utilita-arena-newcastle/calendar,verified_external_calendar,"Venue-specific Songkick calendar safety net for Newcastle Arena. Ticketmaster venue calendar returned HTTP 403 to the crawler; original official events calendar for manual cross-check: https://www.utilitaarena.co.uk/events. Ticketmaster alternate calendar: https://www.ticketmaster.co.uk/utilita-arena-newcastle-tickets-newcastle-upon-tyne/venue/254510?page=1. Check pagination and avoid duplicate premium-package entries."
+ZEROX Newcastle,https://www.skiddle.com/whats-on/Newcastle-on-Tyne/Zerox--Newcastle/,verified_external_calendar,"Venue-specific Skiddle calendar used as a safety net because the official site yielded no parseable dated event links. Original official venue site for manual cross-check: https://www.zeroxbar.com/. Previous note: Safety-net alternative live-music venue; inspect official event and ticket links."

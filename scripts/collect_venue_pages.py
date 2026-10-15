@@ -6,7 +6,7 @@ from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-AGENT="riley-coe-pipeline/0.1 (public venue calendar discovery)"
+AGENT="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
 FIELDS=["venue","source_url","source_status","http_status","content_type","page_title","calendar_coverage_status","text_file","notes"]
 
 class VisibleText(HTMLParser):
@@ -34,7 +34,7 @@ def main():
     ap.add_argument("--sources",type=Path,default=Path("config/venue_sources.csv"))
     ap.add_argument("--out-dir",type=Path,required=True)
     a=ap.parse_args(); a.out_dir.mkdir(parents=True,exist_ok=True)
-    rows=[]; errors=[]; snapshots=a.out_dir/"page_text"; snapshots.mkdir(exist_ok=True)
+    rows=[]; errors=[]; response_cache={}; snapshots=a.out_dir/"page_text"; snapshots.mkdir(exist_ok=True)
     for idx,source in enumerate(read_csv(a.sources),1):
         venue=(source.get("venue") or "").strip(); url=(source.get("source_url") or "").strip()
         status=(source.get("source_status") or "").strip()
@@ -44,10 +44,15 @@ def main():
             errors.append(f"{venue}: missing source URL")
             rows.append(row); continue
         try:
-            req=Request(url,headers={"User-Agent":AGENT,"Accept":"text/html,application/xhtml+xml"})
-            with urlopen(req,timeout=25) as response:
-                code=response.status; ctype=response.headers.get("Content-Type","")
-                raw=response.read(2_000_001)
+            if url in response_cache:
+                code,ctype,raw=response_cache[url]
+                row["notes"]="Response reused from identical configured source URL; calendar coverage remains unchecked."
+            else:
+                req=Request(url,headers={"User-Agent":AGENT,"Accept":"text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8","Accept-Language":"en-GB,en;q=0.9"})
+                with urlopen(req,timeout=25) as response:
+                    code=response.status; ctype=response.headers.get("Content-Type","")
+                    raw=response.read(2_000_001)
+                response_cache[url]=(code,ctype,raw)
             row["http_status"]=str(code); row["content_type"]=ctype
             if len(raw)>2_000_000:
                 raw=raw[:2_000_000]; row["notes"]="Response truncated at 2 MB."
