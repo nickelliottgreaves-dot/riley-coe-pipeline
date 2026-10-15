@@ -14,7 +14,7 @@ from concurrent.futures import ThreadPoolExecutor
 from html.parser import HTMLParser
 from pathlib import Path
 from urllib.error import HTTPError,URLError
-from urllib.parse import urljoin,urlparse
+from urllib.parse import parse_qs,urljoin,urlparse
 from urllib.request import Request,urlopen
 
 UA="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
@@ -201,7 +201,7 @@ def likely(href,text):
 
 def _pagination_number(url):
     parsed=urlparse(url)
-    query=dict((k.casefold(),v) for k,v in __import__("urllib.parse",fromlist=["parse_qs"]).parse_qs(parsed.query).items())
+    query=dict((k.casefold(),v) for k,v in parse_qs(parsed.query).items())
     for key in ("page","paged","p","currentpage","pagenumber"):
         if key in query and query[key]:
             try: return int(query[key][0])
