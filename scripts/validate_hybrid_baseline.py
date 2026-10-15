@@ -11,6 +11,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 POOL = ROOT / "data" / "artist_pool.csv"
 VENUES = ROOT / "config" / "definitive_venues.csv"
+SOURCES = ROOT / "config" / "hybrid_venue_sources.csv"
 FIXTURES = ROOT / "tests" / "fixtures" / "known_gig_regressions.csv"
 
 EXPECTED_VENUES = {
@@ -53,7 +54,7 @@ def norm(value: str) -> str:
 
 def main() -> int:
     problems: list[str] = []
-    for path in (POOL, VENUES, FIXTURES):
+    for path in (POOL, VENUES, SOURCES, FIXTURES):
         if not path.is_file():
             problems.append(f"Required file missing: {path.relative_to(ROOT)}")
     if problems:
@@ -62,6 +63,7 @@ def main() -> int:
 
     pool_rows = read_csv(POOL)
     venue_rows = read_csv(VENUES)
+    source_rows = read_csv(SOURCES)
     fixture_rows = read_csv(FIXTURES)
 
     pool_names = {norm(row.get("artist", "")) for row in pool_rows if row.get("artist", "").strip()}
@@ -76,6 +78,13 @@ def main() -> int:
         problems.append(f"Artist pool has {len(pool_rows)} rows; expected at least the 833-row baseline.")
     if len(venue_rows) != 18 or venue_set != EXPECTED_VENUES or len(venue_set) != len(venue_rows):
         problems.append(f"Venue registry mismatch: {len(venue_rows)} rows, {len(venue_set)} unique names.")
+    source_names = [row.get("venue", "").strip() for row in source_rows]
+    source_set = set(source_names)
+    if len(source_rows) != 18 or source_set != EXPECTED_VENUES or len(source_set) != len(source_rows):
+        problems.append(f"Compatible source registry mismatch: {len(source_rows)} rows, {len(source_set)} unique names.")
+    invalid_sources = [row.get("venue", "") for row in source_rows if not row.get("source_url", "").strip().startswith(("https://", "http://"))]
+    if invalid_sources:
+        problems.append("Invalid/missing HTTP(S) source URLs: " + ", ".join(invalid_sources))
     if len(fixture_rows) != 5 or fixture_keys != EXPECTED_FIXTURES:
         problems.append(f"Known-gig regression fixture mismatch: {len(fixture_rows)} rows.")
     missing_artists = sorted(
@@ -91,6 +100,7 @@ def main() -> int:
         "status": "PASS" if not problems else "FAIL",
         "artist_pool_rows": len(pool_rows),
         "venue_rows": len(venue_rows),
+        "compatible_source_rows": len(source_rows),
         "known_gig_fixtures": len(fixture_rows),
         "known_fixture_performers_in_pool": len(EXPECTED_FIXTURES) - len(missing_artists),
         "problems": problems,
