@@ -6,7 +6,7 @@ verified events or marks the run complete. Existing output directories are not
 overwritten to protect prior evidence.
 """
 from __future__ import annotations
-import argparse, csv, json, subprocess, sys, shutil
+import argparse, csv, json, subprocess, sys, shutil, re, unicodedata
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -27,6 +27,11 @@ def read_csv(path, fields):
         if not reader.fieldnames or not set(fields).issubset(reader.fieldnames):
             raise ValueError(f"{path}: missing expected columns {fields}")
         return list(reader)
+
+def normalize_artist(value):
+    value=unicodedata.normalize("NFKD",(value or "").casefold())
+    value="".join(ch for ch in value if not unicodedata.combining(ch))
+    return " ".join(re.findall(r"[a-z0-9]+",value))
 
 def write_csv(path, fields, data):
     with path.open("w",encoding="utf-8",newline="") as f:
@@ -331,6 +336,10 @@ def main():
     write_csv(out/"artist_pool_venue_page_matches.csv",REGRESSION_FIELDS,pool_page_rows)
     pool_page_search_completed=sum(1 for row in pool_page_rows if str(row.get("searched","")).casefold()=="true")
     pool_page_match_count=sum(1 for row in pool_page_rows if row.get("result")=="found_in_collected_pages")
+    expected_pool_names={normalize_artist(row.get("artist","")) for row in pool_seed if normalize_artist(row.get("artist",""))}
+    searched_pool_names={normalize_artist(row.get("artist","")) for row in pool_page_rows if str(row.get("searched","")).casefold()=="true" and normalize_artist(row.get("artist",""))}
+    pool_page_search_complete=(len(pool_page_rows)==len(pool_seed) and pool_page_search_completed==len(pool_seed)
+        and searched_pool_names==expected_pool_names)
     write_csv(out/"pool_matches.csv",MATCH_FIELDS,[])
     # Run matcher to ensure every candidate artist has a corresponding pool comparison.
     subprocess.run([sys.executable,str(ROOT/"scripts/match_event_artists.py"),"--events",str(out/"events.csv"),"--pool",str(args.pool),"--aliases",str(ROOT/"config/artist_aliases.csv"),"--out",str(out/"pool_matches.csv")],check=True)
@@ -366,7 +375,7 @@ def main():
     missing_inputs=[r["input_name"] for r in input_audit if r["status"] in {"missing","not_supplied"}]
     manifest={"run_date":date.today().isoformat(),"window_start":start.isoformat(),"window_end":end.isoformat(),
               "previous_successful_run":args.previous_successful_run,"claimed_status":"PARTIAL",
-              "episode_coverage_complete":False,"venue_sweep_complete":False,"artist_pool_compared":False,"artist_pool_compared_against_captured_pages":pool_page_search_completed==len(pool_seed),"all_event_sources_verified":False,
+              "episode_coverage_complete":False,"venue_sweep_complete":False,"artist_pool_compared":False,"artist_pool_compared_against_captured_pages":pool_page_search_complete,"all_event_sources_verified":False,
               "researcher_notes":"Automatically assembled evidence scaffold. Regression artists were searched in the captured page corpus; negative results are bounded to those snapshots. BBC/RadioFiles tracklist mismatches, event detail pages, supports, prices/ticket status, full venue coverage and safety-net searches still require verification.",
               "package_kind":"candidate_scaffold","source_episode_rows":len(episode_rows),"candidate_event_rows":len(events),"unresolved_event_candidates":len(unresolved),
               "mandatory_venue_rows":len(venue_rows),"venue_calendar_checks_completed":0,"regression_artists_seeded":len(regression_rows),"regression_artist_checks_completed":regression_completed,"artist_pool_page_search_rows":len(pool_page_rows),"artist_pool_page_search_completed":pool_page_search_completed,"artist_pool_page_text_matches":pool_page_match_count,
