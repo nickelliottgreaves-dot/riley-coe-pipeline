@@ -1,4 +1,5 @@
-import csv, json, sys, tempfile, unittest\nfrom unittest.mock import patch
+import csv, json, sys, tempfile, unittest
+from unittest.mock import patch
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 from discover_event_candidates import event_objects, date_part, likely_event_link, PageParser, main
