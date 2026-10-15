@@ -109,5 +109,64 @@ class VerifyEventCandidatesTests(unittest.TestCase):
             self.assertEqual(summary["status"], "LIMITED")
 
 
+    def test_listing_source_url_does_not_verify_an_explicit_seed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            matches = root / "matches.csv"
+            events = root / "events.csv"
+            inspected = root / "inspected.csv"
+            primary = root / "primary.csv"
+            secondary = root / "secondary.csv"
+            natural = root / "natural.csv"
+            out = root / "verified.csv"
+            seeded_url = "https://venue.example/events/the-wedding-present"
+
+            self.write_csv(matches, [
+                "artist_pool_name", "event_date", "venue", "event_title", "matched_performer",
+                "source_url", "notes",
+            ], [{
+                "artist_pool_name": "The Wedding Present", "event_date": "2026-10-23",
+                "venue": "Boiler Shop", "event_title": "The Wedding Present",
+                "matched_performer": "The Wedding Present",
+            }])
+            self.write_csv(events, [
+                "event_date", "venue", "event_title", "artist", "source_url", "notes",
+            ], [])
+            self.write_csv(inspected, [
+                "venue", "page_url", "event_title", "event_date", "performer_names", "notes",
+            ], [{
+                "venue": "Boiler Shop", "page_url": seeded_url,
+                "event_title": "The Wedding Present", "event_date": "2026-10-23",
+                "performer_names": "The Wedding Present",
+                "notes": "Explicit regression seed page; parser coverage only.",
+            }])
+            self.write_csv(primary, ["venue", "source_url", "source_type"], [{
+                "venue": "Boiler Shop", "source_url": "https://venue.example/events",
+                "source_type": "configured_official_calendar",
+            }])
+            self.write_csv(secondary, ["venue", "source_url", "source_type"], [])
+            # The seeded event URL appears only as the source page for a
+            # different candidate, not as a naturally discovered event URL.
+            self.write_csv(natural, ["candidate_url", "source_page_url"], [{
+                "candidate_url": "https://venue.example/events/another-act",
+                "source_page_url": seeded_url,
+            }])
+
+            with patch("sys.argv", [
+                "verify_event_candidates.py", "--matches", str(matches), "--events", str(events),
+                "--inspected", str(inspected), "--primary-sources", str(primary),
+                "--secondary-sources", str(secondary), "--natural-links", str(natural),
+                "--out", str(out),
+            ]):
+                self.assertEqual(main(), 0)
+
+            with out.open(encoding="utf-8", newline="") as stream:
+                row = next(csv.DictReader(stream))
+            self.assertEqual(row["verification_status"], "candidate_needs_manual_review")
+            self.assertEqual(row["verified"], "false")
+            summary = json.loads(out.with_suffix(".summary.json").read_text(encoding="utf-8"))
+            self.assertEqual(summary["verified_events"], 0)
+
+
 if __name__ == "__main__":
     unittest.main()
