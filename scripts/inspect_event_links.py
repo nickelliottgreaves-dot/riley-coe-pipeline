@@ -11,6 +11,7 @@ import argparse,csv,json,re,time,hashlib
 from datetime import date,datetime,timedelta
 from collections import deque,defaultdict
 from concurrent.futures import ThreadPoolExecutor
+from html import unescape
 from html.parser import HTMLParser
 from pathlib import Path
 from urllib.error import HTTPError,URLError
@@ -87,7 +88,7 @@ def objects(obj):
 def clean(v):
     if isinstance(v,dict): return str(v.get("name") or v.get("url") or "")
     if isinstance(v,list): return "; ".join(x for x in (clean(i) for i in v) if x)
-    return str(v or "").strip()
+    return unescape(str(v or "").strip())
 
 def extract_visible_event(page_title, visible_text):
     """Extract review-only event candidates from common visible event-detail layouts."""
@@ -121,8 +122,10 @@ def extract_visible_event(page_title, visible_text):
     generic_titles={"gigs","events","what's on","whats on","home","more info","limited availability",
                     "limited tickets","tickets","buy tickets","book tickets","book now","event details",
                     "details","view details","view event","find out more","read more","on sale","on sale now",
-                    "sold out","coming soon","available now","advance tickets"}
-    if not title or title.casefold() in generic_titles:
+                    "sold out","coming soon","available now","advance tickets","access info",
+                    "access information","venue information","plan your visit"}
+    if (not title or title.casefold() in generic_titles
+            or re.fullmatch(r"(?i)\d{1,2}:\d{2}\s*(?:am|pm)?",title.strip())):
         return None
     supports=[]
     support_mode=False
