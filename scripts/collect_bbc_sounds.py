@@ -17,7 +17,7 @@ from urllib.request import Request,urlopen
 
 ROOT_URL="https://www.bbc.co.uk"
 SERIES_URL="https://www.bbc.co.uk/programmes/m001mf2c/episodes"
-UA="riley-coe-pipeline/0.3 (BBC Sounds episode inventory)"
+UA="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
 EP_FIELDS=["episode_date","episode_title","episode_url","listing_source_url","page_fetch_status","visible_tracklist_heading_detected","tracklist_status","notes"]
 LINK_FIELDS=["episode_url","episode_title","episode_date","source_url","tracklist_status","candidate_artists","snapshot_file","notes"]
 TRACK_FIELDS=["episode_date","episode_title","episode_url","track_title","artist_candidate","extraction_method","review_status","evidence_text","notes"]
@@ -48,7 +48,7 @@ class TextParser(HTMLParser):
             if self._a is not None: self._a["text"].append(clean)
 
 def fetch(url):
-    req=Request(url,headers={"User-Agent":UA,"Accept":"text/html,application/xhtml+xml"})
+    req=Request(url,headers={"User-Agent":UA,"Accept":"text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8","Accept-Language":"en-GB,en;q=0.9"})
     with urlopen(req,timeout=25) as r:
         ctype=r.headers.get("Content-Type","")
         raw=r.read(4_000_001)
