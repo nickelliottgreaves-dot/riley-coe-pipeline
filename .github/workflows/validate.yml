@@ -69,7 +69,7 @@ jobs:
           PY
 
   bbc-sounds-inventory:
-    if: github.ref_name != 'redesign/workflow-contract' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[full-sweep]')))
+    if: github.ref_name == 'rebuild/core-gig-finder' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[full-sweep]')))
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -92,7 +92,7 @@ jobs:
           retention-days: 30
 
   radiofiles-inventory:
-    if: always() && github.ref_name != 'redesign/workflow-contract' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[full-sweep]')))
+    if: always() && github.ref_name == 'rebuild/core-gig-finder' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[full-sweep]')))
     needs: [bbc-sounds-inventory]
     runs-on: ubuntu-latest
     steps:
@@ -154,7 +154,7 @@ jobs:
           retention-days: 30
 
   venue-page-inventory:
-    if: github.ref_name != 'redesign/workflow-contract' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[full-sweep]')))
+    if: github.ref_name == 'rebuild/core-gig-finder' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[full-sweep]')))
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -173,7 +173,7 @@ jobs:
           retention-days: 30
 
   independent-gig-finder:
-    if: github.ref_name == 'redesign/workflow-contract' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[full-sweep]')))
+    if: (github.ref_name == 'redesign/workflow-contract' || github.ref_name == 'main') && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[full-sweep]')))
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -205,7 +205,7 @@ jobs:
           retention-days: 30
 
   independent-artist-pool-updater:
-    if: github.ref_name == 'redesign/workflow-contract' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[full-sweep]')))
+    if: (github.ref_name == 'redesign/workflow-contract' || github.ref_name == 'main') && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[full-sweep]')))
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -233,7 +233,7 @@ jobs:
           retention-days: 30
 
   scheduled-evidence-gate:
-    if: always() && github.ref_name != 'redesign/workflow-contract' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[full-sweep]')))
+    if: always() && github.ref_name == 'rebuild/core-gig-finder' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[full-sweep]')))
     needs: [assemble-evidence-scaffold]
     runs-on: ubuntu-latest
     steps:
@@ -250,7 +250,7 @@ jobs:
         run: python scripts/validate_run.py --run-dir artifacts/evidence-package --pool data/artist_pool.csv
 
   event-candidate-discovery:
-    if: github.ref_name != 'redesign/workflow-contract' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[full-sweep]')))
+    if: github.ref_name == 'rebuild/core-gig-finder' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[full-sweep]')))
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -274,7 +274,7 @@ jobs:
           retention-days: 30
 
   event-page-inspection:
-    if: always() && github.ref_name != 'redesign/workflow-contract' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[full-sweep]')))
+    if: always() && github.ref_name == 'rebuild/core-gig-finder' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[full-sweep]')))
     needs: [event-candidate-discovery]
     runs-on: ubuntu-latest
     steps:
@@ -302,7 +302,7 @@ jobs:
           retention-days: 30
 
   assemble-evidence-scaffold:
-    if: always() && github.ref_name != 'redesign/workflow-contract' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[full-sweep]')))
+    if: always() && github.ref_name == 'rebuild/core-gig-finder' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[full-sweep]')))
     needs: [bbc-sounds-inventory, radiofiles-inventory, venue-page-inventory, event-candidate-discovery, event-page-inspection]
     runs-on: ubuntu-latest
     steps:
