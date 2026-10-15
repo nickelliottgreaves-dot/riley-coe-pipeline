@@ -11,6 +11,8 @@ from datetime import date
 from pathlib import Path
 from urllib.parse import parse_qs,urlparse
 
+ROOT=Path(__file__).resolve().parents[1]
+
 def norm(value: str) -> str:
     value=unicodedata.normalize("NFKD",str(value or "")).casefold()
     value="".join(ch for ch in value if not unicodedata.combining(ch))
@@ -25,6 +27,46 @@ def in_window(value: str, start: date, end: date) -> bool:
     try: d=date.fromisoformat((value or "").strip()[:10])
     except ValueError: return False
     return start <= d <= end
+
+def resolve_explicit_venue(title: str, assigned_venue: str, venue_map: dict[str, str]) -> tuple[str, bool, str]:
+    """Honor an explicit '@ Venue' suffix instead of trusting crawl-root labels."""
+    match = re.search(r"\s+@\s+(.+?)\s*$", (title or "").strip())
+    if not match:
+        return assigned_venue, True, ""
+    location = match.group(1).strip(" .,:;")
+    canonical = venue_map.get(norm(location))
+    if not canonical:
+        return assigned_venue, False, location
+    return canonical, True, location
+
+
+def load_venue_map() -> dict[str, str]:
+    """Load configured venues and a small set of common display aliases."""
+    venue_map = {}
+    path = ROOT / "config" / "venue_sources.csv"
+    if path.exists():
+        for row in read_csv(path):
+            venue = (row.get("venue") or "").strip()
+            if venue:
+                venue_map[norm(venue)] = venue
+    aliases = {
+        "Cluny": "The Cluny",
+        "O2 City Hall": "O2 City Hall Newcastle",
+        "Central Bar": "Central Gateshead / Central Bar",
+        "Central Gateshead": "Central Gateshead / Central Bar",
+        "The Glasshouse": "Glasshouse International Centre for Music",
+        "Glasshouse": "Glasshouse International Centre for Music",
+        "Sage One": "Glasshouse International Centre for Music",
+        "Students' Union": "Newcastle University / Students' Union",
+        "Utilita Arena": "Utilita Arena Newcastle",
+        "ZEROX": "ZEROX Newcastle",
+    }
+    for alias, canonical in aliases.items():
+        key = norm(canonical)
+        if key in venue_map:
+            venue_map[norm(alias)] = venue_map[key]
+    return venue_map
+
 
 def is_event_detail_url(value: str) -> bool:
     """Avoid joining a page-wide mention to every event card on a listing page."""
@@ -63,6 +105,8 @@ def main() -> int:
     unique={}
     for artist in names: unique.setdefault(norm(artist),artist)
     candidates=[]
+    out_of_scope=[]
+    venue_map=load_venue_map()
     source_rows={}
     for source_kind,path in (("structured_discovery",args.events),("event_page_inspection",args.inspected)):
         source_rows[source_kind]=read_csv(path)
@@ -72,8 +116,19 @@ def main() -> int:
             venue=(row.get("venue") or "").strip()
             title=(row.get("event_title") or "").strip()
             url=(row.get("source_url") or row.get("page_url") or "").strip()
+            resolved_venue, location_in_scope, explicit_location = resolve_explicit_venue(title, venue, venue_map)
             raw_performers=(row.get("artist") or row.get("performer_names") or "").strip()
             performers=[x.strip() for x in re.split(r"\s*;\s*",raw_performers) if x.strip()]
+            if not location_in_scope:
+                for performer in performers or [""]:
+                    out_of_scope.append({
+                        "event_date": event_date, "source_venue": venue,
+                        "explicit_location": explicit_location, "event_title": title,
+                        "artist": performer, "source_url": url,
+                        "notes": "Explicit event-title location is not in the configured local venue registry; excluded from local gig matches.",
+                    })
+                continue
+            venue=resolved_venue
             for performer in performers:
                 if not norm(performer): continue
                 candidates.append({
@@ -119,9 +174,21 @@ def main() -> int:
                     title_billing=norm(title_lead)==artist_key
                     if not title_billing and artist_key not in parsed_performers:
                         continue
+                    resolved_venue, location_in_scope, explicit_location = resolve_explicit_venue(
+                        event_title, (row.get("venue") or "").strip(), venue_map
+                    )
+                    if not location_in_scope:
+                        out_of_scope.append({
+                            "event_date": (row.get("event_date") or "").strip()[:10],
+                            "source_venue": (row.get("venue") or "").strip(),
+                            "explicit_location": explicit_location, "event_title": event_title,
+                            "artist": artist, "source_url": row_url,
+                            "notes": "Explicit event-title location is not in the configured local venue registry; excluded from local gig matches.",
+                        })
+                        continue
                     candidates.append({
                         "event_date":(row.get("event_date") or "").strip()[:10],
-                        "venue":(row.get("venue") or "").strip(),
+                        "venue":resolved_venue,
                         "event_title":event_title,
                         "performer":artist,"performer_norm":artist_key,
                         "source_url":row_url,"source_kind":"pool_page_text_match",
@@ -131,11 +198,38 @@ def main() -> int:
                         "notes":(hit.get("notes") or "")+" Artist name is also present in the event title or explicit performer field; still verify billing, source details, price and ticket status.",
                     })
     # Deduplicate the same event/performer surfaced by discovery and inspection.
+    # Ignore source URL differences and compare the lead title before a subtitle
+    # or explicit venue suffix. Prefer detail-page evidence over listing-page rows.
     dedup={}
+    source_priority={"pool_page_text_match":1,"structured_discovery":2,"event_page_inspection":3}
     for row in candidates:
-        key=(row["event_date"],norm(row["venue"]),norm(row["event_title"]),row["performer_norm"],row["source_url"])
-        dedup.setdefault(key,row)
+        lead_title=re.split(r"\s+@\s+|\s*:\s*|\s+[–—-]\s+",row["event_title"],maxsplit=1)[0]
+        key=(row["event_date"],norm(row["venue"]),norm(lead_title),row["performer_norm"])
+        if key not in dedup:
+            dedup[key]=row
+            continue
+        existing=dedup[key]
+        for field in ("price","ticket_status"):
+            if not (existing.get(field) or "").strip() and (row.get(field) or "").strip():
+                existing[field]=row[field]
+        if source_priority.get(row["source_kind"],0)>source_priority.get(existing["source_kind"],0):
+            for field in ("source_url","source_kind","candidate_status","notes"):
+                if row.get(field):
+                    existing[field]=row[field]
+            if len(row.get("event_title",""))>len(existing.get("event_title","")):
+                existing["event_title"]=row["event_title"]
     candidates=list(dedup.values())
+    # Preserve explicit non-local venue mentions for audit, but never match them.
+    out_scope_dedup={}
+    for row in out_of_scope:
+        key=(row["event_date"],norm(row["source_venue"]),norm(row["explicit_location"]),norm(row["event_title"]),norm(row["artist"]))
+        out_scope_dedup.setdefault(key,row)
+    out_of_scope=list(out_scope_dedup.values())
+    out_scope_path=args.out.with_name("out_of_scope_event_candidates.csv")
+    out_scope_path.parent.mkdir(parents=True,exist_ok=True)
+    with out_scope_path.open("w",encoding="utf-8",newline="") as f:
+        w=csv.DictWriter(f,fieldnames=["event_date","source_venue","explicit_location","event_title","artist","source_url","notes"])
+        w.writeheader(); w.writerows(out_of_scope)
     by_artist={}
     for artist in unique:
         matches=[r for r in candidates if r["performer_norm"]==artist]
@@ -159,8 +253,9 @@ def main() -> int:
         "dated_event_candidate_rows":len(candidates),
         "artists_with_candidate_matches":sum(bool(v) for v in by_artist.values()),
         "candidate_match_rows":sum(len(v) for v in by_artist.values()),
+        "out_of_scope_event_rows":len(out_of_scope),
         "coverage_rows":len(by_artist),"verified_event_rows":0,"status":"PARTIAL_CANDIDATE_MATCH",
-        "outputs":{"matches":str(match_path),"coverage":str(coverage_path)},
+        "outputs":{"matches":str(match_path),"coverage":str(coverage_path),"out_of_scope":str(out_scope_path)},
         "limitations":["Exact performer-name matching only; aliases and ambiguous billing need review.","No candidate is marked verified.","Missing structured data, JS-only calendars, ticketing pages and uncrawled dates may hide events."]
     }
     match_path.with_suffix(".summary.json").write_text(json.dumps(summary,indent=2)+"\n",encoding="utf-8")
