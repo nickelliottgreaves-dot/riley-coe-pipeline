@@ -167,6 +167,40 @@ Advance tickets:
         self.assertIsNone(extract_visible_event("Access Info - The Glasshouse", visible))
         self.assertIsNone(extract_visible_event("7:00pm - The Glasshouse", visible))
 
+    def test_glasshouse_detail_page_uses_explicit_room_not_crawl_seed(self):
+        visible = """Friday 16 October 2026 |
+7:30pm
+Book Now
+Sheku Kanneh-Mason plays Saint-Saëns
+Part of
+Classical 26/27
+Sage One
+Book Now
+Tickets – £5.00 to £53.00
+Who’s on stage
+Sheku Kanneh-Mason
+Royal Northern Sinfonia"""
+        row=extract_visible_event("Sheku Kanneh-Mason plays Saint-Saëns | The Glasshouse",visible,"Sage Two")
+        self.assertIsNotNone(row)
+        self.assertEqual(row["event_date"],"2026-10-16")
+        self.assertEqual(row["venue"],"Sage One")
+        self.assertEqual(row["price"],"£5.00")
+
+    def test_glasshouse_detail_page_at_external_touring_venue_is_excluded(self):
+        visible = """Thursday 15 October 2026 |
+7:30pm
+Book Now
+Sheku Kanneh-Mason plays Saint-Saëns
+Part of
+Classical 26/27
+Middlesbrough Town Hall
+Book Now
+Tickets – £5.00 to £53.00
+Who’s on stage
+Sheku Kanneh-Mason"""
+        row=extract_visible_event("Sheku Kanneh-Mason plays Saint-Saëns | The Glasshouse",visible,"Sage Two")
+        self.assertIsNone(row)
+
     def test_extracts_multiple_dated_cards_from_cluny_calendar(self):
         visible = """Gigs
 October 2026
