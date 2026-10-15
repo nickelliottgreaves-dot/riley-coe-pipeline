@@ -262,6 +262,43 @@ Saint-Saëns' packs energy into his concerto."""
         self.assertEqual(row["price"],"£5.00 to £53.00")
         self.assertEqual(row["performer_names"],"Sheku Kanneh-Mason; Dinis Sousa; Royal Northern Sinfonia")
 
+    def test_detail_page_metadata_and_timing_lines_are_not_performers(self):
+        visible="""Friday 16 October 2026
+        Sage One
+        Who's playing it
+        Sheku Kanneh-Mason
+        Violin
+        Dinis Sousa
+        Conductor
+        Timings are approximate and subject to change
+        8.30pm - 9pm
+        Interval
+        Age: Under 14s must be accompanied by an adult.
+        What they say
+        The Guardian
+        Your visit
+        Plan your journey
+        Parking
+        Eat and Drink
+        Access Info
+        Take a listen
+        About Samling Academy"""
+        row=extract_visible_event("Sheku Kanneh-Mason plays Saint-Saëns | The Glasshouse",visible,"Sage Two")
+        self.assertIsNotNone(row)
+        self.assertEqual(row["performer_names"],"Sheku Kanneh-Mason; Dinis Sousa")
+
+    def test_listing_parser_rejects_timing_and_access_labels_as_event_titles(self):
+        visible="""8.30pm - 9pm
+        Fri 16 Oct 2026
+        Live Music
+        Sage Two
+        Access Info
+        Sat 17 Oct 2026
+        Live Music
+        Sage Two"""
+        rows=extract_visible_listing_events(visible,"Sage Two")
+        self.assertEqual(rows,[])
+
     def test_glasshouse_detail_page_at_external_touring_venue_is_excluded(self):
         visible = """Thursday 15 October 2026 |
 7:30pm
