@@ -308,8 +308,13 @@ def main() -> int:
 
     # Any inaccessible/not-checked mandatory venue blocks COMPLETE even if a user
     # has accidentally set the manifest booleans to true.
-    if any((venue_map.get(norm_venue(v), {}).get("status", "").strip().lower() in {"inaccessible", "not_checked"}) for v in required_venues):
-        errors.append("At least one mandatory venue was inaccessible or not checked")
+    unchecked_venues=[v for v in required_venues if venue_map.get(norm_venue(v), {}).get("status", "").strip().lower() in {"inaccessible", "not_checked"}]
+    if unchecked_venues:
+        message="At least one mandatory venue was inaccessible or not checked: "+", ".join(unchecked_venues)
+        if manifest.get("claimed_status")=="COMPLETE":
+            errors.append(message)
+        else:
+            warnings.append(message+"; this run remains PARTIAL")
 
     status = "FAILED" if errors else ("PARTIAL" if warnings else "COMPLETE")
     report = {
