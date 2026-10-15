@@ -130,11 +130,21 @@ def main() -> int:
                         "ticket_status":row.get("ticket_status",row.get("availability","")),
                         "notes":(hit.get("notes") or "")+" Artist name is also present in the event title or explicit performer field; still verify billing, source details, price and ticket status.",
                     })
-    # Deduplicate the same event/performer surfaced by discovery and inspection.
+    # Deduplicate the same event/performer across primary and secondary sources,
+    # while retaining every distinct evidence URL in the output row.
     dedup={}
     for row in candidates:
-        key=(row["event_date"],norm(row["venue"]),norm(row["event_title"]),row["performer_norm"],row["source_url"])
-        dedup.setdefault(key,row)
+        key=(row["event_date"],norm(row["venue"]),norm(row["event_title"]),row["performer_norm"])
+        if key not in dedup:
+            dedup[key]=row
+        else:
+            prior=dedup[key]
+            urls=[u.strip() for u in (prior.get("source_url","")+";"+row.get("source_url","")).split(";") if u.strip()]
+            prior["source_url"]="; ".join(dict.fromkeys(urls))
+            kinds=[k for k in (prior.get("source_kind",""),row.get("source_kind","")) if k]
+            prior["source_kind"]="+".join(dict.fromkeys("+".join(kinds).split("+")))
+            notes=[n for n in (prior.get("notes",""),row.get("notes","")) if n]
+            prior["notes"]=" | ".join(dict.fromkeys(notes))
     candidates=list(dedup.values())
     by_artist={}
     for artist in unique:
