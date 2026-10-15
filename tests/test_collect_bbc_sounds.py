@@ -1,8 +1,8 @@
 import sys,unittest, json, tempfile
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/"scripts"))
-from collect_bbc_sounds import episode_id,find_episodes,parse_date,TextParser,extract_tracklist_candidates,main,radiofiles_app_url
+from collect_bbc_sounds import episode_id,find_episodes,parse_date,TextParser,extract_tracklist_candidates,main,radiofiles_app_url,discover_radiofiles_episode_candidates
 
 class BBCCollectorTests(unittest.TestCase):
     def test_sequential_page_fallback_finds_more_bbc_episodes(self):
@@ -30,6 +30,27 @@ class BBCCollectorTests(unittest.TestCase):
             self.assertEqual(summary["listing_pages_fetched"], 4)
             self.assertEqual(summary["episodes_discovered"], 2)
             self.assertEqual(summary["listing_pagination_status"], "sequential_page_fallback_exhausted")
+
+    def test_radiofiles_discovery_supplements_only_pids_in_date_window(self):
+        response = MagicMock()
+        response.status = 200
+        response.headers.get.return_value = "application/json"
+        response.read.return_value = json.dumps({"episodes": [
+            {"pid": "m0031td3", "date": "28 Sep 2026", "label": "Riley & Coe – 28 Sep 2026"},
+            {"pid": "m0032cm3", "date": "15 Oct 2026", "label": "Riley & Coe – 15 Oct 2026"},
+            {"pid": "m0000001", "date": "01 Sep 2026", "label": "Outside window"},
+            {"pid": "not-an-id", "date": "30 Sep 2026", "label": "Bad PID"}
+        ]}).encode()
+        manager = MagicMock()
+        manager.__enter__.return_value = response
+        manager.__exit__.return_value = False
+        with patch("collect_bbc_sounds.urlopen", return_value=manager):
+            found = discover_radiofiles_episode_candidates(
+                __import__("datetime").date(2026, 9, 24),
+                __import__("datetime").date(2026, 10, 15))
+        self.assertEqual([x["episode_id"] for x in found], ["m0031td3", "m0032cm3"])
+        self.assertEqual(found[0]["url"], "https://www.bbc.co.uk/programmes/m0031td3")
+        self.assertEqual(found[0]["discovery_source"], "RadioFiles PID fallback")
 
     def test_radiofiles_deep_link_uses_series_and_episode_ids(self):
         self.assertEqual(
