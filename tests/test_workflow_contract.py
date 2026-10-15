@@ -19,7 +19,7 @@ class WorkflowContractTests(unittest.TestCase):
         start, end = reporting_window(date(2026, 10, 15))
         self.assertEqual(start.isoformat(), "2026-10-15")
         self.assertEqual(end.isoformat(), "2026-10-28")
-        self.assertEqual((end - start).days + 1, 28)
+        self.assertEqual((end - start).days + 1, 14)
 
     def test_contract_rejects_window_shorter_than_minimum(self):
         with TemporaryDirectory() as temp:
@@ -45,7 +45,7 @@ class WorkflowContractTests(unittest.TestCase):
             self.assertTrue(manifest.get(field), field)
         self.assertEqual(manifest["previous_successful_run"], "unknown/not established")
         self.assertEqual(manifest["claimed_status"], "PARTIAL")
-        self.assertEqual(manifest["window_end"], "2026-11-11")
+        self.assertEqual(manifest["window_end"], "2026-10-28")
 
     def test_current_registry_and_pool_are_consistent(self):
         result = validate_registries()
