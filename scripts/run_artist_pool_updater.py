@@ -78,6 +78,22 @@ def record_skipped(name: str, out_dir: Path, results: list[dict[str, str]], reas
     })
 
 
+def summarize_episode_crosschecks(
+    bbc_episodes: list[dict[str, str]],
+    crosscheck_rows: list[dict[str, str]],
+) -> dict[str, int]:
+    exact = sum(row.get("crosscheck_status") == "EXACT_FULL_TRACKLIST_MATCH" for row in crosscheck_rows)
+    mismatched = sum(row.get("crosscheck_status") == "MISMATCH_REQUIRES_REVIEW" for row in crosscheck_rows)
+    return {
+        "bbc_episode_rows": len(bbc_episodes),
+        "crosscheck_rows": len(crosscheck_rows),
+        "exact_crosschecked_episode_rows": exact,
+        "mismatched_episode_rows": mismatched,
+        "bbc_episodes_without_crosscheck": max(0, len(bbc_episodes) - len(crosscheck_rows)),
+        "episodes_not_exactly_crosschecked": max(0, len(bbc_episodes) - exact),
+    }
+
+
 def newest_csv(folder: Path, pattern: str) -> Path | None:
     matches = sorted(folder.glob(pattern))
     return matches[-1] if matches else None
@@ -187,6 +203,7 @@ def main() -> int:
     crosscheck_rows = read_csv(crosscheck_dir / "bbc_radiofiles_episode_crosscheck.csv")
     bbc_episodes = read_csv(bbc_inventory)
     rf_episodes_rows = read_csv(rf_episodes)
+    episode_summary = summarize_episode_crosschecks(bbc_episodes, crosscheck_rows)
     proposal_audit_path = newest_csv(proposal_dir, "artist_pool_proposal_audit_*.json")
 
     stage_failures = sum(row["status"] not in {"success", "skipped"} for row in stages)
@@ -210,8 +227,11 @@ def main() -> int:
         "authoritative_pool_rows_after": len(pool_rows_after),
         "bbc_episode_rows": len(bbc_episodes),
         "radiofiles_episode_rows": len(rf_episodes_rows),
-        "exact_crosschecked_episode_rows": sum(row.get("crosscheck_status") == "EXACT_FULL_TRACKLIST_MATCH" for row in crosscheck_rows),
-        "incomplete_or_unavailable_bbc_episodes": sum((row.get("tracklist_status") or "").casefold() != "complete" for row in bbc_episodes),
+        "crosscheck_rows": episode_summary["crosscheck_rows"],
+        "exact_crosschecked_episode_rows": episode_summary["exact_crosschecked_episode_rows"],
+        "mismatched_episode_rows": episode_summary["mismatched_episode_rows"],
+        "bbc_episodes_without_crosscheck": episode_summary["bbc_episodes_without_crosscheck"],
+        "episodes_not_exactly_crosschecked": episode_summary["episodes_not_exactly_crosschecked"],
         "proposal_generated": bool(proposed_pool and additions),
         "proposed_pool_path": str(proposed_pool.relative_to(out_dir)) if proposed_pool else "",
         "additions_rows": len(read_csv(additions)) if additions else 0,
@@ -234,6 +254,9 @@ def main() -> int:
         "bbc_episode_rows": len(bbc_episodes),
         "radiofiles_episode_rows": len(rf_episodes_rows),
         "exact_crosschecked_episode_rows": manifest["exact_crosschecked_episode_rows"],
+        "mismatched_episode_rows": manifest["mismatched_episode_rows"],
+        "bbc_episodes_without_crosscheck": manifest["bbc_episodes_without_crosscheck"],
+        "episodes_not_exactly_crosschecked": manifest["episodes_not_exactly_crosschecked"],
         "proposal_generated": manifest["proposal_generated"],
         "additions_rows": manifest["additions_rows"],
         "ambiguous_review_rows": manifest["ambiguous_review_rows"],
