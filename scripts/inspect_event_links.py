@@ -643,8 +643,8 @@ def extract_citywide_guide_events(visible_text, start_date, end_date):
     aliases={
         "thecluny":"The Cluny","cluny":"The Cluny","cluny2":"Cluny 2",
         "boilershop":"Boiler Shop","wylambrewery":"Wylam Brewery","thegrove":"The Grove",
-        "glasshouseinternationalcentrefor music":"Glasshouse International Centre for Music",
-        "glasshouseinternationalcentrefor music":"Glasshouse International Centre for Music",
+        "glasshouseinternationalcentreformusic":"Glasshouse International Centre for Music",
+        "glasshouseinternationalcentreformusic":"Glasshouse International Centre for Music",
         "thesage":"Glasshouse International Centre for Music","sageone":"Glasshouse International Centre for Music",
         "sage1":"Glasshouse International Centre for Music","sage2":"Sage Two","sagetwo":"Sage Two",
         "thecumberlandarms":"Cumberland Arms","cumberlandarms":"Cumberland Arms",
@@ -658,7 +658,7 @@ def extract_citywide_guide_events(visible_text, start_date, end_date):
         "thenewgatesocial":"The Newgate Social","newgatesocial":"The Newgate Social",
         "headofsteam":"Head of Steam Newcastle","headofsteamnewcastle":"Head of Steam Newcastle"
     }
-    date_pattern=re.compile(r"(?i)\\b(?:(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)(?:day)?\\s+)?(\\d{1,2})(?:st|nd|rd|th)?\\s+([A-Za-z]{3,9})\\s+(20\\d{2})\\b")
+    date_pattern=re.compile(r"(?i)\b(?:(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)(?:day)?\s+)?(\d{1,2})(?:st|nd|rd|th)?\s+([A-Za-z]{3,9})\s+(20\d{2})\b")
     found=[]
     for i,line in enumerate(lines):
         match=date_pattern.search(line)
@@ -676,9 +676,9 @@ def extract_citywide_guide_events(visible_text, start_date, end_date):
         venue=aliases.get(norm(venue_text))
         if not venue or not title: continue
         if title.casefold() in {"official event page","gig preview","live music","tickets","view tickets"}: continue
-        billing=re.sub(r"(?i)^byker grave(?:\\s+presents?)?\\s*:\\s*","",title).strip()
+        billing=re.sub(r"(?i)^byker grave(?:\s+presents?)?\s*:\s*","",title).strip()
         billing=billing.split("//",1)[-1].strip()
-        performers=[part.strip(" -–—:") for part in re.split(r"\\s+\\+\\s+",billing) if part.strip(" -–—:")]
+        performers=[part.strip(" -–—:") for part in re.split(r"\s+\+\s+",billing) if part.strip(" -–—:")]
         found.append({
             "event_title":title,"event_date":event_day.isoformat(),"venue":venue,
             "performer_names":"; ".join(dict.fromkeys(performers or [title])),
