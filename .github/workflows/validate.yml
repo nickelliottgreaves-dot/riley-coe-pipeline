@@ -120,6 +120,7 @@ jobs:
             python scripts/build_verified_artist_pool_proposal.py \
               --pool data/artist_pool.csv \
               --verified-candidates artifacts/radiofiles/bbc-crosscheck/verified_episode_artist_candidates.csv \
+              --reconciliation artifacts/radiofiles/reconciliation/radiofiles_artist_reconciliation.csv \
               --out-dir artifacts/radiofiles/pool-proposal
           else
             echo "No verified BBC/RadioFiles cross-check file; no pool proposal generated."
