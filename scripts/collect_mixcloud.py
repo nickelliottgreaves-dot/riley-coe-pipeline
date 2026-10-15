@@ -254,6 +254,25 @@ def fetch_duckduckgo_cloudcasts(username: str, since: date, until: date) -> tupl
             published = episode_date_from_text(link_text + " " + path.replace("/", " "))
             if not published or not (since <= published <= until) or target in seen:
                 continue
+            # Search engines can retain stale Mixcloud URLs long after a show
+            # has disappeared. Verify the public page before treating a search
+            # result as a live episode candidate; a search snippet is not proof
+            # that the page or its tracklist is still available.
+            page_req = Request(target, headers={
+                "User-Agent": USER_AGENT,
+                "Accept": "text/html,application/xhtml+xml,*/*",
+                "Accept-Language": "en-GB,en;q=0.9",
+            })
+            try:
+                with urlopen(page_req, timeout=25) as page_response:
+                    page_status = getattr(page_response, "status", 200)
+                    page_response.read(4096)
+                if page_status >= 400:
+                    errors.append(f"DuckDuckGo candidate page returned HTTP {page_status}: {target}")
+                    continue
+            except (HTTPError, URLError, TimeoutError, OSError) as exc:
+                errors.append(f"DuckDuckGo candidate page is inaccessible ({exc}): {target}")
+                continue
             seen.add(target)
             found.append({
                 "name": link_text or parts[1].replace("-", " "),
