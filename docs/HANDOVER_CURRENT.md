@@ -472,3 +472,23 @@ The first PR (#8) was opened directly from `redesign/workflow-contract`, which d
 - Added regression coverage for the clean branch conditions. Latest clean-branch test run [38745730262](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38745730262) passed: **129 tests**.
 
 This handover commit intentionally triggers a simulated-Cobalt full sweep from the clean branch. Confirm the new workflow conditions select the independent jobs, the report remains PARTIAL, the failure ledger and crawl audit reconcile, and Cobalt is the one calendar-source partial. If it passes, open a clean PR from `deploy/weekly-gig-finder-clean` to `main` and close PR #8 as superseded; do not merge without the user's approval.
+
+
+## Deployment handover — 2026-10-15 (latest)
+
+### Pull requests and branch state
+- Clean deployment branch: `deploy/weekly-gig-finder-clean`, based directly on `main` commit `0238b7dcced3f999db59c6340fdf077733d0598d`. The current PR diff is one clean snapshot plus a few follow-up commits, not the 554-commit history of the original redesign branch.
+- **Open review PR #9:** https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/pull/9 — “Deploy independent weekly Riley & Coe gig finder”. API reports it is mergeable with a clean merge state; no merge has been performed.
+- **PR #8 is closed as superseded**, not merged. Its body points reviewers to PR #9.
+- Original working branch `redesign/workflow-contract` remains preserved as the development/reference branch.
+
+### Latest acceptance evidence
+- Clean branch unit tests: [38745730262](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38745730262), **129 tests passed**.
+- Clean branch simulated-Cobalt run: [38745828682](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38745828682), success. Cobalt failure was explicitly recorded; 21 failure-ledger rows matched the crawl audit; 20 venue rows and 847 artist comparison rows; seven candidates; zero out-of-scope rows; report remained PARTIAL.
+- Normal live sweep: [38743825036](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38743825036), success. 20 venue rows, 847/847 artist comparisons, seven candidates, zero out-of-scope rows, 19 captured-scope venue outcomes and one partial (Cobalt), 21 failure-ledger rows matching the crawl audit.
+- All 20 `calendar_coverage_verified` flags remain false. Automated event matches remain unverified; manual review remains a separate ledger.
+
+### Critical deployment status
+**The weekly automation is not yet active on `main`.** It becomes active only after PR #9 is reviewed and merged. The workflow is configured for Monday 08:00 UTC and manual dispatch; on `main`, it runs the independent gig finder and review-only artist-pool updater, while legacy all-in-one jobs remain isolated to `rebuild/core-gig-finder`.
+
+Do not merge without the user's approval. Once approved and merged, run one manual dispatch on `main` to confirm the deployed ref uses the new independent jobs and then inspect its artifacts. The scheduled workflow's next normal cadence after 2026-10-15 is Monday 2026-10-19 at 08:00 UTC.
