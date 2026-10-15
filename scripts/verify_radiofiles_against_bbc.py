@@ -28,6 +28,15 @@ def pid_from_url(url: str) -> str:
     match = re.search(r"/(?:programmes|sounds/play)/(m[0-9a-z]{7,})", str(url or ""), re.I)
     return match.group(1) if match else ""
 
+def artist_credit_compatible(bbc_artist: str, radiofiles_artist: str) -> bool:
+    """RadioFiles may store the primary artist while BBC exposes the full collaboration credit."""
+    bbc_key, radiofiles_key = norm(bbc_artist), norm(radiofiles_artist)
+    if not bbc_key or not radiofiles_key:
+        return False
+    if bbc_key == radiofiles_key:
+        return True
+    return bool(re.search(r"(?<![a-z0-9])" + re.escape(radiofiles_key) + r"(?![a-z0-9])", bbc_key))
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--bbc-tracks", type=Path, required=True)
@@ -78,7 +87,7 @@ def main() -> int:
         for i in range(max_rows):
             br = bbc[i] if i < len(bbc) else {}
             rr = rf[i] if i < len(rf) else {}
-            same = bool(br and rr and norm(br.get("track_title")) == norm(rr.get("track_title")) and norm(br.get("artist_candidate")) == norm(rr.get("artist_candidate")))
+            same = bool(br and rr and norm(br.get("track_title")) == norm(rr.get("track_title")) and artist_credit_compatible(br.get("artist_candidate",""), rr.get("artist_candidate","")))
             if same: matched += 1
             else: mismatched += 1
             local_track_results.append({
@@ -87,7 +96,7 @@ def main() -> int:
                 "bbc_track_title":br.get("track_title",""),"bbc_artist":br.get("artist_candidate",""),
                 "radiofiles_track_title":rr.get("track_title",""),"radiofiles_artist":rr.get("artist_candidate",""),
                 "track_match":str(same).lower(),"bbc_episode_url":bbc_url,"radiofiles_episode_url":rf_url,
-                "notes":"" if same else "Missing row, count mismatch, ordering mismatch or title/artist normalization mismatch."
+                "notes":"" if same else "Missing row, count mismatch, ordering mismatch, title mismatch or RadioFiles artist not contained in BBC full credit."
             })
         full_match = count_match and mismatched == 0 and matched == len(bbc)
         status = "EXACT_FULL_TRACKLIST_MATCH" if full_match else ("NO_TRACK_ROWS" if not bbc and not rf else "MISMATCH_REQUIRES_REVIEW")
