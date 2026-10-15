@@ -5,7 +5,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
-from run_core_search import build_coverage, match_candidates, normalize
+from run_core_search import build_coverage, inspection_to_candidates, match_candidates, normalize
 
 
 class CoreSearchTests(unittest.TestCase):
@@ -32,6 +32,30 @@ class CoreSearchTests(unittest.TestCase):
         self.assertEqual([row["matched_pool_artist"] for row in matches], ["A Certain Ratio", "Gallus"])
         self.assertEqual(len(matches), 2)
         self.assertTrue(all(row["verified"] == "false" for row in matches))
+
+    def test_inspection_expands_each_billed_act_to_an_independent_candidate(self):
+        rows = [{
+            "event_date": "2026-10-20",
+            "venue": "The Cluny",
+            "event_title": "Tour date",
+            "performer_names": "Gallus; A Certain Ratio",
+            "page_url": "https://example.test/event",
+            "notes": "review required",
+        }]
+        candidates = inspection_to_candidates(rows)
+        self.assertEqual([row["artist"] for row in candidates], ["Gallus", "A Certain Ratio"])
+        matches = match_candidates(candidates, [{"artist": "Gallus"}, {"artist": "A Certain Ratio"}], [])
+        self.assertEqual({row["matched_pool_artist"] for row in matches}, {"Gallus", "A Certain Ratio"})
+
+    def test_inspection_without_named_performer_is_not_a_pool_match(self):
+        rows = [{
+            "event_date": "2026-10-20",
+            "venue": "Wylam Brewery",
+            "event_title": "Lord Of The Wings | Food Battle",
+            "performer_names": "",
+            "page_url": "https://example.test/event",
+        }]
+        self.assertEqual(inspection_to_candidates(rows), [])
 
     def test_approved_alias_is_used_only_when_canonical_is_in_pool(self):
         events = [{"event_date": "2026-10-20", "venue": "X", "event_title": "Y", "artist": "Alias Act", "source_url": "https://example.test"}]
