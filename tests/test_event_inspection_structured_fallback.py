@@ -554,5 +554,81 @@ Book Tickets
                 for row in rows
             ))
 
+
+    def test_skiddle_venue_scope_rejects_other_cities_and_other_venues(self):
+        source = "https://www.skiddle.com/whats-on/Newcastle-on-Tyne/The-Lubber-Fiend/"
+        self.assertTrue(allowed_source_scoped_url(
+            source, "https://www.skiddle.com/whats-on/Newcastle-on-Tyne/The-Lubber-Fiend/#events", "Lubber Fiend"
+        ))
+        self.assertTrue(allowed_source_scoped_url(
+            source, "https://www.skiddle.com/whats-on/Newcastle-on-Tyne/The-Lubber-Fiend/12345-example-event/", "Lubber Fiend"
+        ))
+        self.assertFalse(allowed_source_scoped_url(
+            source, "https://www.skiddle.com/whats-on/Cardiff/", "Lubber Fiend"
+        ))
+        self.assertFalse(allowed_source_scoped_url(
+            source, "https://www.skiddle.com/whats-on/Birmingham/whats-on-in-birmingham-today/", "Lubber Fiend"
+        ))
+        self.assertFalse(allowed_source_scoped_url(
+            source, "https://www.skiddle.com/whats-on/Newcastle-on-Tyne/The-Cluny/", "Lubber Fiend"
+        ))
+
+    def test_skiddle_crawl_does_not_attribute_cardiff_events_to_lubber_fiend(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            links = root / "links.csv"
+            sources = root / "sources.csv"
+            out = root / "out"
+            source = "https://www.skiddle.com/whats-on/Newcastle-on-Tyne/The-Lubber-Fiend/"
+            local_event = "https://www.skiddle.com/whats-on/Newcastle-on-Tyne/The-Lubber-Fiend/12345-example-event/"
+            unrelated = [
+                "https://www.skiddle.com/whats-on/Cardiff/",
+                "https://www.skiddle.com/whats-on/Newcastle-on-Tyne/The-Cluny/",
+            ]
+            with links.open("w", encoding="utf-8", newline="") as f:
+                w = csv.DictWriter(f, fieldnames=["venue", "candidate_url", "link_text"])
+                w.writeheader()
+                w.writerow({"venue": "Lubber Fiend", "candidate_url": unrelated[0], "link_text": "Cardiff events"})
+                w.writerow({"venue": "Lubber Fiend", "candidate_url": unrelated[1], "link_text": "The Cluny"})
+                w.writerow({"venue": "Lubber Fiend", "candidate_url": local_event, "link_text": "Example event"})
+            with sources.open("w", encoding="utf-8", newline="") as f:
+                w = csv.DictWriter(f, fieldnames=["venue", "source_url"])
+                w.writeheader()
+                w.writerow({"venue": "Lubber Fiend", "source_url": source})
+            calendar = (
+                '<title>Lubber Fiend events</title>'
+                f'<a href="{unrelated[0]}">Cardiff events</a>'
+                f'<a href="{unrelated[1]}">The Cluny</a>'
+                f'<a href="{local_event}">Example event</a>'
+            )
+            detail = (
+                '<title>Example Act at Lubber Fiend</title>'
+                '<script type="application/ld+json">'
+                '{"@type":"MusicEvent","name":"Example Act","startDate":"2026-10-20T19:00:00+01:00",'
+                '"performer":{"@type":"MusicGroup","name":"Example Act"}}'
+                '</script>'
+            )
+            fetched = []
+            def fake_fetch(url):
+                fetched.append(url)
+                if url == source:
+                    return 200, "text/html", calendar, False
+                if url == local_event:
+                    return 200, "text/html", detail, False
+                raise AssertionError("Out-of-scope Skiddle URL fetched: " + url)
+
+            with patch("inspect_event_links.fetch", side_effect=fake_fetch):
+                with patch("sys.argv", [
+                    "inspect_event_links.py", "--links", str(links),
+                    "--sources", str(sources), "--out-dir", str(out),
+                    "--start", "2026-10-15", "--end", "2026-10-28", "--delay", "0",
+                ]):
+                    self.assertEqual(main(), 0)
+            self.assertEqual(fetched, [source, local_event])
+            with (out / "event_page_inspection.csv").open(encoding="utf-8", newline="") as f:
+                rows = list(csv.DictReader(f))
+            self.assertTrue(any(row["event_title"] == "Example Act" and row["venue"] == "Lubber Fiend" for row in rows))
+            self.assertFalse(any(row["page_url"] in unrelated for row in rows))
+
 if __name__ == "__main__":
     unittest.main()
