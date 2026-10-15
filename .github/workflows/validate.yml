@@ -182,7 +182,7 @@ jobs:
         run: |
           mkdir -p artifacts/event-candidates
           START=$(python -c "from datetime import date; print(date.today().isoformat())")
-          END=$(python -c "from datetime import date,timedelta; print((date.today()+timedelta(days=13)).isoformat())")
+          END=$(python -c "from datetime import date,timedelta; print((date.today()+timedelta(days=27)).isoformat())")
           echo "Window: $START through $END"
           python scripts/discover_event_candidates.py --sources config/venue_sources.csv --start "$START" --end "$END" --out-dir artifacts/event-candidates
       - name: Preserve event candidates and audit even when discovery fails
@@ -211,7 +211,7 @@ jobs:
       - name: Inspect event detail pages and bounded same-host links
         run: |
           START=$(python -c "from datetime import date; print(date.today().isoformat())")
-          END=$(python -c "from datetime import date,timedelta; print((date.today()+timedelta(days=13)).isoformat())")
+          END=$(python -c "from datetime import date,timedelta; print((date.today()+timedelta(days=27)).isoformat())")
           python scripts/inspect_event_links.py --links artifacts/event-candidates/event_link_candidates.csv --sources config/venue_sources.csv --out-dir artifacts/event-page-inspection --start "$START" --end "$END" --max-pages-per-venue 120 --max-depth 3
       - name: Preserve event-page snapshots and crawl audit
         if: always()
@@ -259,7 +259,7 @@ jobs:
         if: always()
         run: |
           START=$(python -c "from datetime import date; print(date.today().isoformat())")
-          END=$(python -c "from datetime import date,timedelta; print((date.today()+timedelta(days=13)).isoformat())")
+          END=$(python -c "from datetime import date,timedelta; print((date.today()+timedelta(days=27)).isoformat())")
           python scripts/match_pool_to_window_events.py \
             --pool data/artist_pool.csv \
             --events "artifacts/riley-coe-event-candidates-${{ github.run_id }}/event_candidates.csv" \
@@ -270,7 +270,7 @@ jobs:
       - name: Assemble dated PARTIAL evidence package
         run: |
           START=$(python -c "from datetime import date; print(date.today().isoformat())")
-          END=$(python -c "from datetime import date,timedelta; print((date.today()+timedelta(days=13)).isoformat())")
+          END=$(python -c "from datetime import date,timedelta; print((date.today()+timedelta(days=27)).isoformat())")
           python scripts/assemble_run_package.py \
             --start "$START" --end "$END" \
             --bbc-episodes "artifacts/riley-coe-bbc-sounds-inventory-${{ github.run_id }}/bbc_episode_inventory.csv" \
