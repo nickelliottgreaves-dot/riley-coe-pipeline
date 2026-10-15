@@ -69,6 +69,16 @@ def validate_registries(root: Path | str = ROOT) -> dict[str, Any]:
     pool = read_csv(root / contract["artist_pool_path"])
 
     errors: list[str] = []
+    for label, rows in (
+        ("venue sources", sources),
+        ("required venues", required),
+        ("artist pool", pool),
+    ):
+        for row_number, row in enumerate(rows, start=2):
+            if None in row:
+                errors.append(f"{label} CSV row {row_number} has extra fields; commas inside a field must be quoted.")
+            if any(value is None for value in row.values()):
+                errors.append(f"{label} CSV row {row_number} is missing one or more fields.")
     source_keys: dict[str, str] = {}
     for row in sources:
         venue = (row.get("venue") or "").strip()
