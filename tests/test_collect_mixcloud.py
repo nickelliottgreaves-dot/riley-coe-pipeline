@@ -61,6 +61,24 @@ class MixcloudInventoryTests(unittest.TestCase):
         self.assertEqual(items[0]["created_time"][:10], "2026-10-06")
         self.assertFalse(any("yielded no dated" in error for error in errors))
 
+    def test_html_fallback_searches_public_site_when_profile_has_no_show_links(self):
+        class FakeResponse:
+            status = 200
+            def __init__(self, body): self.body = body
+            def __enter__(self): return self
+            def __exit__(self, *args): return False
+            def read(self, limit): return self.body
+        def fake_urlopen(req, timeout=25):
+            url = req.full_url
+            if "/search/?" in url:
+                return FakeResponse(b'<script>window.__DATA__={"url":"https://www.mixcloud.com/SixMusicAlternative/riley-coe-tuesday-6th-october-2026/"}</script>')
+            return FakeResponse(b'<html><body>Profile page without dated show links</body></html>')
+        with patch("scripts.collect_mixcloud.urlopen", side_effect=fake_urlopen):
+            items, errors = fetch_html_cloudcasts("SixMusicAlternative", date(2026, 10, 1), date(2026, 10, 21))
+        self.assertEqual(len(items), 1)
+        self.assertIn("riley-coe-tuesday-6th-october-2026", items[0]["url"])
+        self.assertFalse(any("yielded no dated" in error for error in errors))
+
     def test_search_fallback_tries_coe_query_variant_and_deduplicates(self):
         requested_urls = []
         def fake_get_json(url):
