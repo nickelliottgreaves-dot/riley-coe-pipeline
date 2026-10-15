@@ -74,10 +74,12 @@ def main() -> int:
         event_coverage = read_csv(run_dir / "artist_window_event_coverage.csv")
         matches = read_csv(run_dir / "artist_window_event_matches.csv")
         out_of_scope = read_csv(run_dir / "out_of_scope_event_candidates.csv")
+        crawl_audit = read_csv(run_dir / "event_inspection" / "event_page_crawl_audit.csv")
+        fetch_failures = read_csv(run_dir / "event_inspection" / "event_page_fetch_failures.csv")
         read_csv(run_dir / "stage_results.csv")
     except (OSError, csv.Error, ValueError) as exc:
         errors.append(str(exc))
-        sources, pool, source_coverage, page_matches, event_coverage, matches, out_of_scope = [], [], [], [], [], [], []
+        sources, pool, source_coverage, page_matches, event_coverage, matches, out_of_scope, crawl_audit, fetch_failures = [], [], [], [], [], [], [], [], []
 
     def check_exact_coverage(label: str, expected_names: list[str], rows: list[dict[str, str]], field: str) -> None:
         expected = [normalize_key(name) for name in expected_names if normalize_key(name)]
@@ -101,6 +103,25 @@ def main() -> int:
         errors.append(f"Expected one source-coverage row per configured source ({len(sources)}); found {len(source_coverage)}.")
     if len(event_coverage) != len(pool):
         errors.append(f"Expected one event-comparison row per pool row ({len(pool)}); found {len(event_coverage)}.")
+
+    audited_failures = 0
+    for row in crawl_audit:
+        try:
+            audited_failures += int(row.get("pages_failed") or 0)
+        except ValueError:
+            errors.append(f"Invalid pages_failed count in crawl audit for {row.get('venue', '(unknown venue)')}.")
+    if len(fetch_failures) != audited_failures:
+        errors.append(
+            f"event_page_fetch_failures.csv has {len(fetch_failures)} rows but venue crawl audit records {audited_failures} failed fetches."
+        )
+    configured_venue_keys = {normalize_key(name) for name in source_names if normalize_key(name)}
+    for index, row in enumerate(fetch_failures, 2):
+        if not (row.get("page_url") or "").strip():
+            errors.append(f"event_page_fetch_failures.csv row {index} has no page URL.")
+        if not (row.get("error_message") or "").strip():
+            errors.append(f"event_page_fetch_failures.csv row {index} has no error message.")
+        if normalize_key(row.get("venue", "")) not in configured_venue_keys:
+            errors.append(f"event_page_fetch_failures.csv row {index} references an unknown venue.")
 
     unchecked_sources = [row.get("venue", "") for row in source_coverage if row.get("outcome") in {"not_checked", "partial"}]
     if unchecked_sources:
@@ -141,6 +162,8 @@ def main() -> int:
         "event_comparison_rows": len(event_coverage),
         "candidate_match_rows": len(matches),
         "out_of_scope_event_rows": len(out_of_scope),
+        "failed_page_fetch_rows": len(fetch_failures),
+        "crawl_audit_failed_page_count": audited_failures,
         "errors": errors,
         "warnings": warnings,
         "important_limit": "Valid package structure does not prove exhaustive calendar coverage or independently verified gigs.",
