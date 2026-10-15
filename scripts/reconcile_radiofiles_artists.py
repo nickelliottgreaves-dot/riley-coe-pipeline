@@ -7,6 +7,7 @@ baseline and records episode gaps without promoting unverified artists.
 import argparse, csv, json, re, unicodedata
 from collections import defaultdict
 from datetime import date
+from difflib import SequenceMatcher
 from pathlib import Path
 
 def norm(value):
@@ -54,15 +55,21 @@ def main():
         x["urls"].add(r.get("source_url", ""))
         perdate[r.get("episode_date", "")] += 1
         perdate_artists[r.get("episode_date", "")].add(key)
+    pool_keys = list(poolmap.keys())
     candidates = []
     for key, x in sorted(grouped.items(), key=lambda kv: kv[1]["name"].casefold()):
         exact = poolmap.get(key, "")
         alias = aliasmap.get(key, "")
         canonical = exact or (alias if norm(alias) in poolmap else "")
         status = "EXACT_NORMALIZED_POOL_MATCH" if exact else ("ALIAS_MATCH_TO_POOL" if canonical else ("ALIAS_CANONICAL_NOT_IN_POOL_REVIEW" if alias else "UNMATCHED_REVIEW_ONLY"))
+        scored = sorted(((SequenceMatcher(None, key, pk).ratio(), pk) for pk in pool_keys), reverse=True) if not canonical else []
+        best_score = scored[0][0] if scored else ""
+        best = [poolmap[pk] for score, pk in scored if best_score != "" and score >= best_score - 0.015 and score >= 0.72][:5]
         candidates.append({
             "artist_candidate": x["name"], "normalized_key": key, "reconciliation_status": status,
-            "matched_pool_artist": canonical, "track_appearances": x["n"],
+            "matched_pool_artist": canonical, "closest_pool_candidates": " | ".join(best),
+            "best_similarity_score": f"{best_score:.3f}" if best_score != "" else "",
+            "track_appearances": x["n"],
             "episode_dates": "; ".join(sorted(filter(None, x["dates"]))),
             "episode_titles": "; ".join(sorted(filter(None, x["titles"]))),
             "track_examples": "; ".join(sorted(filter(None, x["songs"]))),
@@ -87,7 +94,7 @@ def main():
     out = a.out_dir
     write(out / "radiofiles_artist_reconciliation.csv", [
         "artist_candidate", "normalized_key", "reconciliation_status", "matched_pool_artist",
-        "track_appearances", "episode_dates", "episode_titles", "track_examples", "source_urls", "promotion_status"
+        "closest_pool_candidates", "best_similarity_score", "track_appearances", "episode_dates", "episode_titles", "track_examples", "source_urls", "promotion_status"
     ], candidates)
     write(out / "radiofiles_episode_coverage_review.csv", [
         "episode_date", "episode_title", "episode_pid", "track_count_reported", "track_count_returned",
@@ -104,7 +111,10 @@ def main():
         "episodes_with_track_rows": sum(bool(r["track_rows_in_candidate_file"]) for r in coverage),
         "episodes_without_track_rows": sum(not bool(r["track_rows_in_candidate_file"]) for r in coverage),
         "pool_modified": False,
-        "promotion_policy": "Review-only; no candidate is promoted into the authoritative pool by this script."
+        "promotion_policy": "Review-only; no candidate is promoted into the authoritative pool by this script.",
+        "fuzzy_candidates_are_suggestions_only": True,
+        "fuzzy_suggestion_threshold": 0.72,
+        "note": "Closest candidates help manual review; similarity never constitutes a match or authorizes promotion."
     }
     out.mkdir(parents=True, exist_ok=True)
     (out / "radiofiles_artist_reconciliation_audit.json").write_text(json.dumps(audit, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
