@@ -1,0 +1,123 @@
+name: Weekly Riley & Coe Core Gig Search
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 8 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: weekly-core-gig-search
+  cancel-in-progress: false
+
+jobs:
+  core-gig-search:
+    name: Search nine core venues against current artist pool
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out current branch
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Confirm current pool and prepare 14-day window
+        id: window
+        shell: bash
+        run: |
+          set -euo pipefail
+          START="$(python -c 'from datetime import date; print(date.today().isoformat())')"
+          END="$(python -c 'from datetime import date,timedelta; print((date.today()+timedelta(days=13)).isoformat())')"
+          POOL_ROWS="$(python -c 'import csv; f=open("data/artist_pool.csv",encoding="utf-8-sig",newline=""); print(sum(1 for _ in csv.DictReader(f)))')"
+          echo "start=$START" >> "$GITHUB_OUTPUT"
+          echo "end=$END" >> "$GITHUB_OUTPUT"
+          echo "pool_rows=$POOL_ROWS" >> "$GITHUB_OUTPUT"
+          echo "## Weekly Riley & Coe Core Gig Search" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Search window: $START to $END (14 calendar days)" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Current artist-pool rows: $POOL_ROWS" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Scope: nine core venues; pool refresh is deliberately separate." >> "$GITHUB_STEP_SUMMARY"
+          test "$POOL_ROWS" -gt 0
+
+      - name: Run core search (preserve partial output if a source fails)
+        id: search
+        shell: bash
+        run: |
+          set +e
+          OUT="artifacts/core-search-${{ steps.window.outputs.start }}"
+          python scripts/run_core_search.py \
+            --start "${{ steps.window.outputs.start }}" \
+            --end "${{ steps.window.outputs.end }}" \
+            --out-dir "$OUT"
+          CODE=$?
+          echo "exit_code=$CODE" >> "$GITHUB_OUTPUT"
+          echo "output_dir=$OUT" >> "$GITHUB_OUTPUT"
+          echo "Core search process exit code: $CODE"
+          # Source-level failures should yield a Limited Results report, not
+          # discard the run's audit. The final status is determined below.
+          exit 0
+
+      - name: Determine report status
+        if: always()
+        id: status
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          out = Path("artifacts/core-search-${{ steps.window.outputs.start }}")
+          summary = out / "run_summary.json"
+          if not summary.exists():
+              status = "FAILED_RUN"
+              reason = "The core search did not produce its run summary; inspect the logs and source audit."
+              details = {}
+          else:
+              details = json.loads(summary.read_text(encoding="utf-8"))
+              failures = int(details.get("core_venues_with_fetch_failure_or_missing_audit", 9))
+              matches = int(details.get("candidate_pool_matches", 0))
+              if failures == 0 and matches > 0:
+                  status = "LIMITED_RESULTS"
+                  reason = "Candidate matches found, but event verification and complete calendar coverage are not established."
+              elif failures < 9:
+                  status = "LIMITED_RESULTS"
+                  reason = "The search produced partial source coverage; inspect the per-venue ledger."
+              else:
+                  status = "FAILED_RUN"
+                  reason = "No core source fetch succeeded; check source access and logs."
+              details["status"] = status
+              details["status_reason"] = reason
+              summary.write_text(json.dumps(details, indent=2) + "\n", encoding="utf-8")
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as f:
+              f.write(f"status={status}\n")
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as f:
+              f.write(f"### Outcome: {status}\n\n{reason}\n\n")
+              if details:
+                  f.write(f"- Core venues expected: {details.get('core_venues_expected', 9)}\n")
+                  f.write(f"- Sources fetched: {details.get('core_venues_with_fetch_success', 0)}\n")
+                  f.write(f"- Candidate event/artist rows: {details.get('candidate_event_artist_rows', 0)}\n")
+                  f.write(f"- Artist-pool candidate matches: {details.get('candidate_pool_matches', 0)}\n")
+                  f.write("- Verified gigs: 0 (this collector does not verify individual events)\n")
+          PY
+
+      - name: Upload dated report and coverage ledger
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: riley-coe-core-gig-search-${{ steps.window.outputs.start }}
+          path: artifacts/core-search-${{ steps.window.outputs.start }}/
+          if-no-files-found: warn
+          retention-days: 90
+
+      - name: Fail only if no usable run summary was produced
+        if: always()
+        shell: bash
+        run: |
+          if [ ! -f "artifacts/core-search-${{ steps.window.outputs.start }}/run_summary.json" ]; then
+            echo "FAILED_RUN: no run summary was produced."
+            exit 1
+          fi
+          echo "A dated report was produced. See the job summary and uploaded artifact for the result and limitations."
