@@ -100,7 +100,6 @@ jobs:
               --sources "$SOURCES" \
               --extra-seeds tests/fixtures/known_gig_regressions.csv \
               --out-dir "$OUT/$PASS-inspection" \
-              --extra-seeds tests/fixtures/known_gig_regressions.csv \
               --start "${{ steps.window.outputs.start }}" \
               --end "${{ steps.window.outputs.end }}" \
               --max-pages-per-venue 35 --max-depth 2
