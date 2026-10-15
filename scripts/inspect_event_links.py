@@ -354,7 +354,7 @@ def extract_visible_listing_events(visible_text, default_venue="", start_date=No
     """Extract event-card candidates from listing pages with title/date/venue lines."""
     lines=[line.strip() for line in visible_text.splitlines() if line.strip()]
     date_pattern=re.compile(r"(?i)\b(?:(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)(?:day)?\s+)?\d{1,2}(?:st|nd|rd|th)?\s+[A-Za-z]{3,9}\s+(?:['’]?\d{2}|20\d{2})\b")
-    generic={"gigs","events","what's on","whats on","info","more info","limited availability","limited tickets","tickets","buy tickets","book tickets","book now","details","event details","view event","view details","find out more","read more","on sale","on sale now","sold out","coming soon","view as list","choose date","search","next","previous","older","available now","full price","advance tickets","interval","timings are approximate and subject to change","what they say","the guardian","your visit","plan your journey","parking","eat and drink","access info","access information","take a listen","about samling academy"}
+    generic={"gigs","events","what's on","whats on","info","more info","limited availability","limited tickets","tickets","buy tickets","book tickets","book now","details","event details","view event","view details","find out more","read more","on sale","on sale now","sold out","coming soon","view as list","choose date","search","next","previous","older","available now","full price","advance tickets","interval","timings are approximate and subject to change","what they say","the guardian","your visit","plan your journey","parking","eat and drink","access info","access information","take a listen","about samling academy","follow","contact us","october","november","december","january","february","march","april","may","june","july","august","september"}
     known_venues={re.sub(r"[^a-z0-9]+","",name.casefold()) for name in [
         "The Cluny","Cluny 2","Boiler Shop","Wylam Brewery","The Grove","The Glasshouse",
         "Glasshouse International Centre for Music","Sage Two","Sage One","Cumberland Arms","Cobalt Studios",
@@ -431,7 +431,58 @@ def extract_visible_listing_events(visible_text, default_venue="", start_date=No
         if not date_pattern.search(line):
             continue
         dt=parsed_date(line)
-        if not dt or i==0:
+        if not dt:
+            continue
+        # Some venue calendars put the date first, followed by a ticket CTA,
+        # then the event heading (e.g. the Cumberland Arms events page).
+        # If a known venue/room appears before a plausible heading, keep the
+        # existing title-before-date handling instead.
+        forward_title=""
+        forward_index=None
+        for j in range(i+1,min(len(lines),i+8)):
+            candidate=lines[j].strip(" -–—:")
+            if date_pattern.search(candidate) or inline_date_title.match(candidate):
+                break
+            key=re.sub(r"[^a-z0-9]+","",candidate.casefold())
+            if key in known_venues:
+                break
+            low=candidate.casefold()
+            if low in generic or is_page_furniture(candidate) or not candidate:
+                continue
+            if low.startswith(("send us a message","or email ","email to book","website:","tickets:")):
+                continue
+            if len(candidate)>180 or re.search(r"[.!?]$",candidate):
+                continue
+            forward_title=candidate
+            forward_index=j
+            break
+        if forward_title and forward_index is not None:
+            title_parts=[part.strip() for part in re.split(r"\\s+\\+\\s+",forward_title) if part.strip()]
+            performers=list(title_parts)
+            for extra in lines[forward_index+1:min(len(lines),forward_index+4)]:
+                if date_pattern.search(extra) or inline_date_title.match(extra):
+                    break
+                low=extra.casefold().strip()
+                if low in generic or is_page_furniture(extra) or low.startswith(("send us a message","or email ","email to book")):
+                    break
+                if "," in extra and not re.search(r"[.!?]",extra):
+                    performers.extend(part.strip() for part in extra.split(",") if part.strip())
+                    break
+            price=""; availability="not_checked"
+            for extra in lines[i+1:min(len(lines),i+10)]:
+                if date_pattern.search(extra) or inline_date_title.match(extra):
+                    break
+                pm=re.search(r"£\\s?\\d+(?:\\.\\d{1,2})?(?:\\s*[-–]\\s*£?\\s?\\d+(?:\\.\\d{1,2})?)?",extra,re.I)
+                if pm and not price: price=pm.group(0).replace(" ","")
+                if "sold out" in extra.casefold(): availability="SoldOut"
+            found.append({
+                "event_title":forward_title,"event_date":dt,"venue":default_venue,
+                "performer_names":"; ".join(dict.fromkeys(performers)),"price":price,
+                "currency":"GBP" if price else "","availability":availability,
+                "notes":"Candidate extracted from date-first venue listing; independently verify title, billing/support, room, price and ticket status."
+            })
+            continue
+        if i==0:
             continue
         # Two common card layouts are supported:
         #   title -> date -> venue
