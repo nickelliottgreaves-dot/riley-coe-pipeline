@@ -58,6 +58,9 @@ class ValidateGigFinderReportTests(unittest.TestCase):
             "source_url", "source_kind", "match_basis", "candidate_status", "price",
             "ticket_status", "verified", "notes"
         ], [])
+        self.write_csv(run / "out_of_scope_event_candidates.csv", [
+            "event_date", "source_venue", "explicit_location", "event_title", "artist", "source_url", "notes"
+        ], [])
         self.write_csv(run / "stage_results.csv", ["stage", "status", "exit_code", "command", "log_file", "notes"], [])
         return run, pool, sources
 
