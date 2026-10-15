@@ -231,7 +231,7 @@ def extract_visible_event(page_title, visible_text, default_venue="", page_url="
     # Ents24 detail-page titles follow "Artist Newcastle tickets at Venue ...";
     # preserve the billed act instead of allowing a date-first card parser to
     # misread the word "at" as the event title.
-    title=re.split(r"(?i)\\s+(?:newcastle(?:\\s+upon\\s+tyne)?\\s+)?tickets?\\s+at\\s+",title)[0].strip()
+    title=re.split(r"(?i)\s+(?:newcastle(?:\s+upon\s+tyne)?\s+)?tickets?\s+at\s+",title)[0].strip()
     # Strip common venue suffixes, including pages titled "Artist at Venue".
     if re.search(r"\s[-|–—]\s",title):
         title=re.split(r"\s[-|–—]\s",title)[0].strip()
