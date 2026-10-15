@@ -471,7 +471,7 @@ Tickets"""
                 w=csv.DictWriter(f,fieldnames=["venue","source_url"]);w.writeheader()
                 w.writerow({"venue":"Test Venue","source_url":"https://venue.example/whats-on"})
             fetched=[]
-            calendar='<title>Test Venue What's On</title><a href="/wp-content/uploads/photo.jpg">Venue photo</a><a href="/events/act">Act</a>'
+            calendar="<title>Test Venue What's On</title><a href=\"/wp-content/uploads/photo.jpg\">Venue photo</a><a href=\"/events/act\">Act</a>"
             detail='<title>Act - Test Venue</title><p>Date:</p><p>Thu 15 Oct 2026</p><p>Venue:</p><p>Test Venue</p>'
             def fake_fetch(url, *args, **kwargs):
                 fetched.append(url)
