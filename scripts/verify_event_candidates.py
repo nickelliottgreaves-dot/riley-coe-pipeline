@@ -46,8 +46,8 @@ def read_json(path: Path) -> dict:
 
 
 VENUE_ALIASES = {
-    "the cluny": {"the cluny", "cluny"},
-    "cluny 2": {"cluny 2", "cluny two"},
+    "the cluny": {"the cluny", "cluny", "cluny 2", "cluny two"},
+    "cluny 2": {"the cluny", "cluny", "cluny 2", "cluny two"},
     "boiler shop": {"boiler shop"},
     "wylam brewery": {"wylam brewery"},
     "the grove": {"the grove", "grove newcastle"},
@@ -105,6 +105,11 @@ def is_calendar_hub_url(url: str, venue: str, source_rows: list[dict[str, str]],
         if candidate_path and source_path.startswith(candidate_path + "/"):
             return True
     return False
+
+
+def report_venue(value: str) -> str:
+    """Consolidate The Cluny and Cluny 2 in user-facing gig reports."""
+    return "The Cluny" if norm(value) in {"the cluny", "cluny", "cluny 2", "cluny two"} else str(value or "").strip()
 
 
 def contains_performer(row: dict[str, str], performer: str) -> bool:
@@ -240,9 +245,11 @@ def main() -> int:
             verification_notes = "Insufficient naturally collected event-level evidence; do not present as verified."
 
         verified = verification_status != "candidate_needs_manual_review"
+        report_venue_name = report_venue(venue)
         if verified:
-            verified_event_keys.add((day, venue_key, norm(canonical_title)))
+            verified_event_keys.add((day, norm(report_venue_name), norm(canonical_title)))
         out_row = dict(match)
+        out_row["venue"] = report_venue_name
         out_row.update({
             "verification_status": verification_status,
             "verified": "true" if verified else "false",
