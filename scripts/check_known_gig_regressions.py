@@ -121,13 +121,21 @@ def main() -> int:
         ])
         writer.writeheader()
         writer.writerows(results)
+    recovered = sum(r["result"] == "recovered" for r in results)
+    naturally_recovered = sum(r["natural_result"] == "naturally_recovered" for r in results)
+    parser_pass = bool(results) and recovered == len(results)
+    natural_pass = bool(results) and naturally_recovered == len(results)
     summary = {
         "fixtures": len(results),
-        "recovered": sum(r["result"] == "recovered" for r in results),
-        "not_recovered": sum(r["result"] != "recovered" for r in results),
-        "naturally_recovered": sum(r["natural_result"] == "naturally_recovered" for r in results),
-        "not_naturally_recovered": sum(r["natural_result"] != "naturally_recovered" for r in results),
-        "status": "PASS" if results and all(r["result"] == "recovered" for r in results) else "FAIL",
+        "recovered": recovered,
+        "not_recovered": len(results) - recovered,
+        "naturally_recovered": naturally_recovered,
+        "not_naturally_recovered": len(results) - naturally_recovered,
+        "parser_status": "PASS" if parser_pass else "FAIL",
+        "natural_discovery_status": "PASS" if natural_pass else "INCOMPLETE",
+        "status": "PASS" if parser_pass and natural_pass else (
+            "PARSER_PASS_NATURAL_DISCOVERY_INCOMPLETE" if parser_pass else "FAIL"
+        ),
         "results_file": str(args.out),
     }
     args.out.with_suffix(".summary.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
