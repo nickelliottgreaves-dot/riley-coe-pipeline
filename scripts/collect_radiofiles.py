@@ -59,6 +59,8 @@ def validate_tracklist(payload: dict, expected_pid: str, expected_date: date) ->
     payload_date = parse_episode_date(str(payload.get("date") or ""))
     row_errors = []
     normalized = []
+    if not tracks:
+        row_errors.append("Tracklist has zero rows; treat as unavailable, not complete")
     for position, track in enumerate(tracks, 1):
         if not isinstance(track, dict):
             row_errors.append(f"Track row {position} is not an object")
@@ -71,7 +73,7 @@ def validate_tracklist(payload: dict, expected_pid: str, expected_date: date) ->
         normalized.append({"track_position": position, "track_title": title, "artist_candidate": artist})
     date_match = payload_date == expected_date if payload_date else False
     pid_match = payload_pid == expected_pid if payload_pid else None
-    internally_consistent = count_match and len(normalized) == len(tracks) and date_match and pid_match is not False and not row_errors
+    internally_consistent = bool(tracks) and count_match and len(normalized) == len(tracks) and date_match and pid_match is not False and not row_errors
     return {
         "tracks": normalized,
         "reported_count": reported_count if isinstance(reported_count, int) else "",
