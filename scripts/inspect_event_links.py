@@ -486,11 +486,13 @@ def extract_visible_listing_events(visible_text, default_venue="", start_date=No
             # billed title. Do not attribute every card to the source row's
             # configured venue merely because it was crawled for that venue.
             card_venue=""
-            for extra in lines[forward_index+1:min(len(lines),forward_index+5)]:
+            following=lines[forward_index+1:min(len(lines),forward_index+5)]
+            for pos,extra in enumerate(following):
                 if date_pattern.search(extra) or inline_date_title.match(extra):
                     break
                 candidate_key=re.sub(r"[^a-z0-9]+","",extra.casefold())
-                if candidate_key in known_venues:
+                next_label=following[pos+1].casefold().strip() if pos+1<len(following) else ""
+                if candidate_key in known_venues or next_label in {"official event page","gig preview"}:
                     card_venue=extra.strip()
                     break
                 if is_page_furniture(extra) or extra.casefold().strip() in generic:
