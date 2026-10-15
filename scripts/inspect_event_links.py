@@ -240,8 +240,8 @@ def extract_visible_event(page_title, visible_text, default_venue="", page_url="
                     "think tank","the globe","zerox","sage one","sage two"}
     venue_title=title.casefold().strip()
     configured_venue=str(default_venue or "").casefold().strip()
-    if (not title or venue_title in generic_titles or venue_title==configured_venue
-            or venue_title==f"{configured_venue} newcastle"
+    if (not title or venue_title in generic_titles or re.search(r"\barchives?\b",venue_title)
+            or venue_title==configured_venue or venue_title==f"{configured_venue} newcastle"
             or re.fullmatch(r"(?i)\d{1,2}:\d{2}\s*(?:am|pm)?",title.strip())):
         return None
     billing_title=title
