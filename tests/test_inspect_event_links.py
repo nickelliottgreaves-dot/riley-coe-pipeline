@@ -432,7 +432,7 @@ Tickets"""
                 rows=list(csv.DictReader(f))
             self.assertTrue(any(r["event_title"]=="Skating Polly" and r["status"]=="visible_event_candidate_needs_review" for r in rows))
 
-    def test_external_ticket_hosts_are_not_crawled_as_venue_pages(self):
+    def test_unallowlisted_external_ticket_hosts_are_not_crawled_as_venue_pages(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp); links=root/"links.csv"; sources=root/"sources.csv"
             with links.open("w",encoding="utf-8",newline="") as f:
@@ -457,7 +457,8 @@ Tickets"""
             with (root/"out"/"event_page_crawl_audit.csv").open(newline="",encoding="utf-8") as f:
                 audit=list(csv.DictReader(f))[0]
             self.assertEqual(audit["external_seed_links_skipped"],"1")
-            self.assertIn("External ticketing hosts are not crawled",audit["notes"])
+            self.assertIn("allowlisted external ticketing event-detail pages",audit["notes"])
+            self.assertIn("not recursively crawled",audit["notes"])
 
     def test_partial_page_failures_keep_successful_crawl_outputs(self):
         with tempfile.TemporaryDirectory() as tmp:
