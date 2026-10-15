@@ -59,6 +59,30 @@ class ValidatorTests(unittest.TestCase):
             self.assertEqual(manifest["claimed_status"],"PARTIAL")
             self.assertIs(manifest["episode_coverage_complete"],False)
 
+    def test_episode_complete_status_requires_exact_crosscheck_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp); episode_file=root/"bbc_episodes.csv"; out=root/"partial-run"
+            with episode_file.open("w",newline="",encoding="utf-8") as f:
+                w=csv.DictWriter(f,fieldnames=["episode_date","episode_title","episode_url","tracklist_status","notes"])
+                w.writeheader()
+                w.writerow({"episode_date":"2026-10-15","episode_title":"Fixture episode",
+                    "episode_url":"https://www.bbc.co.uk/sounds/play/mfixture","tracklist_status":"not_yet_checked",
+                    "notes":"Fixture without crosscheck."})
+            assembled=subprocess.run([sys.executable,str(ROOT/"scripts/assemble_run_package.py"),
+                "--start","2026-10-15","--end","2026-10-28","--bbc-episodes",str(episode_file),
+                "--out-dir",str(out)],capture_output=True,text=True)
+            self.assertEqual(assembled.returncode,0,assembled.stderr)
+            episodes_path=out/"episodes.csv"
+            with episodes_path.open(newline="",encoding="utf-8") as f:
+                rows=list(csv.DictReader(f)); fields=list(rows[0])
+            rows[0]["tracklist_status"]="complete"
+            with episodes_path.open("w",newline="",encoding="utf-8") as f:
+                w=csv.DictWriter(f,fieldnames=fields);w.writeheader();w.writerows(rows)
+            result=subprocess.run([sys.executable,str(VALIDATOR),"--run-dir",str(out)],
+                capture_output=True,text=True)
+            self.assertNotEqual(result.returncode,0)
+            self.assertIn("episodes.csv marks tracklists complete but bbc_radiofiles_episode_crosscheck.csv is missing",result.stdout)
+
     def test_false_complete_flags_fail(self):
         with tempfile.TemporaryDirectory() as tmp:
             p = Path(tmp)
