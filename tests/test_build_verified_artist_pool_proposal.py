@@ -18,7 +18,7 @@ class VerifiedPoolProposalTests(unittest.TestCase):
             cand_fields=["episode_date","episode_pid","episode_title","track_position","track_title","artist_candidate","radiofiles_artist_candidate","bbc_episode_url","radiofiles_episode_url","crosscheck_status","evidence"]
             self.write(candidates,cand_fields,[
                 {"episode_date":"2026-10-13","episode_pid":"m0031tk4","track_title":"Song A","artist_candidate":"Existing Artist","radiofiles_artist_candidate":"Existing Artist","crosscheck_status":"EXACT_FULL_TRACKLIST_MATCH","bbc_episode_url":"https://bbc.example/a","radiofiles_episode_url":"https://radiofiles.example/a"},
-                {"episode_date":"2026-10-13","episode_pid":"m0031tk4","track_title":"Song B","artist_candidate":"New Artist","radiofiles_artist_candidate":"New Artist","crosscheck_status":"EXACT_FULL_TRACKLIST_MATCH","bbc_episode_url":"https://bbc.example/a","radiofiles_episode_url":"https://radiofiles.example/a"},
+                {"episode_date":"2026-10-13","episode_pid":"m0031tk4","track_title":"Song B","artist_candidate":"New Artist & Collaborator","radiofiles_artist_candidate":"New Artist","crosscheck_status":"EXACT_FULL_TRACKLIST_MATCH","bbc_episode_url":"https://bbc.example/a","radiofiles_episode_url":"https://radiofiles.example/a"},
                 {"episode_date":"2026-10-14","episode_pid":"m0031tk5","track_title":"Song C","artist_candidate":"Unsafe Candidate","radiofiles_artist_candidate":"Unsafe Candidate","crosscheck_status":"MISMATCH_REQUIRES_REVIEW","bbc_episode_url":"https://bbc.example/b","radiofiles_episode_url":"https://radiofiles.example/b"},
             ])
             subprocess.run([sys.executable,str(SCRIPT),"--pool",str(pool),"--verified-candidates",str(candidates),"--out-dir",str(out)],check=True,capture_output=True,text=True)
@@ -31,6 +31,7 @@ class VerifiedPoolProposalTests(unittest.TestCase):
             audit=json.loads((out/f"artist_pool_proposal_audit_{stamp}.json").read_text())
             self.assertEqual([r["artist"] for r in proposed],["Existing Artist","New Artist"])
             self.assertEqual([r["artist"] for r in additions],["New Artist"])
+            self.assertIn("New Artist & Collaborator", additions[0]["source_basis"])
             self.assertFalse(audit["authoritative_pool_modified"])
             self.assertEqual(pool.read_text().splitlines(),["index,artist,status,source_basis","1,Existing Artist,ACTIVE,baseline"])
 
