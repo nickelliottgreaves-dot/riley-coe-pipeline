@@ -2,7 +2,7 @@ import sys,unittest, json, tempfile
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/"scripts"))
-from collect_bbc_sounds import episode_id,find_episodes,parse_date,TextParser,extract_tracklist_candidates,main,radiofiles_app_url,discover_radiofiles_episode_candidates
+from collect_bbc_sounds import episode_id,episode_urn,fetch_rms_tracklist,find_episodes,parse_date,TextParser,extract_tracklist_candidates,main,radiofiles_app_url,discover_radiofiles_episode_candidates
 
 class BBCCollectorTests(unittest.TestCase):
     def test_sequential_page_fallback_finds_more_bbc_episodes(self):
@@ -66,6 +66,33 @@ class BBCCollectorTests(unittest.TestCase):
     def test_episode_id(self):
         self.assertEqual(episode_id("https://www.bbc.co.uk/programmes/m0031tk4"),"m0031tk4")
         self.assertEqual(episode_id("https://www.bbc.co.uk/sounds/play/m0031tk4"),"m0031tk4")
+
+    def test_extracts_episode_urn_from_raw_markup(self):
+        self.assertEqual(episode_urn('<meta content="urn:bbc:radio:episode:m0031tk5">'),
+                         "urn:bbc:radio:episode:m0031tk5")
+        self.assertEqual(episode_urn("<html>no URN</html>"),"")
+
+    def test_fetches_full_track_rows_from_official_rms_track_list_module(self):
+        payload={"data":[
+            {"type":"header_module","id":"playable","title":"Riley & Coe"},
+            {"type":"inline_display_module","id":"track_list","title":"Track List","state":"ok","total":None,
+             "data":[
+                 {"type":"segment_item","id":"p0000001","urn":"urn:bbc:radio:segment:music:abc",
+                  "titles":{"primary":"Artist One","secondary":"Song One"}},
+                 {"type":"segment_item","id":"p0000002","urn":"urn:bbc:radio:segment:music:def",
+                  "titles":{"primary":"Artist Two","secondary":"Song Two"}}
+             ]}
+        ]}
+        response=MagicMock(); response.status=200
+        response.headers.get.return_value="application/json"
+        response.read.return_value=json.dumps(payload).encode()
+        manager=MagicMock(); manager.__enter__.return_value=response; manager.__exit__.return_value=False
+        with patch("collect_bbc_sounds.urlopen",return_value=manager):
+            result=fetch_rms_tracklist("urn:bbc:radio:episode:m0031tk5")
+        self.assertEqual(len(result["rows"]),2)
+        self.assertEqual(result["rows"][0]["artist_candidate"],"Artist One")
+        self.assertEqual(result["rows"][1]["track_title"],"Song Two")
+        self.assertIn("show_tracklist=true",result["url"])
     def test_finds_episode_links(self):
         html='<a href="/programmes/m0031tk4">Gideon reigns supreme</a><a href="/about">About</a>'
         self.assertEqual(find_episodes(html,"https://www.bbc.co.uk/programmes/m001mf2c/episodes")[0]["title"],"Gideon reigns supreme")
