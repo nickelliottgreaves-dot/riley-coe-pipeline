@@ -46,7 +46,26 @@ jobs:
                   baseline = list(csv.DictReader(f))
               baseline_names = {row["artist"].strip().casefold() for row in baseline}
               assert baseline_names.issubset(set(names)), "Updated pool dropped an artist from the preserved 747-row backup"
-          print(f"Artist pool OK: {len(rows)} rows; baseline preservation checked when dated backup exists")
+          pre_review_backup = Path("data/artist_pool_backup_20261015_pre_fuzzy_review.csv")
+          assert pre_review_backup.exists(), "Missing immediate pre-review artist-pool backup"
+          with pre_review_backup.open(encoding="utf-8-sig", newline="") as f:
+              immediate_baseline = list(csv.DictReader(f))
+          assert len(immediate_baseline) == 833, f"Expected 833-row immediate backup, found {len(immediate_baseline)}"
+          immediate_names = {row["artist"].strip().casefold() for row in immediate_baseline}
+          assert immediate_names.issubset(set(names)), "Updated pool dropped an artist from the immediate 833-row backup"
+          dated_pool = Path("data/artist_pool_20261015_reviewed.csv")
+          assert dated_pool.exists(), "Missing dated reviewed artist pool"
+          with dated_pool.open(encoding="utf-8-sig", newline="") as f:
+              dated_rows = list(csv.DictReader(f))
+          dated_names = {row["artist"].strip().casefold() for row in dated_rows}
+          assert len(dated_rows) == len(rows) and dated_names == set(names), "Dated reviewed pool differs from authoritative pool"
+          review_ledger = Path("artifacts/manual-review/artist-pool-fuzzy-review-2026-10-15.csv")
+          assert review_ledger.exists(), "Missing manual fuzzy-review decision ledger"
+          with review_ledger.open(encoding="utf-8-sig", newline="") as f:
+              review_rows = list(csv.DictReader(f))
+          assert sum(row["decision"] == "ADD_TO_POOL" for row in review_rows) == 14, "Expected 14 reviewed additions"
+          assert sum(row["decision"].startswith("HOLD") for row in review_rows) == 4, "Expected four held review candidates"
+          print(f"Artist pool OK: {len(rows)} rows; preserved 747-row legacy baseline and 833-row immediate backup; dated review ledger validated")
           PY
 
   bbc-sounds-inventory:
