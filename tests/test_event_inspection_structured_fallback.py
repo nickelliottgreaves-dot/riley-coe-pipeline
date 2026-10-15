@@ -1,9 +1,10 @@
 import csv, json, sys, tempfile, unittest
+from datetime import date
 from pathlib import Path
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
-from inspect_event_links import main
+from inspect_event_links import main, extract_visible_listing_events
 
 
 class StructuredDataFallbackTests(unittest.TestCase):
@@ -121,6 +122,68 @@ class StructuredDataFallbackTests(unittest.TestCase):
             self.assertEqual(audit["pages_failed"], "4")
             self.assertEqual(audit["crawl_cap_reached"], "false")
             self.assertEqual(audit["status"], "PARTIAL")
+
+
+    def test_date_first_cumberland_cards_capture_title_and_support_acts(self):
+        visible = """Events
+october
+Thur 15 October '26 | 19.30
+TICKETS
+Yotuns + Delphine Joussein ‘Calamity’ + LEDLEY w/ special guest Faye MacCalman
+fri 16 October '26 | 19:30
+Tickets
+f54 x mercury prize fringe 2026
+Sin Clair, Nadine Hurley, Crimewavex
+"""
+        rows = extract_visible_listing_events(
+            visible, "Cumberland Arms",
+            date.fromisoformat("2026-10-15"), date.fromisoformat("2026-10-28")
+        )
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(rows[0]["event_date"], "2026-10-15")
+        self.assertIn("Yotuns", rows[0]["performer_names"])
+        self.assertIn("Faye MacCalman", rows[0]["performer_names"])
+        self.assertEqual(rows[1]["event_date"], "2026-10-16")
+        self.assertIn("Sin Clair", rows[1]["performer_names"])
+        self.assertIn("Crimewavex", rows[1]["performer_names"])
+
+    def test_inline_month_day_and_ordinal_dates_are_inferred_from_window(self):
+        visible = """Oct 15 – KMP Quintal
+Thursday 15 October, 7pm
+Tickets: £6-£8
+23rd Oct - The Fargo Railroad Co. @ Central Bar
+26th Oct - The Klittens
+"""
+        rows = extract_visible_listing_events(
+            visible, "Central Gateshead / Central Bar",
+            date.fromisoformat("2026-10-15"), date.fromisoformat("2026-10-28")
+        )
+        by_title = {row["event_title"]: row for row in rows}
+        self.assertEqual(by_title["KMP Quintal"]["event_date"], "2026-10-15")
+        self.assertEqual(by_title["KMP Quintal"]["price"], "£6-£8")
+        self.assertEqual(by_title["The Fargo Railroad Co."]["event_date"], "2026-10-23")
+        self.assertEqual(by_title["The Klittens"]["event_date"], "2026-10-26")
+
+    def test_ordinal_full_year_calendar_dates_parse_for_gigantic_cards(self):
+        visible = """Friday 16th October 2026
+Smith & Liddle
+The Grove, Newcastle upon Tyne
+Doors at 19:00
+Book Tickets
+Saturday 17th October 2026
+Northern Hospitality
++ Slate Label & Ben Harwood
+The Grove, Newcastle upon Tyne
+Doors at 19:00
+Book Tickets
+"""
+        rows = extract_visible_listing_events(
+            visible, "The Grove",
+            date.fromisoformat("2026-10-15"), date.fromisoformat("2026-10-28")
+        )
+        self.assertEqual([r["event_date"] for r in rows], ["2026-10-16", "2026-10-17"])
+        self.assertEqual(rows[0]["event_title"], "Smith & Liddle")
+        self.assertIn("Slate Label & Ben Harwood", rows[1]["performer_names"])
 
 
 if __name__ == "__main__":
