@@ -12,7 +12,7 @@ on:
 # Prevent multiple manual/push test runs from repeatedly crawling the same
 # public calendars in parallel; keep the newest run for each ref.
 concurrency:
-  group: riley-coe-validation-${{ github.ref }}-${{ github.sha }}
+  group: riley-coe-validation-${{ github.ref }}
   cancel-in-progress: false
 
 permissions:
