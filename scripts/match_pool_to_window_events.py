@@ -209,6 +209,12 @@ def main() -> int:
             dedup[key]=row
             continue
         existing=dedup[key]
+        # Keep an individual event-detail URL even when the richer parsed row came from a venue calendar.
+        # Otherwise a match can link only to the generic calendar and lose its direct event page.
+        existing_detail=is_event_detail_url(existing.get("source_url",""))
+        row_detail=is_event_detail_url(row.get("source_url",""))
+        if row_detail and not existing_detail:
+            existing["source_url"]=row["source_url"]
         for field in ("price","ticket_status"):
             if not (existing.get(field) or "").strip() and (row.get(field) or "").strip():
                 existing[field]=row[field]
