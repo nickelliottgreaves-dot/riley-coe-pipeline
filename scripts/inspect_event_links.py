@@ -362,14 +362,37 @@ def main():
                         else:
                             all_rows.append({"venue":venue,"page_url":url,"http_status":status,"content_type":ctype,"page_title":page_title,"event_title":"","event_date":"","performer_names":"","price":"","currency":"","availability":"","event_jsonld_found":"false","visible_text_snapshot":f"snapshots/{snap_name}","verified":"false","status":"page_text_needs_review","notes":"No Event JSON-LD or reliable visible event-card fields found; inspect saved visible text manually."+( " HTML truncated." if truncated else "")})
                 if depth<args.max_depth:
-                    for href,txt in p.links:
-                        target=urljoin(url,href); parsed=urlparse(target)
-                        if parsed.scheme not in {"https","http"} or parsed.netloc not in source_hosts or target in visited or not likely(href,txt): continue
-                        # Avoid adding fragments and tracking-only URL variants.
-                        target=canonicalize_url(target)
-                        if target not in visited and target not in queued:
+                    listing_dates=[]
+                    for candidate in listing_events:
+                        try: listing_dates.append(date.fromisoformat(candidate["event_date"]))
+                        except (ValueError,KeyError): pass
+                    stop_listing=False
+                    if listing_dates and len(listing_dates)==len(listing_events):
+                        ascending=listing_dates==sorted(listing_dates)
+                        descending=listing_dates==sorted(listing_dates,reverse=True)
+                        if ascending and all(day>args.end_date for day in listing_dates):
+                            stop_listing=True
+                        elif descending and all(day<args.start_date for day in listing_dates):
+                            stop_listing=True
+                    in_window=[candidate for candidate in listing_events if args.start_date<=date.fromisoformat(candidate["event_date"])<=args.end_date]
+                    if not stop_listing:
+                        for href,txt in p.links:
+                            target=urljoin(url,href); parsed=urlparse(target)
+                            if parsed.scheme not in {"https","http"} or parsed.netloc not in source_hosts:
+                                continue
+                            navigation=is_calendar_navigation(href,txt,url)
+                            if listing_events:
+                                if not navigation and not any(event_link_matches(candidate,href,txt) for candidate in in_window):
+                                    continue
+                            elif event_objects and not navigation:
+                                continue
+                            elif not event_objects and not likely(href,txt):
+                                continue
+                            target=canonicalize_url(target)
+                            if target in visited or target in queued:
+                                continue
                             item=(target,depth+1)
-                            if is_calendar_navigation(href,txt,url):
+                            if navigation:
                                 queue.appendleft(item)
                             else:
                                 queue.append(item)
