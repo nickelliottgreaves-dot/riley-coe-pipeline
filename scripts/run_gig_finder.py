@@ -235,8 +235,20 @@ def main() -> int:
     )
     matches = read_csv(matches_path)
     artist_coverage = read_csv(out_dir / "artist_window_event_coverage.csv")
+    pool_page_rows = read_csv(pool_page_matches)
+    pool_count = registry_check["artist_count"]
+    page_comparison_complete = (
+        len(pool_page_rows) == pool_count
+        and all((row.get("searched") or "").casefold() == "true" for row in pool_page_rows)
+    )
+    event_comparison_complete = (
+        len(artist_coverage) == pool_count
+        and all((row.get("searched") or "").casefold() == "true" for row in artist_coverage)
+    )
     manifest.update({
         "claimed_status": "PARTIAL",
+        "artist_pool_compared": page_comparison_complete,
+        "artist_pool_event_comparison_complete": event_comparison_complete,
         "configured_source_count": len(sources),
         "sources_with_explicit_coverage_rows": len(coverage),
         "sources_with_calendar_coverage_verified": sum(row["calendar_coverage_verified"] == "true" for row in coverage),
