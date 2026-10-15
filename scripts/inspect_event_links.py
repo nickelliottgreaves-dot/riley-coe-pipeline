@@ -228,6 +228,10 @@ def extract_visible_event(page_title, visible_text, default_venue="", page_url="
         if external_location:
             return None
     title=(page_title or "").strip()
+    # Ents24 detail-page titles follow "Artist Newcastle tickets at Venue ...";
+    # preserve the billed act instead of allowing a date-first card parser to
+    # misread the word "at" as the event title.
+    title=re.split(r"(?i)\\s+(?:newcastle(?:\\s+upon\\s+tyne)?\\s+)?tickets?\\s+at\\s+",title)[0].strip()
     # Strip common venue suffixes, including pages titled "Artist at Venue".
     if re.search(r"\s[-|–—]\s",title):
         title=re.split(r"\s[-|–—]\s",title)[0].strip()
@@ -235,7 +239,7 @@ def extract_visible_event(page_title, visible_text, default_venue="", page_url="
         title=re.sub(r"(?i)\s+at\s+"+re.escape(default_venue)+r"(?:\s+Newcastle)?\s*$","",title).strip()
     generic_titles={"gigs","events","what's on","whats on","home","more info","limited availability",
                     "limited tickets","tickets","buy tickets","book tickets","book now","event details",
-                    "details","view details","view event","find out more","read more","on sale","on sale now",
+                    "details","at","view details","view event","find out more","read more","on sale","on sale now",
                     "sold out","coming soon","available now","advance tickets","access info",
                     "access information","venue information","plan your visit","boiler shop","the glasshouse",
                     "glasshouse","utilita arena","the cluny","cluny","cluny 2","cobalt studios",
