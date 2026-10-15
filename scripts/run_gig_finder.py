@@ -28,7 +28,7 @@ DISCOVERY_EVENT_FIELDS = ["event_date", "venue", "event_title", "artist", "artis
 LINK_FIELDS = ["venue", "link_text", "candidate_url", "source_page_url", "candidate_reason", "verified", "notes"]
 INSPECTED_FIELDS = ["venue", "page_url", "http_status", "content_type", "page_title", "event_title", "event_date", "performer_names", "price", "currency", "availability", "event_jsonld_found", "visible_text_snapshot", "verified", "status", "notes"]
 MATCH_FIELDS = ["artist_pool_name", "event_date", "venue", "event_title", "matched_performer", "source_url", "source_kind", "match_basis", "candidate_status", "price", "ticket_status", "verified", "notes"]
-COVERAGE_FIELDS = ["venue", "source_url", "page_fetch_status", "http_status", "discovery_status", "candidate_events", "candidate_links", "detail_pages_fetched", "detail_pages_failed", "external_event_pages_inspected", "crawl_cap_reached", "calendar_coverage_verified", "outcome", "notes"]
+COVERAGE_FIELDS = ["venue", "source_url", "page_fetch_status", "http_status", "discovery_status", "candidate_events", "candidate_links", "detail_pages_fetched", "detail_pages_failed", "same_host_pages_failed", "external_detail_pages_failed", "external_event_pages_inspected", "crawl_cap_reached", "calendar_coverage_verified", "outcome", "notes"]
 STAGE_FIELDS = ["stage", "status", "exit_code", "timeout_seconds", "command", "log_file", "notes"]
 STAGE_TIMEOUT_SECONDS = 300
 
@@ -116,12 +116,19 @@ def combine_venue_coverage(
     page_rows: list[dict[str, str]],
     discovery_rows: list[dict[str, str]],
     crawl_rows: list[dict[str, str]],
+    failure_rows: list[dict[str, str]] | None = None,
 ) -> list[dict[str, str]]:
+    """Summarize venue-calendar capture separately from external ticket-page failures."""
     def index(rows: list[dict[str, str]]) -> dict[str, dict[str, str]]:
         return {normalize_key(row.get("venue", "")): row for row in rows if normalize_key(row.get("venue", ""))}
+
     page_by = index(page_rows)
     discovery_by = index(discovery_rows)
     crawl_by = index(crawl_rows)
+    failures_by: dict[str, list[dict[str, str]]] = {}
+    for failure in failure_rows or []:
+        failures_by.setdefault(normalize_key(failure.get("venue", "")), []).append(failure)
+
     result = []
     for source in sources:
         venue = (source.get("venue") or "").strip()
@@ -129,29 +136,47 @@ def combine_venue_coverage(
         page = page_by.get(key, {})
         discovery = discovery_by.get(key, {})
         crawl = crawl_by.get(key, {})
+        venue_failures = failures_by.get(key, [])
         failed_pages = (crawl.get("pages_failed") or "").strip()
+        failed_count = int(failed_pages) if failed_pages.isdigit() else 0
+        external_detail_failures = sum(
+            (row.get("external_page") or "").casefold() in {"true", "yes", "1"}
+            for row in venue_failures
+        )
+        same_host_failures = sum(
+            (row.get("external_page") or "").casefold() in {"false", "no", "0"}
+            for row in venue_failures
+        )
+        # If the ledger is absent or incomplete, do not silently classify unknown failures as external-only.
+        unclassified_failures = max(0, failed_count - external_detail_failures - same_host_failures)
+        same_host_failures += unclassified_failures
         cap = (crawl.get("crawl_cap_reached") or "").strip().casefold()
         page_status = ("page_captured" if page.get("text_file") else "fetch_failed") if page else "not_checked"
         discovery_status = (discovery.get("status") or "not_checked").strip()
-        notes = " ".join(x.strip() for x in [
+        notes_parts = [
             source.get("notes", ""), page.get("notes", ""),
             discovery.get("notes", ""), crawl.get("notes", ""),
-        ] if x and x.strip())
+        ]
+        if external_detail_failures:
+            notes_parts.append(
+                f"{external_detail_failures} external event-detail fetch(es) failed; event-level details remain unresolved."
+            )
+        notes = " ".join(x.strip() for x in notes_parts if x and x.strip())
         has_any_audit = bool(page or discovery or crawl)
-        has_failure = (
-            page_status.casefold() in {"failed", "inaccessible", "http_error", "error"}
+        # External ticket/detail pages failing does not mean the venue calendar itself failed.
+        # Those failures remain explicit, and calendar completeness is never inferred.
+        has_calendar_failure = (
+            page_status.casefold() in {"failed", "fetch_failed", "inaccessible", "http_error", "error"}
             or discovery_status.casefold() in {"failed", "inaccessible", "error"}
-            or (failed_pages.isdigit() and int(failed_pages) > 0)
+            or same_host_failures > 0
             or cap in {"true", "yes", "1"}
         )
         if not has_any_audit:
             outcome = "not_checked"
-        elif has_failure:
+        elif has_calendar_failure:
             outcome = "partial"
-        elif page or discovery or crawl:
-            outcome = "checked_in_captured_scope"
         else:
-            outcome = "not_checked"
+            outcome = "checked_in_captured_scope"
         result.append({
             "venue": venue,
             "source_url": source.get("source_url", ""),
@@ -161,7 +186,9 @@ def combine_venue_coverage(
             "candidate_events": discovery.get("structured_events_found", "0"),
             "candidate_links": discovery.get("candidate_links_found", "0"),
             "detail_pages_fetched": crawl.get("pages_fetched", "0"),
-            "detail_pages_failed": failed_pages or "0",
+            "detail_pages_failed": str(failed_count),
+            "same_host_pages_failed": str(same_host_failures),
+            "external_detail_pages_failed": str(external_detail_failures),
             "external_event_pages_inspected": crawl.get("external_event_pages_inspected", "0"),
             "crawl_cap_reached": cap or "false",
             "calendar_coverage_verified": "false",
@@ -302,7 +329,7 @@ def main() -> int:
     crawl_audit = read_csv(inspection_dir / "event_page_crawl_audit.csv")
     fetch_failures = read_csv(inspection_dir / "event_page_fetch_failures.csv")
     crawl_audit_failed_pages = sum(int(row.get("pages_failed") or 0) for row in crawl_audit if (row.get("pages_failed") or "0").isdigit())
-    coverage = combine_venue_coverage(sources, page_audit, discovery_audit, crawl_audit)
+    coverage = combine_venue_coverage(sources, page_audit, discovery_audit, crawl_audit, fetch_failures)
     write_csv(out_dir / "venue_coverage.csv", COVERAGE_FIELDS, coverage)
     write_csv(out_dir / "stage_results.csv", STAGE_FIELDS, stage_results)
 
