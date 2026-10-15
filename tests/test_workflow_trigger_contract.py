@@ -25,6 +25,7 @@ class WorkflowTriggerContractTests(unittest.TestCase):
             block = job_block(name)
             self.assertIn("github.ref_name == 'redesign/workflow-contract'", block, name)
             self.assertIn("github.ref_name == 'main'", block, name)
+            self.assertIn("github.ref_name == 'deploy/weekly-gig-finder-clean'", block, name)
             self.assertIn("github.event_name == 'schedule'", block, name)
             self.assertIn("github.event_name == 'workflow_dispatch'", block, name)
             self.assertIn("[full-sweep]", block, name)
