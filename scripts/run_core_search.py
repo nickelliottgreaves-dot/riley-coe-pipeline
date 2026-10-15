@@ -42,6 +42,31 @@ def write_csv(path: Path, fields: list[str], rows: list[dict[str, str]]) -> None
         writer.writerows(rows)
 
 
+def inspection_to_candidates(rows: list[dict[str, str]]) -> list[dict[str, str]]:
+    """Convert second-stage page inspection into one review-only row per billed act."""
+    candidates = []
+    for row in rows:
+        event_date = (row.get("event_date") or "").strip()[:10]
+        title = (row.get("event_title") or "").strip()
+        venue = (row.get("venue") or "").strip()
+        source_url = (row.get("page_url") or "").strip()
+        if not event_date or not title or not venue:
+            continue
+        performers = [name.strip() for name in (row.get("performer_names") or "").split(";") if name.strip()]
+        for artist in dict.fromkeys(performers):
+            candidates.append({
+                "event_date": event_date,
+                "venue": venue,
+                "event_title": title,
+                "artist": artist,
+                "artist_role": "unknown",
+                "source_url": source_url,
+                "verified": "false",
+                "notes": (row.get("notes") or "Extracted from event page; manual verification remains required."),
+            })
+    return candidates
+
+
 def normalize(value: str) -> str:
     value = unicodedata.normalize("NFKD", (value or "").casefold())
     value = "".join(ch for ch in value if not unicodedata.combining(ch))
@@ -71,29 +96,33 @@ def match_candidates(
 
     matches = []
     for event in events:
-        artist = (event.get("artist") or "").strip()
-        key = normalize(artist)
-        if not key:
-            continue
-        if key in pool_by_key and len(pool_by_key[key]) == 1:
-            matched = pool_by_key[key][0]
-            match_type = "exact"
-        elif key in aliases:
-            matched = aliases[key]
-            match_type = "approved_alias"
-        else:
-            continue
-        matches.append({
-            "event_date": (event.get("event_date") or "").strip(),
-            "venue": (event.get("venue") or "").strip(),
-            "event_title": (event.get("event_title") or "").strip(),
-            "event_artist": artist,
-            "matched_pool_artist": matched,
-            "match_type": match_type,
-            "source_url": (event.get("source_url") or "").strip(),
-            "verified": "false",
-            "notes": "Candidate pool match only; event, date, room, artist role and calendar coverage require verification.",
-        })
+        # Event-page parsers can return multiple billed acts separated by
+        # semicolons. Match each independently rather than requiring the whole
+        # combined billing string to equal one pool entry.
+        artists = [name.strip() for name in (event.get("artist") or "").split(";") if name.strip()]
+        for artist in dict.fromkeys(artists):
+            key = normalize(artist)
+            if not key:
+                continue
+            if key in pool_by_key and len(pool_by_key[key]) == 1:
+                matched = pool_by_key[key][0]
+                match_type = "exact"
+            elif key in aliases:
+                matched = aliases[key]
+                match_type = "approved_alias"
+            else:
+                continue
+            matches.append({
+                "event_date": (event.get("event_date") or "").strip(),
+                "venue": (event.get("venue") or "").strip(),
+                "event_title": (event.get("event_title") or "").strip(),
+                "event_artist": artist,
+                "matched_pool_artist": matched,
+                "match_type": match_type,
+                "source_url": (event.get("source_url") or "").strip(),
+                "verified": "false",
+                "notes": "Candidate pool match only; event, date, room, artist role and calendar coverage require verification.",
+            })
     return matches
 
 
@@ -182,9 +211,42 @@ def main() -> int:
         print(result.stderr, file=sys.stderr)
         raise SystemExit("Core discovery did not produce its required candidate and audit files.")
 
-    events = read_csv(event_path)
     audit_rows = read_csv(audit_path)
     links = read_csv(link_path)
+
+    # Landing-page JSON-LD alone proved too thin in the live run (1 event row
+    # across 9 venues and 1,029 candidate links). Inspect a bounded number of
+    # official-host calendar/detail pages before matching artists.
+    inspection_dir = discovery_dir / "event_pages"
+    inspect_command = [
+        sys.executable, str(ROOT / "scripts/inspect_event_links.py"),
+        "--links", str(link_path),
+        "--sources", str(args.core_sources),
+        "--start", start.isoformat(), "--end", end.isoformat(),
+        "--out-dir", str(inspection_dir),
+        "--max-pages-per-venue", "30",
+        "--max-depth", "2",
+    ]
+    inspected = subprocess.run(inspect_command, cwd=ROOT, capture_output=True, text=True, check=False)
+    inspection_path = inspection_dir / "event_page_inspection.csv"
+    if not inspection_path.exists():
+        print(inspected.stdout)
+        print(inspected.stderr, file=sys.stderr)
+        raise SystemExit("Second-stage event-page inspection did not produce its inspection CSV.")
+
+    events = inspection_to_candidates(read_csv(inspection_path))
+    # Keep any first-pass structured event rows that already contain a named
+    # performer; deduplicate after combining the two evidence paths.
+    first_pass = read_csv(event_path)
+    events.extend(row for row in first_pass if (row.get("artist") or "").strip())
+    deduped = {}
+    for row in events:
+        key = (normalize(row.get("event_date", "")), normalize(row.get("venue", "")),
+               normalize(row.get("event_title", "")), normalize(row.get("artist", "")),
+               (row.get("source_url") or "").strip())
+        deduped[key] = row
+    events = list(deduped.values())
+
     pool_rows = read_csv(args.pool)
     alias_rows = read_csv(args.aliases)
     if not pool_rows or "artist" not in pool_rows[0]:
@@ -210,10 +272,15 @@ def main() -> int:
         "status": "LIMITED_RESULTS",
         "status_reason": "This first-pass collector reads structured data from configured landing pages only; it does not prove complete calendars or verify individual events.",
         "discovery_exit_code": result.returncode,
+        "event_inspection_exit_code": inspected.returncode,
+        "event_pages_inspected": sum(int(row.get("pages_fetched", 0)) + int(row.get("pages_failed", 0)) for row in read_csv(inspection_dir / "event_page_crawl_audit.csv")) if (inspection_dir / "event_page_crawl_audit.csv").exists() else 0,
+        "event_inspection_candidates_with_named_performers": len(events),
         "outputs": [
             "discovery/event_candidates.csv",
             "discovery/event_link_candidates.csv",
             "discovery/event_discovery_audit.csv",
+            "discovery/event_pages/event_page_inspection.csv",
+            "discovery/event_pages/event_page_crawl_audit.csv",
             "candidate_pool_matches.csv",
             "core_venue_coverage.csv",
             "run_summary.json",
