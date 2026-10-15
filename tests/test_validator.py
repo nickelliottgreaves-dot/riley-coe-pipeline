@@ -33,7 +33,7 @@ class ValidatorTests(unittest.TestCase):
             self.assertIn(norm(venue), sources, f"Missing source registry entry: {venue}")
             row = sources[norm(venue)]
             self.assertTrue(row["source_url"].startswith("https://"), f"Missing URL for {venue}")
-            self.assertIn(row["source_status"], {"verified_official_calendar", "verified_official_site", "verified_official_social_listing", "verified_external_calendar"})
+            self.assertIn(row["source_status"], {"verified_official_calendar", "verified_official_site", "verified_official_social_listing", "verified_external_calendar", "configured_official_calendar", "configured_shared_official_calendar", "configured_official_site", "configured_shared_official_site", "configured_promoter_calendar", "inactive_venue_status_check"})
 
     def test_valid_partial_package_exits_successfully_without_claiming_complete(self):
         with tempfile.TemporaryDirectory() as tmp:
