@@ -118,8 +118,35 @@ def main():
     write_csv(out/"tracklist_candidate_review.csv",track_review_fields,track_review_rows)
     event_rows=read_csv(args.events,["event_date","venue","event_title","artist","artist_role","source_url","verified","notes"]) if args.events else []
     # Add Event JSON-LD candidates from inspected detail pages; they remain unverified.
-    inspected_rows=read_csv(args.event_page_inspection,["venue","page_url","event_title","event_date","performer_names","price","currency","availability","event_jsonld_found","notes"]) if args.event_page_inspection else []
+    inspected_rows=read_csv(args.event_page_inspection,["venue","page_url","event_title","event_date","performer_names","price","currency","availability","event_jsonld_found","status","notes"]) if args.event_page_inspection else []
+    # Shared calendars can be registered under multiple room labels (notably The Cluny and Cluny 2).
+    # If the same listing is attributed to multiple venue labels from the same page, do not guess its room.
+    venue_labels_by_listing={}
     for item in inspected_rows:
+        listing_key=((item.get("page_url") or "").strip(), " ".join((item.get("event_title") or "").casefold().split()),
+                     (item.get("event_date") or "")[:10])
+        if all(listing_key):
+            venue_labels_by_listing.setdefault(listing_key,set()).add((item.get("venue") or "").strip())
+    ambiguous_listing_keys={key for key, labels in venue_labels_by_listing.items() if len({x for x in labels if x}) > 1}
+    ambiguous_room_rows=[]
+    for item in inspected_rows:
+        listing_key=((item.get("page_url") or "").strip(), " ".join((item.get("event_title") or "").casefold().split()),
+                     (item.get("event_date") or "")[:10])
+        if listing_key in ambiguous_listing_keys:
+            raw=(item.get("event_date") or "").strip()
+            dt=raw[:10] if len(raw)>=10 else ""
+            try:
+                in_window=bool(dt) and start <= date.fromisoformat(dt) <= end
+            except ValueError:
+                in_window=False
+            if in_window:
+                ambiguous_room_rows.append({"event_date":dt,"venue":item.get("venue",""),
+                    "event_title":item.get("event_title",""),"artist_candidate":item.get("performer_names",""),
+                    "artist_role":"room_unverified","source_url":item.get("page_url",""),
+                    "price":(item.get("price","") + ((" "+item.get("currency","")) if item.get("currency") else "")).strip(),
+                    "ticket_status":item.get("availability",""),"discovery_method":"shared_calendar_room_ambiguous",
+                    "notes":"The same listing URL/date/title was attributed to multiple configured venue/room labels. Excluded from in-scope events until the actual room is independently confirmed."})
+            continue
         structured=(item.get("event_jsonld_found") or "").casefold() == "true"
         visible_candidate=(item.get("status") or "").casefold() == "visible_event_candidate_needs_review"
         if not (structured or visible_candidate):
@@ -156,7 +183,7 @@ def main():
         "O2 City Hall","O2 City Hall Newcastle","Newcastle University Students' Union",
         "Students' Union","The Cluny","Cluny 2","ZEROX"
     ])
-    events=[]; unresolved=[]; seen_event_keys={}
+    events=[]; unresolved=list(ambiguous_room_rows); seen_event_keys={}
     for r in event_rows:
         raw_date=(r.get("event_date") or "").strip()
         dt=raw_date[:10] if len(raw_date)>=10 else ""
