@@ -373,3 +373,22 @@ Run [38741114377](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/a
 The six partial venues are currently marked partial when one or more crawled detail pages fail, but the event-page inspection artifact exposes only a small subset of individual failed URLs while the crawl audit reports aggregate counts. That makes the failures hard to diagnose and leaves the coverage ledger less useful than it should be.
 
 Next, add an explicit `event_page_fetch_failures.csv` with one row per failed URL (venue, URL, crawl depth/source kind, HTTP status or exception, and whether it was an allowlisted external ticket page). Add regression tests for recording HTTP errors and unusable empty non-200 responses, and keep the run PARTIAL. Do not lower the partial status or imply calendar completeness just because the failure ledger exists.
+
+
+## Latest artifact audit and new defect (2026-10-15 13:02 UTC)
+
+Reviewed the independent gig-finder artifact from run [38738653337](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38738653337), which was an intentional simulated-Cobalt-failure run on commit `e304b39ba0e510fdfe322e446cbf895f876e1854`.
+
+Observed:
+- Candidate package and report validator both succeeded and retained a valid `PARTIAL` report. 20 source-coverage rows and 847 artist comparison rows were emitted. No match was marked verified.
+- Current branch pool is now **847 rows**, not the older 833-row baseline in the earlier handover. Re-check the dated pool update audit and backup before modifying it; do not assume 833 remains current.
+- 18 source discovery fetches succeeded and 2 failed (Cobalt Studios connection refused; Utilita Arena Newcastle HTTP 403). Venue discovery audit correctly reports 0 calendar checks completed; this remains candidate discovery only.
+- Event inspection captured 653 pages, with 135 failures and two crawl caps. All 20 venue rows remain PARTIAL; no venue calendar coverage is verified.
+- Crucial defect found in candidate matches: Skiddle global/city feed URLs were being attributed to configured local venues. For example, Sŵn Festival / Cardiff listings appeared under Lubber Fiend and Little Buildings, and Birmingham event feeds were attached to those venues. These are false local candidates and must be excluded.
+- The first patch to prevent Skiddle cross-city leakage failed its tests (run [38739096969](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38739096969)); subsequent fixture repair and scope tests passed (run [38739200928](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38739200928), all unit tests successful). **A new live full sweep is required** to verify that the actual output no longer includes other-city events.
+- Older simulated-failure run had two collector stages return non-zero even though their outputs correctly reported PARTIAL with 18/20 fetches. The runner should preserve these as partial/failed stages, but the summary should distinguish expected partial-data exits from crashes.
+- The first normal test-only redesign push succeeded with 116 tests (run [38732937472](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38732937472)); latest source-scope regression run [38739200928](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38739200928) also succeeded.
+
+## Immediate next action (updated)
+
+Run a fresh live full sweep at the latest commit after the Skiddle source-scoping fix. Inspect every candidate match and assert that no out-of-city Skiddle feed is assigned to a local venue. Confirm report structure, 20 source outcomes, one page-search and event-comparison row per current pool artist (847), and ensure PARTIAL remains the honest status. Then address false candidate pollution and distinguish source-partial exits from code crashes. Keep the pool, backups and prior artifacts unchanged.
