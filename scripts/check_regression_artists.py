@@ -70,7 +70,7 @@ def main() -> int:
             "searched":str(bool(pages)).lower(),
             "result":"found_in_collected_pages" if hits else ("not_found_in_collected_pages" if pages else "no_page_snapshots_available"),
             "evidence_url":evidence_url,
-            "notes":f"Searched {len(pages)} collected venue/event-page text snapshots; matches={len(hits)}; matching URLs: {'; '.join(urls[:8])}. For negative results, evidence_url lists up to eight representative searched sources; the full crawl audit and snapshots preserve the wider corpus. External ticket pages, JavaScript-only content and uncrawled pages may be missing."
+            "notes":f"Searched {len(pages)} collected venue/event-page text snapshots; matches={len(hits)}; matching URLs: {'; '.join(urls[:8])}. A negative result is limited to this bounded corpus; evidence_url lists up to eight representative searched sources, while the full crawl audit and snapshots preserve the wider corpus. External ticket pages, JavaScript-only content and uncrawled pages may be missing."
         })
     args.out.parent.mkdir(parents=True,exist_ok=True)
     with args.out.open("w",encoding="utf-8",newline="") as f:
