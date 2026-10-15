@@ -16,6 +16,9 @@ on:
       - 'scripts/check_known_gig_regressions.py'
       - 'data/artist_pool.csv'
       - 'tests/fixtures/known_gig_regressions.csv'
+      - 'tests/test_inspect_event_links.py'
+      - 'tests/test_check_known_gig_regressions.py'
+      - 'tests/test_event_inspection_structured_fallback.py'
   workflow_dispatch:
   schedule:
     - cron: "0 8 * * 1"
@@ -61,7 +64,7 @@ jobs:
           echo "Coverage passes: 18 primary source rows + 18 independent secondary calendar rows." >> "$GITHUB_STEP_SUMMARY"
 
       - name: Discover primary venue calendars and event links
-        if: always()
+        if: success()
         shell: bash
         run: |
           set +e
@@ -85,7 +88,7 @@ jobs:
           echo "Secondary discovery exit code: $?"
 
       - name: Inspect primary and secondary event pages
-        if: always()
+        if: success()
         shell: bash
         run: |
           set +e
@@ -107,7 +110,7 @@ jobs:
           done
 
       - name: Combine both passes and snapshot evidence
-        if: always()
+        if: success()
         shell: bash
         run: |
           python - <<'PY'
@@ -162,7 +165,7 @@ jobs:
           PY
 
       - name: Match the entire preserved artist pool against both source passes
-        if: always()
+        if: success()
         shell: bash
         run: |
           set +e
@@ -181,7 +184,7 @@ jobs:
           echo "Pool matching exit code: $?"
 
       - name: Check the five known-gig regressions against both source passes
-        if: always()
+        if: success()
         shell: bash
         run: |
           set +e
@@ -196,7 +199,7 @@ jobs:
           echo "Regression check exit code: $?"
 
       - name: Produce source coverage and honest result status
-        if: always()
+        if: success()
         shell: bash
         run: |
           python - <<'PY'
@@ -265,7 +268,7 @@ jobs:
           PY
 
       - name: Preserve dated report, both source passes, matches and evidence snapshots
-        if: always()
+        if: steps.window.outputs.start != ''
         uses: actions/upload-artifact@v4
         with:
           name: riley-coe-hybrid-gig-search-${{ steps.window.outputs.start }}
