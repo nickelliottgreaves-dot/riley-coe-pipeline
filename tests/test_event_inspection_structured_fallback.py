@@ -126,6 +126,53 @@ class StructuredDataFallbackTests(unittest.TestCase):
             self.assertEqual(structured[0]["event_title"], "In Window Act")
             self.assertEqual(structured[0]["event_date"], "2026-10-17")
 
+    def test_out_of_window_jsonld_does_not_block_visible_in_window_card(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            links = root / "links.csv"
+            sources = root / "sources.csv"
+            out = root / "out"
+            with links.open("w", encoding="utf-8", newline="") as f:
+                w = csv.DictWriter(f, fieldnames=["venue", "candidate_url", "link_text"])
+                w.writeheader()
+                w.writerow({
+                    "venue": "Wylam Brewery",
+                    "candidate_url": "https://venue.example/events/",
+                    "link_text": "Wylam Brewery events",
+                })
+            with sources.open("w", encoding="utf-8", newline="") as f:
+                w = csv.DictWriter(f, fieldnames=["venue", "source_url"])
+                w.writeheader()
+                w.writerow({
+                    "venue": "Wylam Brewery",
+                    "source_url": "https://venue.example/events/",
+                })
+            page = (
+                '<title>Wylam Brewery Events</title>'
+                '<script type="application/ld+json">'
+                '{"@type":"MusicEvent","name":"Old Event","startDate":"2027-02-01"}'
+                '</script>'
+                '<p>Sat 17 Oct 2026</p><p>Visible In-Window Act</p>'
+                '<p>Wylam Brewery</p>'
+            )
+            with patch("inspect_event_links.fetch", return_value=(200, "text/html", page, False)):
+                with patch("sys.argv", [
+                    "inspect_event_links.py", "--links", str(links),
+                    "--sources", str(sources), "--out-dir", str(out),
+                    "--start", "2026-10-15", "--end", "2026-10-28",
+                    "--delay", "0",
+                ]):
+                    self.assertEqual(main(), 0)
+            with (out / "event_page_inspection.csv").open(encoding="utf-8", newline="") as f:
+                rows = list(csv.DictReader(f))
+            self.assertTrue(any(
+                row["event_title"] == "Visible In-Window Act"
+                and row["event_date"] == "2026-10-17"
+                and row["status"] == "visible_event_candidate_needs_review"
+                for row in rows
+            ))
+            self.assertFalse(any(row["event_title"] == "Old Event" for row in rows))
+
     def test_empty_non_200_host_response_uses_only_bounded_fallback_probes(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
