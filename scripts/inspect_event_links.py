@@ -136,8 +136,13 @@ def extract_visible_event(page_title, visible_text, default_venue=""):
                     "limited tickets","tickets","buy tickets","book tickets","book now","event details",
                     "details","view details","view event","find out more","read more","on sale","on sale now",
                     "sold out","coming soon","available now","advance tickets","access info",
-                    "access information","venue information","plan your visit"}
-    if (not title or title.casefold() in generic_titles
+                    "access information","venue information","plan your visit","boiler shop","the glasshouse",
+                    "glasshouse","utilita arena","the cluny","cluny","cluny 2","cobalt studios",
+                    "think tank","the globe","zerox","sage one","sage two"}
+    venue_title=title.casefold().strip()
+    configured_venue=str(default_venue or "").casefold().strip()
+    if (not title or venue_title in generic_titles or venue_title==configured_venue
+            or venue_title==f"{configured_venue} newcastle"
             or re.fullmatch(r"(?i)\d{1,2}:\d{2}\s*(?:am|pm)?",title.strip())):
         return None
     supports=[]
