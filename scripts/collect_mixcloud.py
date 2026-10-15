@@ -160,7 +160,7 @@ def fetch_html_cloudcasts(username: str, since: date, until: date) -> tuple[list
     found: list[dict] = []
     seen: set[str] = set()
     path_pattern = (
-        r"(?i)(?:https?://(?:www\\.)?mixcloud\\.com)?/?"
+        r"(?i)(?:https?://(?:www[.]?)?mixcloud[.]com)?/?"
         + re.escape(username.strip("/"))
         + r"/riley[-_]coe[A-Za-z0-9/_-]*"
     )
@@ -176,7 +176,7 @@ def fetch_html_cloudcasts(username: str, since: date, until: date) -> tuple[list
         html_text = raw[:4_000_000].decode("utf-8", errors="replace")
         parser = CloudcastLinkParser()
         parser.feed(html_text)
-        scan_text = html_text.replace(r"\\/", "/").replace(r"\\u002F", "/").replace(r"\\u002f", "/")
+        scan_text = html_text.replace("\\/", "/").replace("\\u002F", "/").replace("\\u002f", "/")
         link_candidates = list(parser.links)
         link_candidates.extend((path, "") for path in re.findall(path_pattern, scan_text))
         for href, link_text in link_candidates:
