@@ -45,7 +45,7 @@ class PoolWindowEventMatchTests(unittest.TestCase):
             self.assertEqual(rows[0]["source_kind"],"pool_page_text_match")
             self.assertEqual(rows[0]["match_basis"],"full_pool_page_text")
             self.assertEqual(rows[0]["verified"],"false")
-            self.assertIn("actual billing",rows[0]["notes"])
+            self.assertIn("verify billing",rows[0]["notes"])
 
     def test_biography_only_pool_mentions_do_not_become_gig_candidates(self):
         with tempfile.TemporaryDirectory() as tmp:
