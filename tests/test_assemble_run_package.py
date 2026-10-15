@@ -54,6 +54,7 @@ class EvidencePackageTests(unittest.TestCase):
                 w.writerow({"venue":"The Cluny","page_url":"https://thecluny.com/gigs/example","event_title":"Example Live","event_date":"2026-10-20T19:00:00+01:00","performer_names":"Example Artist; Support Artist","price":"18.00","currency":"GBP","availability":"InStock","event_jsonld_found":"true","notes":"Structured candidate only"})
                 w.writerow({"venue":"The Cluny","page_url":"https://thecluny.com/gigs/unresolved","event_title":"Unresolved Live","event_date":"2026-10-21","performer_names":"","event_jsonld_found":"true","notes":"No performer metadata"})
                 w.writerow({"venue":"The Cluny","page_url":"https://thecluny.com/gigs/undated","event_title":"Undated Live","event_date":"","performer_names":"Undated Artist","event_jsonld_found":"true","notes":"No date metadata"})
+                w.writerow({"venue":"The Sands Centre - Carlisle, CA1 1JQ","page_url":"https://example.com/out-of-scope","event_title":"Out of Scope","event_date":"2026-10-22","performer_names":"Out of Scope Artist","event_jsonld_found":"true","notes":"External venue candidate"})
                 w.writerow({"venue":"The Cluny","page_url":"https://thecluny.com/listing/visible-live","event_title":"Visible Live","event_date":"2026-10-22","performer_names":"Visible Artist; Visible Support","price":"18.00","currency":"GBP","availability":"not_checked","event_jsonld_found":"false","status":"visible_event_candidate_needs_review","notes":"Extracted from visible Date/Venue labels"})
             out=root/"run"
             subprocess.run([sys.executable,str(ROOT/"scripts/assemble_run_package.py"),
@@ -73,8 +74,10 @@ class EvidencePackageTests(unittest.TestCase):
             self.assertTrue(all("Visible event-text candidate" in row["notes"] for row in visible_rows))
             with (out/"unresolved_event_candidates.csv").open(newline="",encoding="utf-8") as f:
                 unresolved=list(csv.DictReader(f))
-            self.assertEqual(len(unresolved),2)
+            self.assertEqual(len(unresolved),3)
             self.assertIn("Unresolved Live",{row["event_title"] for row in unresolved})
+            out_of_scope=next(row for row in unresolved if row["event_title"]=="Out of Scope")
+            self.assertIn("excluded from the in-scope event list",out_of_scope["notes"])
             undated=next(row for row in unresolved if row["event_title"]=="Undated Live")
             self.assertEqual(undated["artist_candidate"],"Undated Artist")
             self.assertIn("Date missing or invalid",undated["notes"])
