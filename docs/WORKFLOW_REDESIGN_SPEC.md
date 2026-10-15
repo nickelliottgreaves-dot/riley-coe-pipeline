@@ -33,7 +33,7 @@ The workflow had already been changed to request a 28-day window. The validator 
 - Episode collection, venue collection, event inspection, matching, package assembly and validation are too tightly coupled; failures can cascade and obscure which deliverable is actually usable.
 - Successful HTTP fetches, completed jobs, non-empty files and text matches do not establish complete episode or venue coverage.
 - Some configured venue rows use an external safety-net calendar because the official source is not crawler-friendly. That is useful discovery evidence, but not proof the official calendar has no omissions.
-- The repository contains multiple overlapping notions of completeness: the 28-day workflow window, 15-day assembler/validator limits, the 20-row source registry and the smaller mandatory-venue list. The new contract must make these distinctions explicit.
+- The repository contains conflicting definitions of the contract: the 28-day workflow window versus 15-day assembler/validator limits, and README text describing 16 mandatory venues plus optional safety-net venues even though the current `config/required_venues.csv` marks all 20 configured venues mandatory. The source registry and required-venue registry must be reconciled from data, not inferred from stale prose.
 - The validator can enforce evidence shape and declared statuses; it cannot prove an unobserved event does not exist. Coverage must be described in bounded, evidence-based terms.
 - Artist discovery should enrich future searches, not be a prerequisite for running the weekly search with the current pool.
 
@@ -129,3 +129,42 @@ At each significant stopping point, update this file or a dated handover note wi
 - Do not require episode discovery to succeed before searching the current pool.
 - Do not overwrite the authoritative pool, prior evidence, or immediately previous backup.
 - Do not continue open-ended patches without a reproducible defect, a regression test and a stated acceptance effect.
+
+
+## Phase 1 audit: reuse / adapt / retire inventory
+
+This is a code-level inventory of the active reference branch, not a claim that each script is production-ready.
+
+| Component | Decision | Reason / next check |
+|---|---|---|
+| `data/artist_pool.csv`, dated backup, additions and ambiguity audit | **Reuse / protect** | 833 unique names; the dated audit records 747 preserved baseline rows plus 86 additions from eight exact BBC/RadioFiles episode matches, with 15 fuzzy collisions held out. Do not regenerate or replace without reconciliation. |
+| `config/venue_sources.csv` | **Reuse / normalize** | 20 configured source rows. Preserve source notes and safety-net distinctions; give each row a stable source ID and explicit primary/secondary source relationship in the new contract. |
+| `config/required_venues.csv` | **Reconcile** | Current file has 20 rows and all are marked mandatory. README prose still describes 16 mandatory plus four optional. Remove this disagreement before the new validator is authoritative. |
+| `scripts/collect_venue_pages.py` | **Reuse selectively** | Useful for snapshots and access audits; a reachable landing page is not a calendar-completeness result. |
+| `scripts/discover_event_candidates.py` | **Adapt or replace behind an interface** | Useful JSON-LD/link discovery, but source-specific pagination and rendered calendars need explicit coverage outcomes. |
+| `scripts/inspect_event_links.py` | **Reuse selectively** | Valuable bounded crawling, snapshots, date filtering and crawl audits. Keep as a source adapter, not the authority for whether a calendar is complete. |
+| `scripts/check_regression_artists.py` | **Adapt/reuse** | Whole-pool captured-text comparison and evidence snippets are useful candidate discovery; a negative is bounded to captured pages. |
+| `scripts/match_pool_to_window_events.py` | **Adapt/reuse** | Useful separate date-window join; test against one shared event schema and prevent page-text hits becoming confirmed gigs. |
+| `scripts/run_core_search.py` | **Reference only** | It is a smaller first-pass orchestration for nine core venues, not a replacement for the required 20-source sweep. Reuse useful matching/coverage ideas, not its narrower scope. |
+| `scripts/assemble_run_package.py` | **Replace or substantially simplify** | Currently mixes collection imports, deduplication, ambiguity handling, exports and manifest creation; it also rejects the 28-day window. The new assembler should consume a defined schema and never perform hidden discovery logic. |
+| `scripts/validate_run.py` | **Rebuild around contract** | Retain fail-closed principles, but validate one contract and one window. Keep technical integrity, PARTIAL-report validity and COMPLETE-research eligibility as separate outcomes. |
+| `scripts/collect_bbc_sounds.py` | **Move to independent updater** | Preserve episode inventory, raw snapshots, track candidates and collection audit; it must not block the gig finder. |
+| `scripts/collect_radiofiles.py`, `scripts/verify_radiofiles_against_bbc.py`, `scripts/reconcile_radiofiles_artists.py`, `scripts/build_verified_artist_pool_proposal.py` | **Move to independent updater** | Preserve exact position/title/artist cross-check and review-only proposal safeguards. |
+| `scripts/collect_mixcloud.py` and `tests/test_collect_mixcloud.py` | **Retire from active workflow; archive until final cleanup** | Mixcloud was dropped by decision after 404/soft-404 and unusable tracklist responses. Do not spend more effort on it or let it remain a dependency. Remove only after confirming no active imports/references and preserving the history. |
+| `scripts/match_event_artists.py` | **Inspect for overlap** | Likely overlaps the newer date-window matcher. Keep one canonical event-matching path after comparing test coverage. |
+| `scripts/validate_run.py` + `scripts/assemble_run_package.py` | **Do not patch independently again** | Their schema, date-window and status assumptions must derive from the shared contract. |
+| `tests/` | **Preserve and reorganize** | Existing tests cover collectors, parsers, matching, package assembly, validator, repository data contract and artifact contract. Map each test to the new acceptance criteria; remove duplicates only after equivalent coverage is proven. |
+
+### Known mismatches to resolve before implementation
+
+1. **Window mismatch:** workflow uses 28 dates; assembler and validator enforce 15 dates.
+2. **Venue-registry mismatch:** all 20 rows in `config/required_venues.csv` are marked mandatory, while README text describes 16 mandatory and four optional. The actual 20-source sweep requirement wins unless explicitly changed.
+3. **Manifest ownership:** required manifest fields must be generated centrally from run metadata, not inferred by downstream steps. `previous_successful_run` may be explicitly `unknown/not established`; it must not be absent.
+4. **Evidence package ownership:** downstream validation must consume the package produced by the same run and must distinguish an absent input from a zero-result search.
+5. **Source coverage:** `calendar_coverage_verified` cannot be set true just because a page was fetched or a parser returned events.
+6. **Execution vs research status:** a technically successful run may deliver a valid `PARTIAL` report. The gate must distinguish “package valid and usable” from “research complete and independently verified.”
+7. **Single matching path:** avoid two subtly different artist/event matchers producing competing definitions of a match.
+
+## Current next action
+
+Do not fix the 28-day limit as a one-off patch on the reference branch. First implement a shared contract/configuration and a small testable Process A vertical slice on `redesign/workflow-contract`. Keep the existing collectors as adapters where useful, then test the new path against captured examples and controlled failure cases before wiring the full workflow.
