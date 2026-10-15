@@ -162,7 +162,7 @@ def main():
             "episode_url":track.get("source_url",""),"artist_candidate":track.get("artist_candidate",""),"track_title":track.get("track_title",""),
             "track_position":track.get("track_position",""),"extraction_method":"radiofiles_json_tracklist_candidate",
             "review_status":"verified_full_tracklist_match" if verified else "needs_manual_review","evidence_text":"",
-            "notes":((track.get("notes","")+(" Exact position/title/artist match across official BBC embedded tracklist and RadioFiles." if verified else " RadioFiles candidate only; compare against the complete visible tracklist before updating the artist pool."))+" Tracklist API: "+track.get("tracklist_api_url","")).strip()})
+            "notes":((track.get("notes","")+(" Exact position/title match with compatible artist credits across official BBC embedded tracklist and RadioFiles." if verified else " RadioFiles candidate only; compare against the complete visible tracklist before updating the artist pool."))+" Tracklist API: "+track.get("tracklist_api_url","")).strip()})
     for track in bbc_tracks:
         track_review_rows.append({k:track.get(k,"") for k in track_review_fields})
     for track in embedded_tracks:
@@ -175,7 +175,7 @@ def main():
             "track_title":track.get("track_title",""),"track_position":track.get("track_position",""),
             "extraction_method":"official_bbc_embedded_aod_tracks",
             "review_status":"verified_full_tracklist_match" if verified else "needs_manual_crosscheck","evidence_text":track.get("segment_urn",""),
-            "notes":(track.get("notes","")+(" Exact position/title/artist match across official BBC embedded data and RadioFiles." if verified else " Official BBC page embedded data; compare with RadioFiles position-by-position.")).strip()
+            "notes":(track.get("notes","")+(" Exact position/title match with compatible artist credits across official BBC embedded data and RadioFiles." if verified else " Official BBC page embedded data; compare with RadioFiles position-by-position.")).strip()
         })
     write_csv(out/"tracklist_candidate_review.csv",track_review_fields,track_review_rows)
     event_rows=read_csv(args.events,["event_date","venue","event_title","artist","artist_role","source_url","verified","notes"]) if args.events else []
