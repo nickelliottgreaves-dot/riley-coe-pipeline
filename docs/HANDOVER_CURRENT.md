@@ -492,3 +492,10 @@ This handover commit intentionally triggers a simulated-Cobalt full sweep from t
 **The weekly automation is not yet active on `main`.** It becomes active only after PR #9 is reviewed and merged. The workflow is configured for Monday 08:00 UTC and manual dispatch; on `main`, it runs the independent gig finder and review-only artist-pool updater, while legacy all-in-one jobs remain isolated to `rebuild/core-gig-finder`.
 
 Do not merge without the user's approval. Once approved and merged, run one manual dispatch on `main` to confirm the deployed ref uses the new independent jobs and then inspect its artifacts. The scheduled workflow's next normal cadence after 2026-10-15 is Monday 2026-10-19 at 08:00 UTC.
+
+
+### Superseded pull requests
+- PR #8 was closed unmerged because its branch carried 554 commits of divergence; PR #9 is the clean replacement.
+- PR #7 was closed unmerged because the new review-only artist-pool updater supersedes its narrower RadioFiles reconciliation.
+- PRs #5 and #6 were closed unmerged because Mixcloud was dropped after repeated 404/soft-404 and unusable tracklist results.
+- PR #9 remains the only active deployment PR: https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/pull/9. Latest head is `d8966229e28ecda1afa1add616f9701e877bddcf`; merge state is clean. No PR has been merged.
