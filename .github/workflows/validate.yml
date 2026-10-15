@@ -185,6 +185,34 @@ jobs:
           if-no-files-found: warn
           retention-days: 30
 
+  independent-artist-pool-updater:
+    if: github.ref_name == 'redesign/workflow-contract' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[full-sweep]')))
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Run independent review-only BBC/RadioFiles updater
+        run: python scripts/run_artist_pool_updater.py --run-id "$GITHUB_RUN_ID" --out-dir artifacts/artist-pool-updater
+      - name: Validate proposal integrity and confirm authoritative pool was unchanged
+        if: always()
+        run: |
+          if [ -d artifacts/artist-pool-updater ]; then
+            python scripts/validate_artist_pool_update.py --run-dir artifacts/artist-pool-updater --pool data/artist_pool.csv
+          else
+            echo "Artist-pool updater report directory was not created."
+            exit 1
+          fi
+      - name: Preserve review-only artist-pool proposal and raw evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: riley-coe-artist-pool-updater-${{ github.run_id }}
+          path: artifacts/artist-pool-updater/
+          if-no-files-found: warn
+          retention-days: 30
+
   scheduled-evidence-gate:
     if: always() && github.ref_name != 'redesign/workflow-contract' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[full-sweep]')))
     needs: [assemble-evidence-scaffold]
