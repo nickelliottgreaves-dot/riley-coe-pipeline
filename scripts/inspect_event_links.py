@@ -375,6 +375,9 @@ def extract_visible_listing_events(visible_text, default_venue="", start_date=No
                 try: return datetime.strptime(match.group(1),fmt).date().isoformat()
                 except ValueError: pass
         return ""
+    categories={"live music","music","club night","club","live comedy","comedy","theatre","dance",
+                "festival","film","talk","workshop","family","community event","special event",
+                "club events","live","gig","gigs"}
     found=[]
     # Some venue calendars put a date and event title on one line without a
     # year (e.g. "Oct 15 – KMP Quintal" or "23rd Oct - The Fargo Railroad Co.").
@@ -447,7 +450,7 @@ def extract_visible_listing_events(visible_text, default_venue="", start_date=No
             if key in known_venues:
                 break
             low=candidate.casefold()
-            if low in generic or is_page_furniture(candidate) or not candidate:
+            if low in generic or low in categories or is_page_furniture(candidate) or not candidate:
                 continue
             if low.startswith(("send us a message","or email ","email to book","website:","tickets:")):
                 continue
