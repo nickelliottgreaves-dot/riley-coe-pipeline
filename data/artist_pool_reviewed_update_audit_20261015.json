@@ -1,0 +1,43 @@
+{
+  "generated_on": "2026-10-15",
+  "baseline_pool_path": "data/artist_pool_backup_20261015.csv",
+  "baseline_pool_rows": 833,
+  "reviewed_pool_path": "data/artist_pool_20261015_reviewed.csv",
+  "authoritative_pool_path": "data/artist_pool.csv",
+  "authoritative_pool_rows_after_review": 847,
+  "unique_normalized_artist_names": 847,
+  "review_decision_file": "artifacts/manual-review/artist-pool-fuzzy-review-2026-10-15.csv",
+  "applied_additions": [
+    "Blondie",
+    "Gary Miller",
+    "Grace Jones",
+    "The Beatles",
+    "The Clientele",
+    "The Exits",
+    "The Fates",
+    "The Flaming Stars",
+    "The Forty Fours",
+    "The Shadows",
+    "The String Kings",
+    "The Temptations",
+    "Them",
+    "Tim Presley"
+  ],
+  "applied_addition_count": 14,
+  "applied_addition_basis": "Manual identity review of source-backed artist credits from episodes with exact BBC embedded-tracklist / RadioFiles position-by-position full-list matches. Each addition has a BBC episode URL, RadioFiles URL, track example and written rationale in the review CSV.",
+  "held_for_identity_review": [
+    {
+      "artist": "The Headcoatees",
+      "possible_confusion": "Thee Headcoatees / Thee Headcoats",
+      "reason": "High name similarity and conflicting title-credit metadata; do not add or alias until resolved."
+    }
+  ],
+  "held_due_to_episode_crosscheck_mismatch": [
+    "The Cure",
+    "The Rezillos",
+    "Yeah Yeah Yeahs"
+  ],
+  "backup_policy": "The 833-row backup is intentionally retained as the pre-manual-review pool. Do not overwrite or delete it. The dated reviewed snapshot must remain byte-identical to the authoritative pool at the time of this audit.",
+  "pool_mutation_policy": "This is an explicit manually reviewed update, not automatic updater mutation. Future automated updater runs must remain review-only.",
+  "status": "MANUALLY_REVIEWED_UPDATE_RECORDED"
+}
