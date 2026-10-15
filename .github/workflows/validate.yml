@@ -1,6 +1,6 @@
 name: Riley & Coe evidence validation
 
-# A commit message containing [full-sweep] runs a diagnostic end-to-end collection (including sequential pagination, URL canonicalization, venue scoping, official-first crawling, date-window-aware detail crawling and performer-title fallback).
+# A commit message containing [full-sweep] runs a diagnostic end-to-end collection (including sequential pagination, venue scoping, date-window-aware detail crawling, performer-title fallback and RadioFiles review integration).
 
 on:
   push:
