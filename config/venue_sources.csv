@@ -1,6 +1,6 @@
 venue,source_url,source_status,notes
-The Cluny,https://thecluny.com/,verified_official_calendar,Official homepage upcoming-gigs feed; direct /gigs/ requests intermittently returned empty HTTP 202 responses in the crawler
-Cluny 2,https://thecluny.com/,verified_official_calendar,Same official homepage upcoming-gigs feed; identify room separately and use visible calendar links as fallback
+The Cluny,https://www.songkick.com/venues/17634-cluny/calendar,verified_external_calendar,Venue-specific Songkick safety-net calendar because the official site returned empty HTTP 202 responses to the crawler; official site still needs manual cross-check for non-concert listings
+Cluny 2,https://www.songkick.com/venues/454131-cluny-2/calendar,verified_external_calendar,Separate venue-specific Songkick safety-net calendar because the official site returned empty HTTP 202 responses to the crawler; official site still needs manual cross-check
 Boiler Shop,https://www.boilershop.net/,verified_official_calendar,Official calendar on homepage; follow View Full Calendar and pagination
 Wylam Brewery,https://www.wylambrewery.co.uk/events/,verified_official_calendar,Official What's On calendar
 The Grove,https://thegrovenewcastle.gigantic.com/promoter/the-grove-newcastle-ltd?view=grid,verified_official_calendar,Venue-specific promoter ticket calendar; use this event feed because the venue homepage exposed no parseable event cards
