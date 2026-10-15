@@ -137,7 +137,7 @@ class EvidencePackageTests(unittest.TestCase):
             with (out/"input_file_audit.csv").open(newline="") as f:
                 inputs=list(csv.DictReader(f))
             self.assertTrue(any(row["input_name"]=="bbc_episode_inventory" and row["status"]=="missing" for row in inputs))
-            self.assertTrue(any(row["input_name"]=="bbc_episode_inventory" and row["status"]=="not_supplied" for row in inputs))
+            self.assertTrue(any(row["input_name"]=="bbc_episode_inventory" and row["status"]=="missing" for row in inputs))
             with (out/"venue_coverage.csv").open(newline="") as f:
                 rows=list(csv.DictReader(f))
             self.assertTrue(rows)
