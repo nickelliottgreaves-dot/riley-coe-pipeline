@@ -19,7 +19,7 @@ from urllib.request import Request,urlopen
 
 UA="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
 EVENT_FIELDS=["venue","page_url","http_status","content_type","page_title","event_title","event_date","performer_names","price","currency","availability","event_jsonld_found","visible_text_snapshot","verified","status","notes"]
-AUDIT_FIELDS=["venue","seed_candidate_links","pages_fetched","pages_failed","same_host_links_added","crawl_cap_reached","status","notes"]
+AUDIT_FIELDS=["venue","seed_candidate_links","external_seed_links_skipped","pages_fetched","pages_failed","same_host_links_added","crawl_cap_reached","status","notes"]
 
 class Parser(HTMLParser):
     def __init__(self):
@@ -50,6 +50,13 @@ class Parser(HTMLParser):
 def canonicalize_url(url):
     """Remove tracking parameters so a calendar page is not crawled repeatedly."""
     parsed=urlparse(url)
+    # Some source pages incorrectly wrap an absolute URL inside their href path.
+    # Recover the intended URL rather than fetching /https://host/path on the host.
+    nested_path=(parsed.path or "").lstrip("/")
+    if nested_path.startswith(("https://","http://")):
+        nested=urlparse(nested_path)
+        if nested.netloc:
+            return canonicalize_url(nested.geturl())
     query=parse_qs(parsed.query,keep_blank_values=True)
     cleaned={}
     for key,value in query.items():
@@ -330,8 +337,12 @@ def main():
         # for venues whose official page exposes no usable event structure.
         if canonical_urls:
             queue.append((canonical_urls[0],0)); queued.add(canonical_urls[0])
-        fallback_seed_urls=canonical_urls[1:]
-        source_hosts={urlparse(u).netloc for u in urls if urlparse(u).netloc}
+        official_host=urlparse(canonical_urls[0]).netloc if canonical_urls else ""
+        fallback_seed_urls=[u for u in canonical_urls[1:] if urlparse(u).netloc == official_host]
+        external_seed_links_skipped=max(0,len(canonical_urls[1:])-len(fallback_seed_urls))
+        # Follow links only on the official venue host. Third-party ticket links are
+        # retained in discovery inputs but must not explode the crawl into global ticketing pages.
+        source_hosts={official_host} if official_host else set()
         while queue:
             url,depth=queue.popleft()
             queued.discard(url)
@@ -430,7 +441,7 @@ def main():
                 failed+=1
                 all_rows.append({"venue":venue,"page_url":url,"http_status":"","content_type":"","page_title":"","event_title":"","event_date":"","performer_names":"","price":"","currency":"","availability":"","event_jsonld_found":"false","visible_text_snapshot":"","verified":"false","status":"fetch_failed","notes":f"{type(exc).__name__}: {exc}"})
             time.sleep(max(0,args.delay))
-        audits.append({"venue":venue,"seed_candidate_links":len(set(urls)),"pages_fetched":len(visited)-failed,"pages_failed":failed,"same_host_links_added":added,"crawl_cap_reached":str(cap).lower(),"status":"PARTIAL" if urls else "NO_SEED_LINKS","notes":"Bounded crawl only; cap, JavaScript content, pagination and event/support completeness require review." if urls else "No candidate links supplied for this configured venue. This is a discovery gap, not evidence that the calendar is empty."})
+        audits.append({"venue":venue,"seed_candidate_links":len(set(urls)),"external_seed_links_skipped":external_seed_links_skipped,"pages_fetched":len(visited)-failed,"pages_failed":failed,"same_host_links_added":added,"crawl_cap_reached":str(cap).lower(),"status":"PARTIAL" if urls else "NO_SEED_LINKS","notes":("Bounded crawl only; cap, JavaScript content, pagination and event/support completeness require review. External ticketing hosts are not crawled in this pass." if urls else "No candidate links supplied for this configured venue. This is a discovery gap, not evidence that the calendar is empty.")})
         return all_rows, audits
 
     # Crawl independent venues concurrently so a slow or blocked site cannot
@@ -447,7 +458,7 @@ def main():
         w=csv.DictWriter(f,fieldnames=EVENT_FIELDS);w.writeheader();w.writerows(all_rows)
     with (args.out_dir/"event_page_crawl_audit.csv").open("w",encoding="utf-8",newline="") as f:
         w=csv.DictWriter(f,fieldnames=AUDIT_FIELDS);w.writeheader();w.writerows(audits)
-    summary={"venues_configured":sum(1 for _ in audits),"venues_with_seed_links":sum(r["seed_candidate_links"]>0 for r in audits),"venues_without_seed_links":sum(r["seed_candidate_links"]==0 for r in audits),"pages_inspected":sum(r["pages_fetched"]+r["pages_failed"] for r in audits),"pages_failed":sum(r["pages_failed"] for r in audits),"event_jsonld_rows":sum(r["event_jsonld_found"]=="true" for r in all_rows),"crawl_caps_reached":sum(r["crawl_cap_reached"]=="true" for r in audits),"status":"PARTIAL","limitations":["No event row is marked verified.","Only same-host links are followed after seed discovery.","JavaScript-only calendars, hidden pagination, third-party ticket pages and support acts can be missed.","Manual event-by-event verification and venue coverage records remain required."]}
+    summary={"venues_configured":sum(1 for _ in audits),"venues_with_seed_links":sum(r["seed_candidate_links"]>0 for r in audits),"venues_without_seed_links":sum(r["seed_candidate_links"]==0 for r in audits),"pages_inspected":sum(r["pages_fetched"]+r["pages_failed"] for r in audits),"pages_failed":sum(r["pages_failed"] for r in audits),"external_seed_links_skipped":sum(r["external_seed_links_skipped"] for r in audits),"event_jsonld_rows":sum(r["event_jsonld_found"]=="true" for r in all_rows),"crawl_caps_reached":sum(r["crawl_cap_reached"]=="true" for r in audits),"status":"PARTIAL","limitations":["No event row is marked verified.","Only same-host links are followed after seed discovery.","JavaScript-only calendars, hidden pagination, third-party ticket pages and support acts can be missed.","Manual event-by-event verification and venue coverage records remain required."]}
     (args.out_dir/"event_page_crawl_summary.json").write_text(json.dumps(summary,indent=2)+"\n",encoding="utf-8")
     print(json.dumps(summary,indent=2))
     return 1 if not audits or any(r["pages_failed"] for r in audits) else 0
