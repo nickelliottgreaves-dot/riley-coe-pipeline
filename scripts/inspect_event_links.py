@@ -138,10 +138,11 @@ def extract_visible_event(page_title, visible_text, default_venue="", page_url="
         if year<100: year+=2000
         try: slug_date=date(year,month,day).isoformat()
         except ValueError: slug_date=""
-    date_conflict=bool(slug_date and event_date and slug_date!=event_date)
+    visible_event_date=event_date
+    date_conflict=bool(slug_date and visible_event_date and slug_date!=visible_event_date)
     if date_conflict:
         event_date=""
-    elif slug_date:
+    elif not visible_event_date and slug_date:
         event_date=slug_date
     venue=next_value("Venue") or default_venue
     if (not event_date and not date_conflict) or not venue:
@@ -330,7 +331,7 @@ def extract_visible_event(page_title, visible_text, default_venue="", page_url="
         "price":price,
         "currency":"GBP" if price else "",
         "availability":availability,
-        "notes":"Candidate extracted from visible event-page text; independently verify title, artist billing/support, date, room, price and ticket status."+(" URL date conflicts with visible date; left undated for review." if date_conflict else "")
+        "notes":"Candidate extracted from visible event-page text; independently verify title, artist billing/support, date, room, price and ticket status."+(" URL date conflicts with visible date; left undated for review." if date_conflict else (" Date inferred from URL slug because visible date was unavailable; verify before use." if slug_date and not visible_event_date else ""))
     }
 
 def extract_visible_listing_events(visible_text, default_venue=""):
