@@ -18,6 +18,25 @@ class EventPageCrawlerTests(unittest.TestCase):
         self.assertTrue(event_matches_configured_venue(
             {"name": "Dexys Midnight Runners", "location": {"name": "O2 City Hall Newcastle"}}, "O2 City Hall Newcastle"))
 
+    def test_ents24_detail_titles_keep_billed_act_instead_of_generic_at(self):
+        cases = [
+            ("Ye Gods Newcastle tickets at The Lubber Fiend, Newcastle on 16 October 2026 | Ents24",
+             "Friday 16 October 2026 at 7:30pm\nYE GODS / PALE WORLD & Y GWACTER / DEPLETION £11.00",
+             "The Lubber Fiend", "https://www.ents24.com/newcastle-events/the-lubber-fiend/ye-gods/7515428",
+             "Ye Gods", "2026-10-16"),
+            ("Dexys Midnight Runners Newcastle upon Tyne tickets at O2 City Hall Newcastle, Newcastle upon Tyne on 21 October 2026 | Ents24",
+             "Wednesday 21 October 2026 at 7:00pm\nDexys Midnight Runners",
+             "O2 City Hall Newcastle", "https://www.ents24.com/newcastle-upon-tyne-events/o2-city-hall-newcastle/dexys-midnight-runners/7463144",
+             "Dexys Midnight Runners", "2026-10-21"),
+        ]
+        for page_title, visible, venue, url, expected_title, expected_date in cases:
+            with self.subTest(expected_title=expected_title):
+                candidate = extract_visible_event(page_title, visible, venue, url)
+                self.assertIsNotNone(candidate)
+                self.assertEqual(candidate["event_title"], expected_title)
+                self.assertEqual(candidate["event_date"], expected_date)
+                self.assertIn(expected_title, candidate["performer_names"])
+
     def test_calendar_date_filters_stay_inside_requested_window(self):
         start=date(2026,10,15); end=date(2026,10,28)
         self.assertTrue(calendar_target_in_window("https://thecluny.com/gigs/date/2026/10",start,end))
