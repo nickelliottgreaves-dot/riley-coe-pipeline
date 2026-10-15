@@ -228,6 +228,8 @@ Advance tickets:
         self.assertIsNone(extract_visible_event("Limited Availability - The Glasshouse", visible))
         self.assertIsNone(extract_visible_event("Access Info - The Glasshouse", visible))
         self.assertIsNone(extract_visible_event("7:00pm - The Glasshouse", visible))
+        self.assertIsNone(extract_visible_event("Live Events Archives - NX Newcastle", visible))
+        self.assertIsNone(extract_visible_event("Events Archive - NX Newcastle", visible))
 
     def test_glasshouse_detail_page_uses_explicit_room_not_crawl_seed(self):
         visible = """Friday 16 October 2026 |
