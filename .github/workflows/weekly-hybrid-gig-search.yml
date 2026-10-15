@@ -99,6 +99,7 @@ jobs:
               --links "$LINKS" \
               --sources "$SOURCES" \
               --out-dir "$OUT/$PASS-inspection" \
+              --extra-seeds tests/fixtures/known_gig_regressions.csv \
               --start "${{ steps.window.outputs.start }}" \
               --end "${{ steps.window.outputs.end }}" \
               --max-pages-per-venue 35 --max-depth 2
@@ -125,13 +126,18 @@ jobs:
                   w.writerows(rows)
           event_fields=["event_date","venue","event_title","artist","artist_role","source_url","verified","price","ticket_status","discovery_method","notes"]
           inspected_fields=["venue","page_url","http_status","content_type","page_title","event_title","event_date","performer_names","price","currency","availability","event_jsonld_found","visible_text_snapshot","verified","status","notes"]
+          link_fields=["venue","link_text","candidate_url","source_page_url","candidate_reason","verified","notes"]
           all_events=[]
+          all_links=[]
           all_inspected=[]
           for pass_name in ("primary","secondary"):
               event_path=root/f"{pass_name}-discovery/event_candidates.csv"
               for row in read(event_path):
                   row["notes"] = f"[{pass_name}] " + (row.get("notes") or "")
                   all_events.append(row)
+              for row in read(root/f"{pass_name}-discovery/event_link_candidates.csv"):
+                  row["notes"] = f"[{pass_name}] " + (row.get("notes") or "")
+                  all_links.append(row)
               inspection_dir=root/f"{pass_name}-inspection"
               for row in read(inspection_dir/"event_page_inspection.csv"):
                   rel=(row.get("visible_text_snapshot") or "").strip()
@@ -148,6 +154,7 @@ jobs:
                   row["notes"] = f"[{pass_name}] " + (row.get("notes") or "")
                   all_inspected.append(row)
           write(combined/"event_candidates.csv", all_events, event_fields)
+          write(combined/"event_link_candidates.csv", all_links, link_fields)
           write(combined/"event_page_inspection.csv", all_inspected, inspected_fields)
           print(f"Combined discovery event rows: {len(all_events)}")
           print(f"Combined inspected event/page rows: {len(all_inspected)}")
@@ -184,6 +191,7 @@ jobs:
             --events "$OUT/combined/event_candidates.csv" \
             --inspected "$OUT/combined/event_page_inspection.csv" \
             --inspection-dir "$OUT/combined" \
+            --natural-links "$OUT/combined/event_link_candidates.csv" \
             --out "$OUT/known_gig_regressions.csv"
           echo "Regression check exit code: $?"
 
