@@ -106,6 +106,8 @@ Sage One
 Advance tickets:
 £42.50"""
         self.assertIsNone(extract_visible_event("Limited Availability - The Glasshouse", visible))
+        self.assertIsNone(extract_visible_event("Access Info - The Glasshouse", visible))
+        self.assertIsNone(extract_visible_event("7:00pm - The Glasshouse", visible))
 
     def test_extracts_multiple_dated_cards_from_cluny_calendar(self):
         visible = """Gigs
