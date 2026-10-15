@@ -753,9 +753,18 @@ def main():
         audits=[]
         queue=deque(); queued=set(); visited=set(); failed=0; added=0; cap=False
         canonical_urls=[]
+        primary_source_url=urls[0] if urls else ""
+        primary_host=urlparse(primary_source_url).netloc.casefold()
         for seed_url in urls:
             canonical=canonicalize_url(seed_url)
-            if not allowed_source_scoped_url(seed_url if not canonical_urls else canonical_urls[0], canonical, venue):
+            target_host=urlparse(canonical).netloc.casefold()
+            # Retain external links in the seed inventory so the audit can count
+            # them as skipped, but never enqueue them for crawling.
+            if target_host != primary_host:
+                if canonical not in canonical_urls:
+                    canonical_urls.append(canonical)
+                continue
+            if not allowed_source_scoped_url(primary_source_url, canonical, venue):
                 continue
             if canonical not in canonical_urls:
                 canonical_urls.append(canonical)
