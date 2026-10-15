@@ -635,7 +635,12 @@ def main():
                 # data; do not count those as successful page inspections.
                 if status != 200 and not visible.strip() and not p.scripts:
                     if depth == 0:
-                        for seed_url in fallback_seed_urls:
+                        # An empty non-200 response can indicate a host-wide
+                        # anti-bot/JS shell. Probe only a few same-host fallback
+                        # URLs instead of hammering hundreds of links that are
+                        # likely to return the same unusable response.
+                        fallback_limit = min(3, max(0, args.max_pages_per_venue - 1))
+                        for seed_url in fallback_seed_urls[:fallback_limit]:
                             if seed_url not in visited and seed_url not in queued:
                                 queue.append((seed_url,1)); queued.add(seed_url)
                     raise ValueError(f"HTTP {status} returned no visible text or JSON-LD; response is not usable event evidence")
