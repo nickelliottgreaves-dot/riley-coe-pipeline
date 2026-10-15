@@ -119,7 +119,7 @@ def main() -> int:
         norm(row.get("venue", "")): {
             "host": host(row.get("source_url", "")),
             "source_url": row.get("source_url", ""),
-            "source_type": row.get("source_type", ""),
+            "source_type": row.get("source_type") or row.get("source_status", ""),
         }
         for row in primary_rows
     }
