@@ -847,8 +847,34 @@ def main():
                                 continue
                             navigation=is_calendar_navigation(href,txt,url)
                             if listing_events:
-                                if not navigation and not any(event_link_matches(candidate,href,txt) for candidate in in_window):
+                                matched_candidates=[candidate for candidate in in_window if event_link_matches(candidate,href,txt)]
+                                if not navigation and not matched_candidates:
                                     continue
+                                if not navigation and event_objects:
+                                    # Avoid fetching every detail page when the
+                                    # calendar's in-window JSON-LD already gives
+                                    # both performer billing and a price. Fetch
+                                    # detail pages only where structured data
+                                    # cannot support a useful event record.
+                                    def has_complete_structured_match(candidate):
+                                        candidate_title=re.sub(r"[^a-z0-9]+"," ",str(candidate.get("event_title") or "").casefold()).strip()
+                                        candidate_date=str(candidate.get("event_date") or "")[:10]
+                                        for ev in event_objects:
+                                            event_title=re.sub(r"[^a-z0-9]+"," ",clean(ev.get("name")).casefold()).strip()
+                                            event_date=clean(ev.get("startDate"))[:10]
+                                            if event_date!=candidate_date or not candidate_title or not event_title:
+                                                continue
+                                            if candidate_title not in event_title and event_title not in candidate_title:
+                                                continue
+                                            performer, performer_fallback=event_performer_candidate(ev)
+                                            offers=ev.get("offers") or []
+                                            offers=offers if isinstance(offers,list) else [offers]
+                                            has_price=any(isinstance(offer,dict) and offer.get("price") is not None for offer in offers)
+                                            if performer and not performer_fallback and has_price:
+                                                return True
+                                        return False
+                                    if matched_candidates and all(has_complete_structured_match(candidate) for candidate in matched_candidates):
+                                        continue
                             elif (event_objects or visible_event_found) and not navigation:
                                 continue
                             elif not event_objects and not likely(href,txt):
