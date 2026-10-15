@@ -455,7 +455,8 @@ Book Tickets
                     self.assertEqual(main(), 0)
 
             self.assertEqual(set(fetched), {source, concert})
-            rows = list(csv.DictReader((out / "event_page_inspection.csv").open(encoding="utf-8-sig")))
+            with (out / "event_page_inspection.csv").open(encoding="utf-8-sig", newline="") as handle:
+                rows = list(csv.DictReader(handle))
             self.assertFalse(any("metro-areas" in row["page_url"] for row in rows))
             self.assertFalse(any("/artists/" in row["page_url"] for row in rows))
 
