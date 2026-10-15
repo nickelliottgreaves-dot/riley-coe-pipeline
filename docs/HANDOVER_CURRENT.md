@@ -404,8 +404,21 @@ Run [38741114377](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/a
 - 20 sources fetched; zero discovery fetch failures. Event inspection: 394 pages inspected, 24 failed, 11 allowlisted external event-detail pages inspected, zero crawl caps.
 - The previous cross-city leak (Cardiff/Birmingham Skiddle listings being assigned to Lubber Fiend/Little Buildings) was absent in this artifact. The later regression test run [38739200928](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38739200928) passed, explicitly testing that Skiddle venue calendars cannot leak other-city events.
 - Seven candidates in this run: Barbican Estate at The Cluny (9 Nov); Cabaret Voltaire at Boiler Shop (17 Oct); Fat White Family at Utilita Arena Newcastle (25 Oct); Pys Melyn / support data associated with Louis O'Hara at The Globe (27 Oct); Radhika as a candidate support match on The Wedding Present at Boiler Shop (23 Oct); Teenage Fanclub at Boiler Shop (10 Nov); The Wedding Present at Boiler Shop (23 Oct). These are candidates only, not independently verified; the Boiler Shop listings reported SoldOut in captured text.
-- Run [38741608464](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38741608464), triggered on the newest commit after the scope regression test, was still queued as of 13:19 UTC. Check whether it eventually starts/completes before initiating another live sweep.
+- Run [38741608464](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38741608464) completed successfully at commit `b55e197ed1dac477472dd1d56604febe2229f802`. Its artifact ID is `11975164083` (`riley-coe-independent-gig-finder-38741608464`): 20/20 source rows, 847/847 artist comparison rows, seven candidates, zero out-of-scope rows, zero stage failures, 14 checked-in-captured-scope venues and six partial venues. It reconfirmed that the Skiddle cross-city leakage was absent.
 
-### Next action
+### New failure-ledger improvement and next acceptance run
 
-Inspect run 38741608464 when available. Confirm it uses commit `b55e197ed1dac477472dd1d56604febe2229f802`, produces the new artifact, and repeats the zero-cross-city-leak assertion. If it remains stuck queued, report that blocker plainly and use the latest completed run's artifact only as provisional evidence. Then review the seven candidates against source pages and improve per-source coverage rather than adding generic crawler complexity.
+A specific evidence gap was found: the crawler's aggregate `pages_failed` count could exceed the number of visible `fetch_failed` rows because deduplication collapsed multiple failures for the same venue. The crawler now writes `event_page_fetch_failures.csv` with one row per failed URL, including venue, URL, crawl depth, HTTP status when known, whether it was external, error type and message. Failed rows in `event_page_inspection.csv` are also deduplicated by URL so they do not collapse together.
+
+The gig-finder runner now ensures the failure ledger exists even if the inspection stage fails, records its row count in the manifest/summary, and the report validator checks that the failure-ledger row count equals the sum of `pages_failed` in the crawl audit. Tests cover multiple failed URLs with distinct 503/403 responses and reject a mismatch between ledger and aggregate counts.
+
+Latest tests-only run [38741789201](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38741789201) passed: **138 tests**. This is code validation, not live acceptance of the new ledger.
+
+This handover commit intentionally triggers a fresh normal full sweep on the latest code. Check the artifact and confirm:
+1. `event_page_fetch_failures.csv` exists and has exactly as many rows as the summed `pages_failed` counts in `event_page_crawl_audit.csv`.
+2. Every failure row contains a URL and an error message; HTTP status is preserved when known.
+3. The report validator passes with the new ledger present.
+4. The 20-source / 847-artist coverage, seven candidate matches and zero out-of-scope rows remain stable.
+5. The report remains PARTIAL; do not imply the six partial venue sources are complete.
+
+After this normal sweep, run one simulated-Cobalt failure against the same ledger implementation to verify failure handling. Do not merge to `main` or mark the research COMPLETE.
