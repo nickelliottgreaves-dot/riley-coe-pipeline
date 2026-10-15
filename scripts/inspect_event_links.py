@@ -95,7 +95,7 @@ def is_page_furniture(value):
     raw=str(value or "").strip()
     normalized=" ".join(re.sub(r"[^a-z0-9:]+"," ",raw.casefold()).split())
     return bool(
-        re.fullmatch(r"\d{1,2}(?:[:.]\d{2})?\s*(?:am|pm)?(?:\s*(?:[-–—]|to)\s*\d{1,2}(?:[:.]\d{2})?\s*(?:am|pm)?",raw,re.I)
+        re.fullmatch(r"\d{1,2}(?:[:.]\d{2})?\s*(?:am|pm)?(?:\s*(?:[-–—]|to)\s*\d{1,2}(?:[:.]\d{2})?\s*(?:am|pm)?)?",raw,re.I)
         or re.match(r"^(?:age|doors|interval|timings?|what they say|the guardian|your visit|plan your journey|parking|eat and drink|access info|access information|more info|take a listen|about|stay connected)\b",normalized)
     )
 
