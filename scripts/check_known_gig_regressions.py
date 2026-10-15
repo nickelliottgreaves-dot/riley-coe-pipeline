@@ -57,10 +57,13 @@ def main() -> int:
         return (parsed.netloc.casefold().removeprefix("www."), parsed.path.rstrip("/"))
     natural_urls=set()
     for row in read_csv(args.natural_links) if args.natural_links else []:
-        for field in ("candidate_url","source_page_url"):
-            value=(row.get(field) or "").strip()
-            if value.startswith(("http://","https://")):
-                natural_urls.add(url_key(value))
+        # Only an event URL explicitly discovered as a candidate proves natural
+        # discovery. The source_page_url is merely the calendar/listing that
+        # linked to it; counting that URL can incorrectly bless a seeded event
+        # page as naturally discovered.
+        value=(row.get("candidate_url") or "").strip()
+        if value.startswith(("http://","https://")):
+            natural_urls.add(url_key(value))
 
     results = []
     for fixture in fixtures:
@@ -92,10 +95,11 @@ def main() -> int:
                 }
                 hits.append(hit)
                 explicit_seed = "Explicit regression seed page" in str(row.get("notes",""))
-                if not explicit_seed:
-                    natural_hits.append(hit)
+                # A non-seeded event row is natural evidence in its own right.
+                # A seeded row counts only if its exact event URL was separately
+                # discovered in the unseeded candidate-link ledger.
                 source_url=hit["source_url"]
-                if source_url and url_key(source_url) in natural_urls:
+                if not explicit_seed or (source_url and url_key(source_url) in natural_urls):
                     natural_hits.append(hit)
         # Remove duplicate evidence objects while retaining the natural/seed distinction.
         natural_hits = list({json.dumps(h,sort_keys=True):h for h in natural_hits}.values())
