@@ -499,3 +499,8 @@ Do not merge without the user's approval. Once approved and merged, run one manu
 - PR #7 was closed unmerged because the new review-only artist-pool updater supersedes its narrower RadioFiles reconciliation.
 - PRs #5 and #6 were closed unmerged because Mixcloud was dropped after repeated 404/soft-404 and unusable tracklist results.
 - PR #9 remains the only active deployment PR: https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/pull/9. Latest head is `d8966229e28ecda1afa1add616f9701e877bddcf`; merge state is clean. No PR has been merged.
+
+
+## Final normal-sweep check on the clean deployment branch
+
+The clean branch has passed the simulated-source-failure acceptance run [38745828682](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38745828682) and latest unit tests [38746347848](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38746347848). This final handover commit triggers a **normal** live sweep on `deploy/weekly-gig-finder-clean`, so the exact PR head is tested without the simulated failure. Inspect the artifact for the same 20/847 coverage, seven candidate rows, zero out-of-scope rows, and a reconciled failure ledger. If it passes, update PR #9's acceptance evidence and wait for user approval; do not merge autonomously.
