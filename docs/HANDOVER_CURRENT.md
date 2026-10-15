@@ -460,3 +460,15 @@ Normal live sweep [38743825036](https://github.com/nickelliottgreaves-dot/riley-
 The main-branch deployment path has also been prepared in `.github/workflows/validate.yml`: the new independent gig finder and review-only artist updater are enabled on `main` as well as the redesign branch, while the legacy all-in-one jobs are isolated to `rebuild/core-gig-finder`. Regression tests enforce those trigger conditions. Latest test run [38744373253](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38744373253) passed: **143 tests**.
 
 This handover commit intentionally triggers the final simulated-Cobalt acceptance run against the latest code and trigger conditions. Confirm the run remains PARTIAL, the Cobalt outage is recorded in the failure ledger, counts reconcile, and no external-ticket-only venue is mislabeled as a calendar-capture failure. If it passes, prepare a review PR from `redesign/workflow-contract` to `main`; do not merge without the user's approval.
+
+
+## Clean deployment branch and pre-PR acceptance (2026-10-15)
+
+The first PR (#8) was opened directly from `redesign/workflow-contract`, which diverged from `main` by 554 commits and included unnecessary historical commit history. It has **not** been merged. To make review/deployment safe, a clean branch `deploy/weekly-gig-finder-clean` was created directly from `main` and given a single snapshot commit containing the 60 selected implementation, data, evidence and test files; unrelated Mixcloud, core-only search and runner-smoke changes were left out.
+
+- Clean branch base: `main` commit `0238b7dcced3f999db59c6340fdf077733d0598d`.
+- Snapshot commit: `561378833534f04e2ff21b9c5864d5aa51de3a85`; it is one commit ahead of `main`.
+- Added the clean deployment branch to the independent-job trigger conditions so the candidate-finder and artist-pool updater can be acceptance-tested before merge. On `main`, those jobs run on schedule/manual dispatch/explicit full-sweep pushes; legacy all-in-one jobs remain restricted to `rebuild/core-gig-finder`.
+- Added regression coverage for the clean branch conditions. Latest clean-branch test run [38745730262](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38745730262) passed: **129 tests**.
+
+This handover commit intentionally triggers a simulated-Cobalt full sweep from the clean branch. Confirm the new workflow conditions select the independent jobs, the report remains PARTIAL, the failure ledger and crawl audit reconcile, and Cobalt is the one calendar-source partial. If it passes, open a clean PR from `deploy/weekly-gig-finder-clean` to `main` and close PR #8 as superseded; do not merge without the user's approval.
