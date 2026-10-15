@@ -142,7 +142,7 @@ def main() -> int:
     parser.add_argument("--start", help="Inclusive ISO date; defaults to today")
     parser.add_argument("--out-dir", type=Path, help="Unique output directory; defaults under artifacts/runs")
     parser.add_argument("--previous-successful-run", default="unknown/not established")
-    parser.add_argument("--run-id", default=os.environ.get("GITHUB_RUN_ID", "local"))
+    parser.add_argument("--run-id", default=os.environ.get("GITHUB_RUN_ID", ""))
     args = parser.parse_args()
 
     contract = load_contract()
@@ -153,7 +153,7 @@ def main() -> int:
 
     start, end = reporting_window(args.start, contract=contract)
     run_date = date.today()
-    run_id = str(args.run_id)
+    run_id = str(args.run_id or f"local-{datetime.now(timezone.utc).strftime('%H%M%S%f')}")
     if args.out_dir:
         out_dir = args.out_dir if args.out_dir.is_absolute() else ROOT / args.out_dir
     else:
