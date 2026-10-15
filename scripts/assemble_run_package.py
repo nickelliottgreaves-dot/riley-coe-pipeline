@@ -36,7 +36,7 @@ def main():
     ap=argparse.ArgumentParser()
     ap.add_argument("--start",required=True); ap.add_argument("--end",required=True)
     ap.add_argument("--previous-successful-run",default="unknown/not yet established")
-    ap.add_argument("--episodes",type=Path); ap.add_argument("--bbc-episodes",type=Path); ap.add_argument("--bbc-track-candidates",type=Path); ap.add_argument("--mixcloud-track-candidates",type=Path); ap.add_argument("--events",type=Path)
+    ap.add_argument("--episodes",type=Path); ap.add_argument("--bbc-episodes",type=Path); ap.add_argument("--bbc-track-candidates",type=Path); ap.add_argument("--mixcloud-track-candidates",type=Path); ap.add_argument("--radiofiles-episodes",type=Path); ap.add_argument("--radiofiles-track-candidates",type=Path); ap.add_argument("--events",type=Path)
     ap.add_argument("--venue-audit",type=Path); ap.add_argument("--event-page-inspection",type=Path); ap.add_argument("--event-page-audit",type=Path); ap.add_argument("--out-dir",type=Path,required=True)
     ap.add_argument("--pool",type=Path,default=ROOT/"data/artist_pool.csv")
     args=ap.parse_args()
@@ -50,6 +50,8 @@ def main():
         ("bbc_episode_inventory",args.bbc_episodes,True),
         ("bbc_track_candidates",args.bbc_track_candidates,True),
         ("mixcloud_track_candidates",args.mixcloud_track_candidates,True),
+        ("radiofiles_episode_candidates",args.radiofiles_episodes,True),
+        ("radiofiles_track_candidates",args.radiofiles_track_candidates,True),
         ("event_candidates",args.events,True),
         ("event_discovery_audit",args.venue_audit,True),
         ("event_page_inspection",args.event_page_inspection,True),
@@ -83,6 +85,18 @@ def main():
         episode_rows.append({"episode_date":r.get("episode_date",""),"source":"BBC Sounds official episode page",
             "url":r.get("episode_url",""),"tracklist_status":normalized_state,
             "tracks_extracted":"0","notes":((r.get("notes") or "")+f" Original BBC collector state: {source_state}. BBC inventory/candidates only; visible tracklist completeness and all artists remain to be verified.").strip()})
+    radiofiles_episodes=read_csv(args.radiofiles_episodes,["episode_date","episode_title","episode_url","source","tracklist_status","notes"]) if args.radiofiles_episodes else []
+    radiofiles_tracks=read_csv(args.radiofiles_track_candidates,["episode_date","episode_title","episode_url","artist_candidate","track_title","track_position","source","verification_status","notes"]) if args.radiofiles_track_candidates else []
+    radiofiles_track_counts={}
+    for track in radiofiles_tracks:
+        key=(track.get("episode_date",""),track.get("episode_url",""))
+        radiofiles_track_counts[key]=radiofiles_track_counts.get(key,0)+1
+    for r in radiofiles_episodes:
+        source_state=(r.get("tracklist_status") or "needs_review").strip()
+        count=radiofiles_track_counts.get((r.get("episode_date",""),r.get("episode_url","")),0)
+        episode_rows.append({"episode_date":r.get("episode_date",""),"source":"RadioFiles public tracklist",
+            "url":r.get("episode_url",""),"tracklist_status":"not_yet_checked","tracks_extracted":str(count),
+            "notes":((r.get("notes") or "")+f" Original RadioFiles collector state: {source_state}. Candidate tracklist only; compare every row with the complete visible tracklist before updating the artist pool.").strip()})
     # Consolidate machine-extracted track candidates from both services into one review queue.
     track_review_fields=["episode_date","episode_title","episode_url","artist_candidate","track_title","track_position","extraction_method","review_status","evidence_text","notes"]
     track_review_rows=[]
@@ -92,6 +106,12 @@ def main():
             "episode_url":track.get("episode_url",""),"artist_candidate":track.get("artist",""),"track_title":track.get("track_title",""),
             "track_position":track.get("track_position",""),"extraction_method":"mixcloud_api_candidate",
             "review_status":"needs_manual_review","evidence_text":"","notes":"Mixcloud API candidate only; compare against complete visible show tracklist."})
+    for track in radiofiles_tracks:
+        track_review_rows.append({"episode_date":track.get("episode_date",""),"episode_title":track.get("episode_title",""),
+            "episode_url":track.get("episode_url",""),"artist_candidate":track.get("artist_candidate",""),"track_title":track.get("track_title",""),
+            "track_position":track.get("track_position",""),"extraction_method":"radiofiles_visible_tracklist_candidate",
+            "review_status":"needs_manual_review","evidence_text":"",
+            "notes":(track.get("notes","")+" RadioFiles candidate only; verify every track against the complete visible tracklist.").strip()})
     bbc_tracks=read_csv(args.bbc_track_candidates,["episode_date","episode_title","episode_url","artist_candidate","track_title","extraction_method","review_status","evidence_text","notes"]) if args.bbc_track_candidates else []
     for track in bbc_tracks:
         track_review_rows.append({k:track.get(k,"") for k in track_review_fields})
