@@ -676,6 +676,38 @@ def likely(href,text):
     return bool(re.search(r"event|gig|show|concert|ticket|whats-on|whatson|live-music|performance|listing|page=|next|older",href+" "+text,re.I))
 
 
+def allowed_source_scoped_url(source_url, target_url, venue):
+    """Prevent venue calendars from expanding into unrelated city/artist feeds.
+
+    Songkick venue calendars link to metro-area pages and artist pages. Those
+    pages can list gigs across the UK; crawling them under a venue label creates
+    false local matches. For Songkick, only the same venue calendar and concert
+    detail URLs explicitly billed at that venue are in scope.
+    """
+    source = urlparse(source_url)
+    target = urlparse(target_url)
+    if target.scheme not in {"http", "https"} or target.netloc.casefold() != source.netloc.casefold():
+        return False
+    host = source.netloc.casefold().removeprefix("www.")
+    if not host.endswith("songkick.com"):
+        return True
+
+    source_match = re.match(r"^/venues/(\\d+)(?:-|/|$)", source.path, re.I)
+    target_match = re.match(r"^/venues/(\\d+)(?:-|/|$)", target.path, re.I)
+    if source_match and target_match and source_match.group(1) == target_match.group(1):
+        return True
+    if not target.path.casefold().startswith("/concerts/"):
+        return False
+
+    path = target.path.casefold()
+    venue_key = re.sub(r"[^a-z0-9]+", "", (venue or "").casefold())
+    if venue_key == "thecluny":
+        return bool(re.search(r"-at-(?:the-)?cluny(?:-|$)", path))
+    if venue_key == "cluny2":
+        return bool(re.search(r"-at-(?:the-)?cluny-2(?:-|$)", path))
+    return False
+
+
 def main():
     ap=argparse.ArgumentParser()
     ap.add_argument("--links",type=Path,required=True)
@@ -723,6 +755,8 @@ def main():
         canonical_urls=[]
         for seed_url in urls:
             canonical=canonicalize_url(seed_url)
+            if not allowed_source_scoped_url(seed_url if not canonical_urls else canonical_urls[0], canonical, venue):
+                continue
             if canonical not in canonical_urls:
                 canonical_urls.append(canonical)
         # The official source page is first. Candidate links are a fallback only
@@ -730,7 +764,7 @@ def main():
         if canonical_urls:
             queue.append((canonical_urls[0],0)); queued.add(canonical_urls[0])
         official_host=urlparse(canonical_urls[0]).netloc if canonical_urls else ""
-        fallback_seed_urls=[u for u in canonical_urls[1:] if urlparse(u).netloc == official_host]
+        fallback_seed_urls=[u for u in canonical_urls[1:] if urlparse(u).netloc == official_host and allowed_source_scoped_url(canonical_urls[0],u,venue)]
         external_seed_links_skipped=max(0,len(canonical_urls[1:])-len(fallback_seed_urls))
         # Follow links only on the official venue host. Third-party ticket links are
         # retained in discovery inputs but must not explode the crawl into global ticketing pages.
@@ -842,6 +876,8 @@ def main():
                         for href,txt in p.links:
                             target=urljoin(url,href); parsed=urlparse(target)
                             if parsed.scheme not in {"https","http"} or parsed.netloc not in source_hosts:
+                                continue
+                            if canonical_urls and not allowed_source_scoped_url(canonical_urls[0],target,venue):
                                 continue
                             if not calendar_target_in_window(target,args.start_date,args.end_date):
                                 continue
