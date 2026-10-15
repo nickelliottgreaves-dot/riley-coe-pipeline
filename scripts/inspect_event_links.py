@@ -744,7 +744,7 @@ def page_explicitly_off_venue(page_title, page_url, configured_venue):
     """Detect venue detail pages whose title/URL explicitly names another venue."""
     title=str(page_title or "")
     # Songkick detail titles commonly use "Artist Tickets, Venue, date – Songkick".
-    match=re.search(r"(?i)\\btickets,\\s*([^,]+),",title)
+    match=re.search(r"(?i)\btickets,\s*([^,]+),",title)
     if match and not event_matches_configured_venue({"location":{"name":match.group(1)}},configured_venue):
         return True
     path=urlparse(str(page_url or "")).path.casefold()
