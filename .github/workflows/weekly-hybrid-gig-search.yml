@@ -12,12 +12,14 @@ on:
       - 'scripts/discover_event_candidates.py'
       - 'scripts/inspect_event_links.py'
       - 'scripts/match_pool_to_window_events.py'
+      - 'scripts/verify_event_candidates.py'
       - 'scripts/validate_hybrid_baseline.py'
       - 'scripts/check_known_gig_regressions.py'
       - 'data/artist_pool.csv'
       - 'tests/fixtures/known_gig_regressions.csv'
       - 'tests/test_inspect_event_links.py'
       - 'tests/test_check_known_gig_regressions.py'
+      - 'tests/test_verify_event_candidates.py'
       - 'tests/test_event_inspection_structured_fallback.py'
   workflow_dispatch:
   schedule:
@@ -198,6 +200,22 @@ jobs:
             --out "$OUT/known_gig_regressions.csv"
           echo "Regression check exit code: $?"
 
+      - name: Verify candidate matches against natural source evidence
+        if: success()
+        shell: bash
+        run: |
+          set +e
+          OUT="artifacts/hybrid-search-${{ steps.window.outputs.start }}"
+          python scripts/verify_event_candidates.py \
+            --matches "$OUT/artist_window_event_matches.csv" \
+            --events "$OUT/combined/event_candidates.csv" \
+            --inspected "$OUT/combined/event_page_inspection.csv" \
+            --primary-sources config/hybrid_venue_sources.csv \
+            --secondary-sources config/hybrid_secondary_sources.csv \
+            --natural-links "$OUT/combined/event_link_candidates.csv" \
+            --out "$OUT/verified_event_review.csv"
+          echo "Event-level verification exit code: $?"
+
       - name: Produce source coverage and honest result status
         if: success()
         shell: bash
@@ -214,6 +232,8 @@ jobs:
           primary_crawl=rows(out/"primary-inspection/event_page_crawl_audit.csv")
           secondary_crawl=rows(out/"secondary-inspection/event_page_crawl_audit.csv")
           matches=rows(out/"artist_window_event_matches.csv")
+          verification_path=out/"verified_event_review.summary.json"
+          verification=json.loads(verification_path.read_text(encoding="utf-8")) if verification_path.exists() else {"candidate_match_rows":len(matches),"verified_match_rows":0,"verified_events":0,"unverified_candidate_match_rows":len(matches),"status":"NOT_RUN"}
           reg_path=out/"known_gig_regressions.summary.json"
           regression=json.loads(reg_path.read_text(encoding="utf-8")) if reg_path.exists() else {"fixtures":5,"recovered":0,"not_recovered":5,"status":"NOT_RUN"}
           primary_ok=sum(r.get("status")=="fetched_candidates_only" for r in primary_audit)
@@ -238,9 +258,12 @@ jobs:
             "event_page_crawl_caps":caps,
             "candidate_pool_matches":len(matches),
             "known_gig_regressions":regression,
-            "verified_gigs":0,
+            "event_level_verification":verification,
+            "verified_match_rows":verification.get("verified_match_rows",0),
+            "unverified_candidate_match_rows":verification.get("unverified_candidate_match_rows",len(matches)),
+            "verified_gigs":verification.get("verified_events",0),
             "status":"LIMITED_RESULTS",
-            "reason":"Two-source candidate search only. Independent source evidence improves recall, but all candidates still require event-level verification and bounded crawling cannot prove full calendar completeness.",
+            "reason":f"Conservative verification accepted {verification.get('verified_events',0)} event(s); {verification.get('unverified_candidate_match_rows',len(matches))} candidate performer rows still need manual review. Source coverage is {primary_ok}/18 primary and {secondary_ok}/18 secondary; bounded crawling cannot prove full calendar completeness.",
             "pool_modified":False
           }
           (out/"run_summary.json").write_text(json.dumps(summary,indent=2)+"\n",encoding="utf-8")
