@@ -345,7 +345,7 @@ def fetch_dated_slug_cloudcasts(username: str, since: date, until: date) -> tupl
     episode still requires visible-tracklist review and may be missing tracks.
     """
     account=username.strip("/")
-    found=[]; errors=[]
+    found=[]; errors=[]; html_unavailable=False
     current=since
     decoder=json.JSONDecoder()
     while current<=until:
@@ -363,7 +363,7 @@ def fetch_dated_slug_cloudcasts(username: str, since: date, until: date) -> tupl
                     errors.append(f"Mixcloud dated-slug API request failed for {public_url}: {exc}")
             except (URLError,TimeoutError,OSError,json.JSONDecodeError) as exc:
                 errors.append(f"Mixcloud dated-slug API request failed for {public_url}: {exc}")
-            if item is None:
+            if item is None and not html_unavailable:
                 req=Request(public_url,headers={"User-Agent":USER_AGENT,"Accept":"text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8","Accept-Language":"en-GB,en;q=0.9"})
                 try:
                     with urlopen(req,timeout=12) as response:
@@ -384,11 +384,17 @@ def fetch_dated_slug_cloudcasts(username: str, since: date, until: date) -> tupl
                                     if isinstance(sections,list):
                                         item["sections"]=sections
                                         break
+                            else:
+                                # A non-show/challenge response is enough to stop repeated
+                                # HTML probes; continue API slugs without repeating slow pages.
+                                html_unavailable=True
                 except HTTPError as exc:
                     if exc.code != 404:
                         errors.append(f"Mixcloud dated-slug page request failed for {public_url}: {exc}")
+                        html_unavailable=True
                 except (URLError,TimeoutError,OSError) as exc:
                     errors.append(f"Mixcloud dated-slug page request failed for {public_url}: {exc}")
+                    html_unavailable=True
             if item is not None:
                 item.setdefault("name",f"Riley & Coe {current.strftime('%A')} {_ordinal(current.day)} {current.strftime('%B')} {current.year}")
                 item.setdefault("url",public_url)
