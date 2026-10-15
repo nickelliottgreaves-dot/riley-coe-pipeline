@@ -53,6 +53,39 @@ class PoolWindowEventMatchTests(unittest.TestCase):
             self.assertEqual(rows[0]["source_url"],"https://www.songkick.com/concerts/43399167-barbican-estate-at-cluny")
             self.assertEqual(rows[0]["ticket_status"],"Available")
 
+    def test_discovery_detail_url_is_not_replaced_by_calendar_page_url(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            d=Path(tmp)
+            pool=d/"pool.csv"
+            with pool.open("w",newline="",encoding="utf-8") as f:
+                w=csv.DictWriter(f,fieldnames=["artist"]);w.writeheader();w.writerow({"artist":"Fat White Family"})
+            event_url="https://www.songkick.com/concerts/43156793-fat-white-family-at-utilita-arena-newcastle"
+            calendar_url="https://www.songkick.com/venues/29167-utilita-arena-newcastle/calendar"
+            events=d/"events.csv"
+            with events.open("w",newline="",encoding="utf-8") as f:
+                w=csv.DictWriter(f,fieldnames=["event_date","venue","event_title","artist","source_url","price","ticket_status","notes"])
+                w.writeheader()
+                w.writerow({"event_date":"2026-10-25","venue":"Utilita Arena Newcastle",
+                    "event_title":"Fat White Family @ Utilita Arena Newcastle","artist":"Fat White Family",
+                    "source_url":event_url,"notes":"Structured candidate."})
+            inspected=d/"inspected.csv"
+            with inspected.open("w",newline="",encoding="utf-8") as f:
+                w=csv.DictWriter(f,fieldnames=["event_date","venue","event_title","performer_names","page_url","status","price","availability","notes"])
+                w.writeheader()
+                w.writerow({"event_date":"2026-10-25","venue":"Utilita Arena Newcastle",
+                    "event_title":"Fat White Family @ Utilita Arena Newcastle","performer_names":"Fat White Family; Alex Cameron",
+                    "page_url":calendar_url,"status":"structured_candidate_needs_review",
+                    "notes":"Extracted from venue calendar."})
+            out=d/"matches.csv"
+            with patch("sys.argv",["match_pool_to_window_events.py","--pool",str(pool),"--events",str(events),
+                "--inspected",str(inspected),"--start","2026-10-15","--end","2026-11-11","--out",str(out)]):
+                self.assertEqual(main(),0)
+            with out.open(newline="",encoding="utf-8") as f:
+                rows=list(csv.DictReader(f))
+            self.assertEqual(len(rows),1)
+            self.assertEqual(rows[0]["source_url"],event_url)
+            self.assertEqual(rows[0]["verified"],"false")
+
     def test_only_individual_event_detail_urls_are_used_for_page_text_joins(self):
         self.assertTrue(is_event_detail_url("https://www.boilershop.net/events/the-wedding-present-23-10-26"))
         self.assertTrue(is_event_detail_url("https://www.utilitaarena.co.uk/events/detail/2026-mercury-prize"))
