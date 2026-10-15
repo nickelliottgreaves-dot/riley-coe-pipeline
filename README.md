@@ -40,7 +40,7 @@ The scheduled/manual workflow now runs `scripts/collect_mixcloud.py` against the
 - `mixcloud_api_track_candidates.csv`
 - `mixcloud_collection_audit.json`
 
-This is deliberately a discovery inventory, not a claim that tracklists are complete. API sections are labelled as candidates requiring visible-page verification; absent sections are marked unavailable. BBC Sounds inventory is handled separately by `scripts/collect_bbc_sounds.py`. Venue research is also handled by separate candidate-discovery and event-page inspection stages. The full-run validator remains a separate fail-closed gate.
+This is deliberately a discovery inventory, not a claim that tracklists are complete. API sections are labelled as candidates requiring visible-page verification; absent sections are marked unavailable. The search fallback uses Mixcloud’s documented `q`/`type` search parameters and applies the requested date window locally, rather than sending list-connection date filters to search. BBC Sounds inventory is handled separately by `scripts/collect_bbc_sounds.py`. Venue research is also handled by separate candidate-discovery and event-page inspection stages. The full-run validator remains a separate fail-closed gate.
 
 After a scheduled run, open the repository's **Actions** tab, open the latest **Riley & Coe evidence validation** run, and download the artifact named `riley-coe-mixcloud-inventory-...`. GitHub scheduled workflows run on the default branch and may be delayed, so the Actions history is the source of truth for whether a run actually happened.
 
