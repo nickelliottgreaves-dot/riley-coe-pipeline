@@ -665,6 +665,35 @@ def event_performer_candidate(event):
     return title,bool(title)
 
 
+def venue_scope_matches(location, venue):
+    """Require explicit venue evidence before assigning a structured event to a configured venue."""
+    norm=lambda value: " ".join(re.sub(r"[^a-z0-9]+"," ",str(value or "").casefold()).split())
+    expected=norm(venue)
+    actual=norm(location)
+    aliases={
+        "the cluny":{"the cluny","cluny"},
+        "cluny 2":{"cluny 2","cluny two"},
+        "boiler shop":{"boiler shop"},
+        "wylam brewery":{"wylam brewery"},
+        "the grove":{"the grove","grove newcastle"},
+        "glasshouse international centre for music":{"glasshouse international centre for music","the glasshouse","sage gateshead"},
+        "sage two":{"sage two","sage 2"},
+        "cumberland arms":{"cumberland arms"},
+        "cobalt studios":{"cobalt studios"},
+        "the lubber fiend":{"the lubber fiend","lubber fiend"},
+        "think tank ncl":{"think tank ncl","think tank"},
+        "newcastle university students union":{"newcastle university students union","nusu"},
+        "little buildings":{"little buildings"},
+        "o2 city hall newcastle":{"o2 city hall newcastle","o2 city hall","newcastle city hall","city hall newcastle"},
+        "riverside newcastle":{"riverside newcastle"},
+        "zerox newcastle":{"zerox newcastle","zerox"},
+        "the newgate social":{"the newgate social","newgate social"},
+        "head of steam newcastle":{"head of steam newcastle","head of steam"},
+    }
+    allowed=aliases.get(expected,{expected})
+    return bool(actual) and any(alias and (" "+alias+" ") in (" "+actual+" ") for alias in allowed)
+
+
 def event_matches_configured_venue(event, configured_venue):
     """Reject embedded tour dates that belong to another venue, not this calendar."""
     def identity(value):
@@ -882,6 +911,17 @@ def main():
                             event_day=None
                         if event_day is None or not (args.start_date <= event_day <= args.end_date):
                             continue
+                        event_location=clean(ev.get("location"))
+                        if event_location:
+                            if not venue_scope_matches(event_location,venue):
+                                # A same-host calendar can link to other cities' events
+                                # through recommendations and artist pages. Never relabel
+                                # explicit off-venue structured data as this venue's gig.
+                                continue
+                        elif canonicalize_url(url)!=canonicalize_url(canonical_urls[0]) and not venue_scope_matches(" ".join((name,page_title,url)),venue):
+                            # Detail pages without a location need their own venue evidence;
+                            # the configured calendar label alone is not enough.
+                            continue
                         event_objects.append(ev)
                         perf,performer_fallback=event_performer_candidate(ev)
                         offers=ev.get("offers") or []; offers=offers if isinstance(offers,list) else [offers]
@@ -892,7 +932,11 @@ def main():
                             if o.get("priceCurrency"): currencies.append(str(o["priceCurrency"]))
                             if o.get("availability"): avail.append(clean(o["availability"]).split("/")[-1])
                         all_rows.append({"venue":venue,"page_url":url,"http_status":status,"content_type":ctype,"page_title":page_title,"event_title":name,"event_date":start[:10],"performer_names":perf,"price":"; ".join(sorted(set(prices))),"currency":"; ".join(sorted(set(currencies))),"availability":"; ".join(sorted(set(avail))),"event_jsonld_found":"true","visible_text_snapshot":f"snapshots/{snap_name}","verified":"false","status":"structured_candidate_needs_review","notes":"Structured data is candidate evidence only; independently verify event, exact date, room, billing/support, price and ticket status."+(" Performer metadata absent; event title retained as an unverified artist candidate." if performer_fallback else "")+( " HTML truncated." if truncated else "")})
-                listing_events=extract_visible_listing_events(visible,venue,args.start_date,args.end_date)
+                is_calendar_page=(canonicalize_url(url)==canonicalize_url(canonical_urls[0]) or is_pagination_link(url,page_title))
+                # Detail pages often include "related events" from other venues.
+                # Parse event cards only on the configured calendar/pagination pages;
+                # use the dedicated event extractor for individual detail pages.
+                listing_events=extract_visible_listing_events(visible,venue,args.start_date,args.end_date) if is_calendar_page else []
                 # Keep visible card rows even when JSON-LD exists: the structured
                 # data may omit dates, rooms or performers, while the visible card
                 # supplies useful complementary evidence. The assembler deduplicates
