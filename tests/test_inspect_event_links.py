@@ -2,7 +2,7 @@ import csv, json, subprocess, sys, tempfile, unittest
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/"scripts"))
-from inspect_event_links import canonicalize_url, extract_visible_event, extract_visible_listing_events, is_calendar_navigation, likely
+from inspect_event_links import canonicalize_url, event_link_matches, extract_visible_event, extract_visible_listing_events, is_calendar_navigation, is_event_object, likely
 
 class EventPageCrawlerTests(unittest.TestCase):
     def test_canonical_url_removes_tracking_but_preserves_pagination(self):
@@ -14,6 +14,14 @@ class EventPageCrawlerTests(unittest.TestCase):
             canonicalize_url("https://example.com/events/?page=3&utm_campaign=x"),
             "https://example.com/events/?page=3"
         )
+
+    def test_only_schema_event_types_are_event_objects(self):
+        self.assertTrue(is_event_object({"@type":"MusicEvent","name":"A concert"}))
+        self.assertTrue(is_event_object({"@type":["Thing","Event"],"name":"A concert"}))
+        self.assertFalse(is_event_object({"@type":"Organization","name":"Venue"}))
+        self.assertFalse(is_event_object({"@type":"BreadcrumbList","name":"Breadcrumbs"}))
+        self.assertTrue(event_link_matches({"event_title":"Skating Polly"},"/listing/skating-polly/","Tickets"))
+        self.assertFalse(event_link_matches({"event_title":"Skating Polly"},"/listing/another-act/","Another Act"))
 
     def test_likely_filter_keeps_event_and_ticket_links(self):
         self.assertTrue(likely("/listing/artist-name/", "Artist"))
