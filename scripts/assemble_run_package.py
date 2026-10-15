@@ -125,6 +125,17 @@ def main():
             event_rows.append({**base,"artist":"","artist_role":"unknown",
                 "notes":("Unresolved inspected-page JSON-LD candidate" if structured else "Unresolved visible event-text candidate")+"; performer not exposed. "+(item.get("notes") or "")})
     # Preserve only event rows inside the requested window; every candidate remains unverified.
+    with (ROOT/"config/venue_sources.csv").open(encoding="utf-8-sig",newline="") as f:
+        configured_source_rows=list(csv.DictReader(f))
+    def venue_key(name):
+        return "".join(ch.casefold() for ch in (name or "") if ch.isalnum())
+    allowed_venue_keys={venue_key(row.get("venue","")) for row in configured_source_rows}
+    # Actual room names exposed by official calendars may differ from the registry label.
+    allowed_venue_keys.update(venue_key(name) for name in [
+        "Sage One","The Glasshouse","Glasshouse","Central Bar","Central Gateshead",
+        "O2 City Hall","O2 City Hall Newcastle","Newcastle University Students' Union",
+        "Students' Union","The Cluny","Cluny 2","ZEROX"
+    ])
     events=[]; unresolved=[]; seen_event_keys={}
     for r in event_rows:
         raw_date=(r.get("event_date") or "").strip()
@@ -139,6 +150,13 @@ def main():
             unresolved.append(unresolved_row)
             continue
         if not (start <= event_day <= end):
+            continue
+        if venue_key(r.get("venue","")) not in allowed_venue_keys:
+            unresolved_row={k:r.get(k,"") for k in UNRESOLVED_FIELDS}
+            unresolved_row["artist_candidate"]=r.get("artist","")
+            unresolved_row["artist_role"]=r.get("artist_role","")
+            unresolved_row["notes"]=((r.get("notes") or "")+" Venue does not match the configured local venue registry; excluded from the in-scope event list pending review.").strip()
+            unresolved.append(unresolved_row)
             continue
         if not (r.get("artist") or "").strip():
             unresolved_row={k:r.get(k,"") for k in UNRESOLVED_FIELDS}
