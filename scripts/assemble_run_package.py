@@ -274,15 +274,36 @@ def main():
                 (homepage.get("notes","") or "")+" "+(detail.get("notes","") or "")
         })
     write_csv(out/"venue_discovery_coverage.csv",DISCOVERY_COVERAGE_FIELDS,discovery_coverage_rows)
+    discovery_by_venue={''.join(ch.casefold() for ch in r.get("venue","") if ch.isalnum()):r for r in discovery_coverage_rows}
     venue_rows=[]
     for v in required:
         if (v.get("mandatory") or "").casefold()!="true": continue
-        name=v["venue"].strip(); key=''.join(c.casefold() for c in name if c.isalnum())
+        name=v["venue"].strip(); key=''.join(ch.casefold() for ch in name if ch.isalnum())
         src=source_by_venue.get(key,{})
         audit=audit_by_venue.get(key,{})
-        # A fetch-only audit is explicitly not a calendar check.
-        venue_rows.append({"venue":name,"checked":"false","source_url":audit.get("source_url") or src.get("source_url",""),
-                           "status":"not_checked","notes":"Scaffold only. A reachable page or candidate links do not prove calendar coverage. "+(audit.get("notes") or "No calendar verification evidence supplied.")})
+        discovery=discovery_by_venue.get(key,{})
+        fetch_state=str(discovery.get("homepage_fetch_status") or "not_run").casefold()
+        if fetch_state in {"failed","inaccessible","http_error","fetch_failed"}:
+            status="inaccessible"; checked="false"
+        elif fetch_state not in {"","not_run","not_checked"}:
+            status="partial"; checked="true"
+        else:
+            status="not_checked"; checked="false"
+        detail_count=discovery.get("detail_pages_fetched","0")
+        detail_failed=discovery.get("detail_pages_failed","0")
+        cap=discovery.get("crawl_cap_reached","false")
+        note_parts=[
+            "Bounded official-source crawl recorded; this is not a complete calendar certification.",
+            f"homepage_fetch_status={fetch_state}",
+            f"detail_pages_fetched={detail_count}",
+            f"detail_pages_failed={detail_failed}",
+            f"crawl_cap_reached={cap}",
+            "Event billing/support, ticket status and any JavaScript/external calendar content still require verification."
+        ]
+        if discovery.get("notes"): note_parts.append(discovery["notes"])
+        elif audit.get("notes"): note_parts.append(audit["notes"])
+        venue_rows.append({"venue":name,"checked":checked,"source_url":discovery.get("source_url") or audit.get("source_url") or src.get("source_url",""),
+                           "status":status,"notes":" ".join(note_parts)})
     write_csv(out/"episodes.csv",EPISODE_FIELDS,episode_rows)
     write_csv(out/"venue_coverage.csv",VENUE_FIELDS,venue_rows)
     write_csv(out/"events.csv",EVENT_FIELDS,events)
