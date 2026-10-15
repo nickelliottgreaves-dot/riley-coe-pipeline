@@ -469,6 +469,9 @@ def extract_visible_listing_events(visible_text, default_venue="", start_date=No
                 low=extra.casefold().strip()
                 if low in generic or is_page_furniture(extra) or low.startswith(("send us a message","or email ","email to book")):
                     break
+                if extra.strip().startswith("+ "):
+                    performers.extend(part.strip() for part in re.split(r"\\s+\\+\\s+",extra.strip().lstrip("+ ").strip()) if part.strip())
+                    continue
                 if "," in extra and not re.search(r"[.!?]",extra):
                     performers.extend(part.strip() for part in extra.split(",") if part.strip())
                     break
