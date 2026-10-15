@@ -282,7 +282,9 @@ def fetch_search_cloudcasts(username: str, since: date, until: date) -> tuple[li
     account = username.strip("/").casefold()
 
     for term in queries:
-        url = f"{API_ROOT}/search/?{urlencode({'q': term, 'type': 'cloudcast', 'limit': 100, 'offset': 0, 'since': since.isoformat(), 'until': until.isoformat()})}"
+        # Mixcloud documents q/type for search; since/until are documented for dated
+        # list connections, not search. Filter returned search hits by date locally.
+        url = f"{API_ROOT}/search/?{urlencode({'q': term, 'type': 'cloudcast', 'limit': 100, 'offset': 0})}"
         visited: set[str] = set()
         pages = 0
         while url and url not in visited and pages < 10:
