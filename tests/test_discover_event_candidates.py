@@ -1,4 +1,5 @@
 import csv, json, sys, tempfile, unittest
+from urllib.error import HTTPError
 from unittest.mock import patch
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
@@ -27,6 +28,43 @@ class EventCandidateTests(unittest.TestCase):
         self.assertEqual(p.links,[("/events/abc","Artist live")])
         self.assertEqual(len(p.scripts),1)
 
+
+    def test_partial_source_failures_keep_a_limited_result_and_exit_successfully(self):
+        class Response:
+            status = 200
+            headers = {"Content-Type": "text/html; charset=UTF-8"}
+            def __enter__(self): return self
+            def __exit__(self, *args): return False
+            def read(self, n=-1): return b"<title>One usable calendar</title><a href='/events/act'>Act</a>"
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td); sources=root/"sources.csv"; out=root/"out"
+            with sources.open("w",encoding="utf-8",newline="") as f:
+                w=csv.DictWriter(f,fieldnames=["venue","source_url","source_status","notes"]); w.writeheader()
+                w.writerow({"venue":"Usable Venue","source_url":"https://usable.example/events","source_status":"configured_official_calendar"})
+                w.writerow({"venue":"Blocked Venue","source_url":"https://blocked.example/events","source_status":"configured_official_calendar"})
+            error=HTTPError("https://blocked.example/events",403,"Forbidden",None,None)
+            with patch("discover_event_candidates.urlopen",side_effect=[Response(),error]):
+                with patch("sys.argv",["discover_event_candidates.py","--sources",str(sources),"--start","2026-10-15","--end","2026-10-28","--out-dir",str(out)]):
+                    self.assertEqual(main(),0)
+            summary=json.loads((out/"event_discovery_summary.json").read_text(encoding="utf-8"))
+            self.assertEqual(summary["sources_fetched"],1)
+            self.assertEqual(summary["sources_failed"],1)
+            self.assertEqual(summary["status"],"PARTIAL")
+
+    def test_all_source_failures_return_nonzero(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td); sources=root/"sources.csv"; out=root/"out"
+            with sources.open("w",encoding="utf-8",newline="") as f:
+                w=csv.DictWriter(f,fieldnames=["venue","source_url","source_status","notes"]); w.writeheader()
+                w.writerow({"venue":"Blocked Venue","source_url":"https://blocked.example/events","source_status":"configured_official_calendar"})
+            error=HTTPError("https://blocked.example/events",403,"Forbidden",None,None)
+            with patch("discover_event_candidates.urlopen",side_effect=error):
+                with patch("sys.argv",["discover_event_candidates.py","--sources",str(sources),"--start","2026-10-15","--end","2026-10-28","--out-dir",str(out)]):
+                    self.assertEqual(main(),1)
+            summary=json.loads((out/"event_discovery_summary.json").read_text(encoding="utf-8"))
+            self.assertEqual(summary["sources_fetched"],0)
+            self.assertEqual(summary["sources_failed"],1)
+            self.assertEqual(summary["status"],"FAILED")
 
     def test_shared_official_calendar_url_is_fetched_once(self):
         class Response:

@@ -165,8 +165,13 @@ def main():
         ("event_discovery_audit.csv",AUDIT_FIELDS,audit)]:
         with (args.out_dir/filename).open("w",encoding="utf-8",newline="") as f:
             w=csv.DictWriter(f,fieldnames=fields); w.writeheader(); w.writerows(data)
-    summary={"window_start":start.isoformat(),"window_end":end.isoformat(),"sources_configured":len(audit),"sources_fetched":sum(r["status"]=="fetched_candidates_only" for r in audit),"sources_failed":len(errors),"structured_event_artist_rows":len(events),"candidate_event_links":len(links),"calendar_checks_completed":0,"status":"PARTIAL" if errors or audit else "CANDIDATES_ONLY","errors":errors,"limitations":["Structured data may be missing, stale, duplicated or incomplete.","Candidate links are not verified events.","No JavaScript rendering, pagination traversal, ticket status validation, support-act completeness or independent safety-net search is performed.","This output must not be fed to the COMPLETE gate without human/event-page verification and explicit venue coverage evidence."]}
+    sources_fetched=sum(r["status"]=="fetched_candidates_only" for r in audit)
+    status="PARTIAL" if errors and sources_fetched else ("FAILED" if errors else "CANDIDATES_ONLY")
+    summary={"window_start":start.isoformat(),"window_end":end.isoformat(),"sources_configured":len(audit),"sources_fetched":sources_fetched,"sources_failed":len(errors),"structured_event_artist_rows":len(events),"candidate_event_links":len(links),"calendar_checks_completed":0,"status":status,"errors":errors,"limitations":["Structured data may be missing, stale, duplicated or incomplete.","Candidate links are not verified events.","No JavaScript rendering, pagination traversal, ticket status validation, support-act completeness or independent safety-net search is performed.","This output must not be fed to the COMPLETE gate without human/event-page verification and explicit venue coverage evidence."]}
     (args.out_dir/"event_discovery_summary.json").write_text(json.dumps(summary,indent=2)+"\n",encoding="utf-8")
     print(json.dumps(summary,indent=2))
-    return 1 if errors else 0
+    # A partial crawl is a valid limited result: the workflow must continue so
+    # coverage failures can be reported honestly. Fail only when every source
+    # failed or no source could be fetched at all.
+    return 0 if sources_fetched else 1
 if __name__=="__main__": raise SystemExit(main())
