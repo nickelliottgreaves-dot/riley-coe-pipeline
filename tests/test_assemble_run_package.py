@@ -54,6 +54,69 @@ class EvidencePackageTests(unittest.TestCase):
             self.assertTrue(any(r["input_name"]=="bbc_track_candidates" and r["status"]=="present" for r in audit))
             self.assertTrue(any(r["input_name"]=="radiofiles_episode_candidates" and r["status"]=="present" for r in audit))
 
+    def test_exact_full_tracklist_crosschecks_drive_episode_statuses(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp); out=root/"run"
+            bbc=root/"bbc.csv"; radio=root/"radio.csv"; rf_tracks=root/"radio_tracks.csv"
+            embedded=root/"embedded.csv"; crosscheck=root/"crosscheck.csv"; verified=root/"verified.csv"
+            with bbc.open("w",newline="",encoding="utf-8") as f:
+                w=csv.DictWriter(f,fieldnames=["episode_date","episode_title","episode_url","tracklist_status","notes"]);w.writeheader()
+                w.writerows([
+                    {"episode_date":"2026-10-13","episode_title":"Exact","episode_url":"https://www.bbc.co.uk/sounds/play/m001","tracklist_status":"candidate","notes":"BBC source"},
+                    {"episode_date":"2026-10-12","episode_title":"Mismatch","episode_url":"https://www.bbc.co.uk/sounds/play/m002","tracklist_status":"candidate","notes":"BBC source"},
+                    {"episode_date":"2026-10-11","episode_title":"Unavailable","episode_url":"https://www.bbc.co.uk/sounds/play/m003","tracklist_status":"next_data_not_found","notes":"No embedded list"},
+                ])
+            with radio.open("w",newline="",encoding="utf-8") as f:
+                w=csv.DictWriter(f,fieldnames=["episode_date","episode_title","episode_pid","source_url","tracklist_status","notes"]);w.writeheader()
+                w.writerows([
+                    {"episode_date":"2026-10-13","episode_title":"Exact","episode_pid":"m001","source_url":"https://radiofiles.io/app?pid=m001","tracklist_status":"candidate","notes":"RadioFiles exact"},
+                    {"episode_date":"2026-10-12","episode_title":"Mismatch","episode_pid":"m002","source_url":"https://radiofiles.io/app?pid=m002","tracklist_status":"candidate","notes":"RadioFiles mismatch"},
+                    {"episode_date":"2026-10-11","episode_title":"Unavailable","episode_pid":"m003","source_url":"https://radiofiles.io/app?pid=m003","tracklist_status":"no_tracklist","notes":"Tracklist has zero rows; source=none"},
+                ])
+            with rf_tracks.open("w",newline="",encoding="utf-8") as f:
+                w=csv.DictWriter(f,fieldnames=["episode_date","episode_title","episode_pid","track_position","track_title","artist_candidate","source_url","tracklist_api_url","source","verification_status","notes"]);w.writeheader()
+                w.writerows([
+                    {"episode_date":"2026-10-13","episode_title":"Exact","episode_pid":"m001","track_position":"1","track_title":"Track A","artist_candidate":"Artist A","source_url":"https://radiofiles.io/app?pid=m001","tracklist_api_url":"https://radiofiles.io/api/m001","source":"RadioFiles","verification_status":"candidate","notes":""},
+                    {"episode_date":"2026-10-12","episode_title":"Mismatch","episode_pid":"m002","track_position":"1","track_title":"Wrong Track","artist_candidate":"Artist B","source_url":"https://radiofiles.io/app?pid=m002","tracklist_api_url":"https://radiofiles.io/api/m002","source":"RadioFiles","verification_status":"candidate","notes":""},
+                ])
+            with embedded.open("w",newline="",encoding="utf-8") as f:
+                w=csv.DictWriter(f,fieldnames=["episode_date","episode_title","episode_url","track_position","track_title","artist_candidate","source_url","review_status","notes","segment_urn"]);w.writeheader()
+                w.writerows([
+                    {"episode_date":"2026-10-13","episode_title":"Exact","episode_url":"https://www.bbc.co.uk/sounds/play/m001","track_position":"1","track_title":"Track A","artist_candidate":"Artist A","source_url":"https://www.bbc.co.uk/sounds/play/m001","review_status":"candidate","notes":"","segment_urn":"urn:1"},
+                    {"episode_date":"2026-10-12","episode_title":"Mismatch","episode_url":"https://www.bbc.co.uk/sounds/play/m002","track_position":"1","track_title":"Track B","artist_candidate":"Artist B","source_url":"https://www.bbc.co.uk/sounds/play/m002","review_status":"candidate","notes":"","segment_urn":"urn:2"},
+                ])
+            with crosscheck.open("w",newline="",encoding="utf-8") as f:
+                w=csv.DictWriter(f,fieldnames=["episode_pid","episode_date","bbc_track_rows","radiofiles_track_rows","matched_track_rows","mismatched_track_rows","crosscheck_status","bbc_episode_url","radiofiles_episode_url","notes"]);w.writeheader()
+                w.writerows([
+                    {"episode_pid":"m001","episode_date":"2026-10-13","bbc_track_rows":"1","radiofiles_track_rows":"1","matched_track_rows":"1","mismatched_track_rows":"0","crosscheck_status":"EXACT_FULL_TRACKLIST_MATCH","bbc_episode_url":"https://www.bbc.co.uk/sounds/play/m001","radiofiles_episode_url":"https://radiofiles.io/app?pid=m001","notes":""},
+                    {"episode_pid":"m002","episode_date":"2026-10-12","bbc_track_rows":"2","radiofiles_track_rows":"1","matched_track_rows":"0","mismatched_track_rows":"2","crosscheck_status":"MISMATCH_REQUIRES_REVIEW","bbc_episode_url":"https://www.bbc.co.uk/sounds/play/m002","radiofiles_episode_url":"https://radiofiles.io/app?pid=m002","notes":"Mismatch"},
+                ])
+            with verified.open("w",newline="",encoding="utf-8") as f:
+                w=csv.DictWriter(f,fieldnames=["episode_date","episode_pid","episode_title","track_position","track_title","artist_candidate","radiofiles_artist_candidate","bbc_episode_url","radiofiles_episode_url","crosscheck_status","evidence"]);w.writeheader()
+                w.writerow({"episode_date":"2026-10-13","episode_pid":"m001","episode_title":"Exact","track_position":"1","track_title":"Track A","artist_candidate":"Artist A","radiofiles_artist_candidate":"Artist A","bbc_episode_url":"https://www.bbc.co.uk/sounds/play/m001","radiofiles_episode_url":"https://radiofiles.io/app?pid=m001","crosscheck_status":"EXACT_FULL_TRACKLIST_MATCH","evidence":"Exact position/title/artist match."})
+            subprocess.run([sys.executable,str(ROOT/"scripts/assemble_run_package.py"),
+                "--start","2026-10-11","--end","2026-10-24","--bbc-episodes",str(bbc),
+                "--radiofiles-episodes",str(radio),"--radiofiles-track-candidates",str(rf_tracks),
+                "--bbc-embedded-track-candidates",str(embedded),"--bbc-radiofiles-episode-crosscheck",str(crosscheck),
+                "--bbc-radiofiles-verified-candidates",str(verified),"--out-dir",str(out)],
+                check=True,capture_output=True,text=True)
+            with (out/"episodes.csv").open(newline="",encoding="utf-8") as f: rows=list(csv.DictReader(f))
+            states={(r["episode_date"],r["source"]):r["tracklist_status"] for r in rows}
+            self.assertEqual(states[("2026-10-13","BBC Sounds official episode page")],"complete")
+            self.assertEqual(states[("2026-10-13","RadioFiles public tracklist")],"complete")
+            self.assertEqual(states[("2026-10-12","BBC Sounds official episode page")],"incomplete")
+            self.assertEqual(states[("2026-10-12","RadioFiles public tracklist")],"incomplete")
+            self.assertEqual(states[("2026-10-11","BBC Sounds official episode page")],"unavailable")
+            self.assertEqual(states[("2026-10-11","RadioFiles public tracklist")],"unavailable")
+            manifest=json.loads((out/"run_manifest.json").read_text())
+            self.assertIs(manifest["episode_coverage_complete"],False)
+            with (out/"tracklist_candidate_review.csv").open(newline="",encoding="utf-8") as f: review=list(csv.DictReader(f))
+            exact=[r for r in review if r["episode_date"]=="2026-10-13"]
+            self.assertEqual(len(exact),2)
+            self.assertTrue(all(r["review_status"]=="verified_full_tracklist_match" for r in exact))
+            mismatch=[r for r in review if r["episode_date"]=="2026-10-12"]
+            self.assertTrue(all(r["review_status"]!="verified_full_tracklist_match" for r in mismatch))
+
     def test_merges_inspected_event_jsonld_as_unverified_candidates(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp)
