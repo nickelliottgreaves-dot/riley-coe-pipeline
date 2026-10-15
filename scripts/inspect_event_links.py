@@ -155,7 +155,15 @@ def extract_visible_event(page_title, visible_text, default_venue=""):
         if location_key in local_locations:
             venue=local_locations[location_key]
             break
-        if location_key in out_of_scope_locations:
+        # Location lines sometimes include the city (e.g. "Kings Place, London"
+        # or "The Sands Centre, Carlisle"). Ignore short location-like lines
+        # from regional tours rather than assigning them to the local crawl seed.
+        is_location_line=len(location_line)<=80 and not re.search(r"[.!?]",location_line)
+        external_city=("london","carlisle","kendal","middlesbrough","manchester","birmingham","edinburgh","glasgow","leeds")
+        external_location=(location_key in out_of_scope_locations
+            or any(location_key.startswith(place+" ") for place in out_of_scope_locations)
+            or (is_location_line and (location_key in external_city or any(location_key.endswith(" "+city) for city in external_city))))
+        if external_location:
             return None
     title=(page_title or "").strip()
     # Strip common venue suffixes, including pages titled "Artist at Venue".
