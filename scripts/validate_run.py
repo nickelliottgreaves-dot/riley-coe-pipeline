@@ -288,14 +288,23 @@ def main() -> int:
         errors.append("No episode coverage rows: cannot establish tracklist coverage")
     if not venue_rows:
         errors.append("No venue coverage rows: cannot establish venue-first sweep")
-    if manifest.get("episode_coverage_complete") is not True:
-        errors.append("Manifest episode_coverage_complete is not true")
-    if manifest.get("venue_sweep_complete") is not True:
-        errors.append("Manifest venue_sweep_complete is not true")
-    if manifest.get("artist_pool_compared") is not True:
-        errors.append("Manifest artist_pool_compared is not true")
-    if manifest.get("all_event_sources_verified") is not True:
-        errors.append("Manifest all_event_sources_verified is not true")
+    # A correctly assembled PARTIAL package is a successful collection run,
+    # not a successful research-completeness claim. Record missing coverage as
+    # warnings so weekly artifacts remain available; if the manifest claims
+    # COMPLETE, each missing gate is a hard validation error.
+    gate_flags=(
+        ("episode_coverage_complete","episode coverage"),
+        ("venue_sweep_complete","venue sweep"),
+        ("artist_pool_compared","artist-pool event comparison"),
+        ("all_event_sources_verified","event-source verification"),
+    )
+    for flag,label in gate_flags:
+        if manifest.get(flag) is not True:
+            message=f"Manifest {flag} is not true"
+            if manifest.get("claimed_status")=="COMPLETE":
+                errors.append(message)
+            else:
+                warnings.append(f"{message}; {label} remains partial and cannot be reported COMPLETE")
 
     # Any inaccessible/not-checked mandatory venue blocks COMPLETE even if a user
     # has accidentally set the manifest booleans to true.
@@ -317,7 +326,11 @@ def main() -> int:
     print(json.dumps(report, indent=2))
     if run_dir.exists():
         (run_dir / "validation_report.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
-    return 0 if status == "COMPLETE" else 1
+    # Exit successfully for a structurally valid PARTIAL package. This keeps
+    # the scheduled evidence collection usable while the report remains explicit
+    # that it is not complete. Structural/data-integrity errors still fail, and
+    # any false gate under a claimed COMPLETE manifest is an error above.
+    return 1 if status == "FAILED" else 0
 
 if __name__ == "__main__":
     sys.exit(main())
