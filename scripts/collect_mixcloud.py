@@ -266,10 +266,24 @@ def fetch_duckduckgo_cloudcasts(username: str, since: date, until: date) -> tupl
             try:
                 with urlopen(page_req, timeout=25) as page_response:
                     page_status = getattr(page_response, "status", 200)
-                    page_response.read(4096)
+                    page_html = page_response.read(1_000_001).decode("utf-8", errors="replace")
                 if page_status >= 400:
                     errors.append(f"DuckDuckGo candidate page returned HTTP {page_status}: {target}")
                     continue
+                # Some Mixcloud routes return a generic HTTP 200 shell for
+                # deleted/unavailable cloudcasts. Reject that shell rather than
+                # letting a stale search-index entry fail later at the API.
+                page_lower = page_html.casefold()
+                unavailable_markers = (
+                    "page not found", "not found - mixcloud", "this page isn't available",
+                    "this cloudcast is no longer available", "cloudcast not found",
+                    "404 not found",
+                )
+                if any(marker in page_lower for marker in unavailable_markers):
+                    errors.append(f"DuckDuckGo candidate returned an unavailable-page shell despite HTTP {page_status}: {target}")
+                    continue
+                if len(page_html) > 1_000_000:
+                    errors.append(f"DuckDuckGo candidate page exceeded 1 MB; page content was truncated: {target}")
             except (HTTPError, URLError, TimeoutError, OSError) as exc:
                 errors.append(f"DuckDuckGo candidate page is inaccessible ({exc}): {target}")
                 continue
