@@ -428,4 +428,12 @@ The normal live sweep [38742825828](https://github.com/nickelliottgreaves-dot/ri
 - 14 sources checked in captured scope and six remain partial. The 21 genuine fetch failures are five Universe 503s at Boiler Shop, three SeeTickets/Ents24 403s at Cumberland Arms, one internal Cobalt Studios 404, six ticket-provider failures at NX Newcastle, five SeeTickets 403s at Central Gateshead, and one Skiddle HTTP 202 at The Globe.
 - Run artifact: `riley-coe-independent-gig-finder-38742825828`, ID `11976690632`.
 
-This handover commit intentionally triggers the simulated-Cobalt failure acceptance run against the same ledger implementation. Verify that the report still assembles as PARTIAL, the failure ledger count matches the crawl audit, and the Cobalt outage is explicitly recorded without changing the authoritative pool. Do not merge to `main` or mark the research COMPLETE.
+The simulated-Cobalt acceptance run [38743222752](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38743222752) also passed:
+- The deliberate Cobalt outage produced the expected two non-zero collection stages (venue inventory and event discovery) while still assembling a valid PARTIAL report.
+- Cobalt's `http://127.0.0.1:9/simulated-source-failure` appears in `event_page_fetch_failures.csv` with a connection-refused error.
+- The failure ledger and crawl audit both contain 21 failures; the report validator passed.
+- 20 source rows and 847 artist comparison rows were retained; seven candidates, zero out-of-scope rows, and zero verified automated event rows remain.
+
+The static-media filter and per-URL failure ledger are now acceptance-tested on both a normal live sweep ([38742825828](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38742825828)) and a simulated-source-failure sweep ([38743222752](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38743222752)). The next bounded task is to separate *venue-calendar capture status* from *third-party ticket-page fetch failures* in the coverage ledger: five venues are currently labelled partial mainly because their external ticketing pages return 403/503, despite their venue calendar pages being fetched. Add separate same-host and external-detail failure counts; only a failed primary/calendar page, same-host pagination/detail failure, crawl cap, or failed discovery should make the venue source outcome `partial`. External ticket-page failures must remain visible and keep individual event verification unresolved, while the overall report remains PARTIAL and all calendar-completeness flags stay false.
+
+Do not merge to `main` or mark the research COMPLETE. Keep the 847-row reviewed pool and the 747/833-row historical backups unchanged.
