@@ -90,7 +90,7 @@ def clean(v):
     if isinstance(v,list): return "; ".join(x for x in (clean(i) for i in v) if x)
     return unescape(str(v or "").strip())
 
-def extract_visible_event(page_title, visible_text):
+def extract_visible_event(page_title, visible_text, default_venue=""):
     """Extract review-only event candidates from common visible event-detail layouts."""
     lines=[line.strip() for line in visible_text.splitlines() if line.strip()]
     def next_value(label):
@@ -111,14 +111,27 @@ def extract_visible_event(page_title, visible_text):
             pass
     if not event_date:
         match=re.search(r"(?i)\b(20\d{2}-\d{2}-\d{2})\b",visible_text)
-        if match: event_date=match.group(1)
-    venue=next_value("Venue")
+        if match:
+            event_date=match.group(1)
+    if not event_date:
+        # Several official venue pages expose dates as separate visible lines,
+        # e.g. "Fri / 23 Oct / ' / 26", rather than a labelled Date field.
+        flat=" ".join(lines)
+        match=re.search(r"(?i)\b(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)(?:[a-z]+)?\s+['’]?\s*(\d{2}|20\d{2})\b",flat)
+        if match:
+            day=int(match.group(1)); month=match.group(2).title(); year=int(match.group(3))
+            if year<100: year+=2000
+            try: event_date=datetime.strptime(f"{day} {month} {year}","%d %b %Y").date().isoformat()
+            except ValueError: event_date=""
+    venue=next_value("Venue") or default_venue
     if not event_date or not venue:
         return None
     title=(page_title or "").strip()
-    # Common official event-page titles end with the venue after a separator.
+    # Strip common venue suffixes, including pages titled "Artist at Venue".
     if re.search(r"\s[-|–—]\s",title):
         title=re.split(r"\s[-|–—]\s",title)[0].strip()
+    if default_venue:
+        title=re.sub(r"(?i)\s+at\s+"+re.escape(default_venue)+r"(?:\s+Newcastle)?\s*$","",title).strip()
     generic_titles={"gigs","events","what's on","whats on","home","more info","limited availability",
                     "limited tickets","tickets","buy tickets","book tickets","book now","event details",
                     "details","view details","view event","find out more","read more","on sale","on sale now",
@@ -131,6 +144,9 @@ def extract_visible_event(page_title, visible_text):
     support_mode=False
     for line in lines:
         low=line.casefold()
+        if line.startswith("+ ") and len(line[2:].strip())<120:
+            supports.append(line[2:].strip())
+            continue
         if low in {"with support from","supports","support"}:
             support_mode=True
             continue
@@ -145,11 +161,12 @@ def extract_visible_event(page_title, visible_text):
     ticket_text=" ".join(lines).casefold()
     if "sold out" in ticket_text:
         availability="SoldOut"
-    elif "buy tickets" in ticket_text or "tickets" in ticket_text:
-        availability="not_checked"
     else:
         availability="not_checked"
-    performers=[title]+supports
+    # Event titles may include tour/series subtitles. Match the lead billed act
+    # separately while retaining the full event title for display/review.
+    primary=title.split(":",1)[0].strip() if ":" in title else title
+    performers=list(dict.fromkeys([primary]+supports))
     return {
         "event_title":title,
         "event_date":event_date,
@@ -468,7 +485,7 @@ def main():
                         all_rows.append({"venue":candidate["venue"],"page_url":url,"http_status":status,"content_type":ctype,"page_title":page_title,"event_title":candidate["event_title"],"event_date":candidate["event_date"],"performer_names":candidate["performer_names"],"price":candidate["price"],"currency":candidate["currency"],"availability":candidate["availability"],"event_jsonld_found":"false","visible_text_snapshot":f"snapshots/{snap_name}","verified":"false","status":"visible_event_candidate_needs_review","notes":candidate["notes"]+( " HTML truncated." if truncated else "")})
                 visible_event_found=False
                 if not event_objects:
-                    visible_event=extract_visible_event(page_title,visible)
+                    visible_event=extract_visible_event(page_title,visible,venue)
                     visible_event_found=visible_event is not None
                     if visible_event:
                         all_rows.append({"venue":visible_event["venue"] or venue,"page_url":url,"http_status":status,"content_type":ctype,"page_title":page_title,"event_title":visible_event["event_title"],"event_date":visible_event["event_date"],"performer_names":visible_event["performer_names"],"price":visible_event["price"],"currency":visible_event["currency"],"availability":visible_event["availability"],"event_jsonld_found":"false","visible_text_snapshot":f"snapshots/{snap_name}","verified":"false","status":"visible_event_candidate_needs_review","notes":visible_event["notes"]+( " HTML truncated." if truncated else "")})
