@@ -1,8 +1,9 @@
 import csv, json, subprocess, sys, tempfile, unittest
+from unittest.mock import patch
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/"scripts"))
-from inspect_event_links import canonicalize_url, event_link_matches, extract_visible_event, extract_visible_listing_events, is_calendar_navigation, is_event_object, likely
+from inspect_event_links import canonicalize_url, event_link_matches, extract_visible_event, extract_visible_listing_events, is_calendar_navigation, is_event_object, likely, main
 
 class EventPageCrawlerTests(unittest.TestCase):
     def test_canonical_url_removes_tracking_but_preserves_pagination(self):
@@ -93,6 +94,38 @@ Audition for the Newcastle University Symphony Orchestra!"""
         self.assertEqual(rows[0]["performer_names"], "Skating Polly; Lord Friday The 13th")
         self.assertEqual(rows[1]["venue"], "Cluny 2")
         self.assertEqual(rows[2]["event_title"], "Discharge")
+
+    def test_crawl_prioritizes_official_calendar_and_only_in_window_details(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            links=root/"links.csv"
+            sources=root/"sources.csv"
+            with links.open("w",encoding="utf-8",newline="") as f:
+                w=csv.DictWriter(f,fieldnames=["venue","candidate_url","link_text"]); w.writeheader()
+                w.writerow({"venue":"The Cluny","candidate_url":"https://thecluny.com/listing/unrelated-candidate/","link_text":"Unrelated"})
+            with sources.open("w",encoding="utf-8",newline="") as f:
+                w=csv.DictWriter(f,fieldnames=["venue","source_url"]); w.writeheader()
+                w.writerow({"venue":"The Cluny","source_url":"https://thecluny.com/gigs/"})
+            calendar="""<title>Gigs - The Cluny</title>
+<a href="/events/skating-polly/">Skating Polly</a>
+<a href="/events/old-act/">Old Act</a>
+<p>Skating Polly</p><p>Thu 15 Oct 2026</p><p>/</p><p>The Cluny</p><p>With support from</p><p>Lord Friday The 13th</p><p>Info</p>
+<p>Old Act</p><p>Thu 10 Dec 2026</p><p>/</p><p>The Cluny</p>"""
+            detail="""<title>Skating Polly - The Cluny</title><p>Date:</p><p>Thu 15 Oct 2026</p><p>Venue:</p><p>The Cluny</p><p>Advance tickets:</p><p>£17.50 + fees</p>"""
+            fetched=[]
+            def fake_fetch(url):
+                fetched.append(url)
+                if url=="https://thecluny.com/gigs/":
+                    return 200,"text/html",calendar,False
+                if url=="https://thecluny.com/events/skating-polly/":
+                    return 200,"text/html",detail,False
+                raise AssertionError("Unexpected crawl URL: "+url)
+            with patch("inspect_event_links.fetch",side_effect=fake_fetch), \\
+                 patch("sys.argv",["inspect_event_links.py","--links",str(links),"--sources",str(sources),"--out-dir",str(root/"out"),"--start","2026-10-15","--end","2026-10-28","--delay","0"]):
+                self.assertEqual(main(),0)
+            self.assertEqual(fetched,["https://thecluny.com/gigs/","https://thecluny.com/events/skating-polly/"])
+            summary=json.loads((root/"out"/"event_page_crawl_summary.json").read_text())
+            self.assertEqual(summary["pages_inspected"],2)
 
     def test_crawler_preserves_unverified_status_and_audit(self):
         with tempfile.TemporaryDirectory() as tmp:
