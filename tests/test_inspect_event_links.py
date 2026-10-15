@@ -183,6 +183,14 @@ conductor
 Sheku Kanneh-Mason
 cello
 Royal Northern Sinfonia
+This event takes place at:
+Sage One
+St Mary's Square
+Gateshead
+Tickets
+Friday 16 October 2026
+From: £5.00 - £53.00
+Sage One
 What's happening in the music?
 Saint-Saëns' packs energy into his concerto."""
         row=extract_visible_event("Sheku Kanneh-Mason plays Saint-Saëns | The Glasshouse",visible,"Sage Two")
@@ -214,10 +222,19 @@ Book Now
 Vivaldi's Four Seasons
 Part of
 Royal Northern Sinfonia: Out and about
-Kings Place, London
-Book Now
 Who’s on stage
 Royal Northern Sinfonia
+Who's playing it
+Maria Włoszczowska
+director/violin
+Royal Northern Sinfonia
+This event takes place at:
+Kings Place
+90 York Way
+London
+N1 9AG
+Website:
+Kings Place – The Cultural Pulse of King's Cross
 Tickets
 Sunday 25 October 2026
 From: £28.00 - £35.00
