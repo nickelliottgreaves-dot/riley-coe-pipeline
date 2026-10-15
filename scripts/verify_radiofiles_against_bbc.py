@@ -2,7 +2,8 @@
 """Cross-check RadioFiles track rows against the official BBC page's embedded aod_tracks data.
 
 A candidate episode is cross-checked only when both sources have the same non-zero
-number of rows and every title/artist pair matches at the same position. This is
+number of rows and each title matches at the same position, with RadioFiles' artist
+credit compatible with the BBC's fuller collaboration credit. This is
 a strict source-reconciliation gate, not an automatic claim that either source is
 complete; the audit preserves mismatches for review.
 """
@@ -115,7 +116,7 @@ def main() -> int:
                     "track_position":br.get("track_position",""),"track_title":br.get("track_title",""),
                     "artist_candidate":br.get("artist_candidate",""),"radiofiles_artist_candidate":rr.get("artist_candidate",""),"bbc_episode_url":bbc_url,
                     "radiofiles_episode_url":rf_url,"crosscheck_status":status,
-                    "evidence":"Exact position/title/artist match across official BBC embedded tracklist and RadioFiles."
+                    "evidence":"Exact position/title match with compatible artist credits at this position across official BBC embedded tracklist and RadioFiles."
                 })
 
     def write(name, fields, rows):
