@@ -36,7 +36,7 @@ def main():
     ap=argparse.ArgumentParser()
     ap.add_argument("--start",required=True); ap.add_argument("--end",required=True)
     ap.add_argument("--previous-successful-run",default="unknown/not yet established")
-    ap.add_argument("--bbc-episodes",type=Path); ap.add_argument("--bbc-track-candidates",type=Path); ap.add_argument("--radiofiles-episodes",type=Path); ap.add_argument("--radiofiles-track-candidates",type=Path); ap.add_argument("--events",type=Path)
+    ap.add_argument("--bbc-episodes",type=Path); ap.add_argument("--bbc-track-candidates",type=Path); ap.add_argument("--bbc-embedded-track-candidates",type=Path); ap.add_argument("--bbc-embedded-tracklist-audit",type=Path); ap.add_argument("--bbc-radiofiles-episode-crosscheck",type=Path); ap.add_argument("--bbc-radiofiles-verified-candidates",type=Path); ap.add_argument("--radiofiles-episodes",type=Path); ap.add_argument("--radiofiles-track-candidates",type=Path); ap.add_argument("--events",type=Path)
     ap.add_argument("--venue-audit",type=Path); ap.add_argument("--event-page-inspection",type=Path); ap.add_argument("--event-page-audit",type=Path); ap.add_argument("--out-dir",type=Path,required=True)
     ap.add_argument("--pool",type=Path,default=ROOT/"data/artist_pool.csv")
     args=ap.parse_args()
@@ -48,6 +48,10 @@ def main():
     input_specs=[
         ("bbc_episode_inventory",args.bbc_episodes,True),
         ("bbc_track_candidates",args.bbc_track_candidates,True),
+        ("bbc_embedded_track_candidates",args.bbc_embedded_track_candidates,True),
+        ("bbc_embedded_tracklist_audit",args.bbc_embedded_tracklist_audit,True),
+        ("bbc_radiofiles_episode_crosscheck",args.bbc_radiofiles_episode_crosscheck,True),
+        ("bbc_radiofiles_verified_candidates",args.bbc_radiofiles_verified_candidates,True),
         ("radiofiles_episode_candidates",args.radiofiles_episodes,True),
         ("radiofiles_track_candidates",args.radiofiles_track_candidates,True),
         ("event_candidates",args.events,True),
@@ -69,7 +73,7 @@ def main():
         else:
             input_audit.append({"input_name":name,"path":str(path),"status":"present","size_bytes":Path(path).stat().st_size,"notes":"File exists; presence does not certify content completeness."})
     write_csv(out/"input_file_audit.csv",INPUT_AUDIT_FIELDS,input_audit)
-    for source, dest in [(args.event_page_inspection,"event_page_inspection.csv"),(args.event_page_audit,"event_page_crawl_audit.csv"),(args.bbc_track_candidates,"bbc_track_candidates.csv")]:
+    for source, dest in [(args.event_page_inspection,"event_page_inspection.csv"),(args.event_page_audit,"event_page_crawl_audit.csv"),(args.bbc_track_candidates,"bbc_track_candidates.csv"),(args.bbc_embedded_track_candidates,"bbc_embedded_track_candidates.csv"),(args.bbc_embedded_tracklist_audit,"bbc_embedded_tracklist_audit.csv"),(args.bbc_radiofiles_episode_crosscheck,"bbc_radiofiles_episode_crosscheck.csv"),(args.bbc_radiofiles_verified_candidates,"bbc_radiofiles_verified_candidates.csv")]:
         if source and Path(source).exists():
             shutil.copy2(source,out/dest)
     episode_rows=[]
@@ -106,6 +110,16 @@ def main():
     bbc_tracks=read_csv(args.bbc_track_candidates,["episode_date","episode_title","episode_url","artist_candidate","track_title","extraction_method","review_status","evidence_text","notes"]) if args.bbc_track_candidates else []
     for track in bbc_tracks:
         track_review_rows.append({k:track.get(k,"") for k in track_review_fields})
+    embedded_tracks=read_csv(args.bbc_embedded_track_candidates,["episode_date","episode_title","episode_url","track_position","track_title","artist_candidate","source_url","review_status","notes"]) if args.bbc_embedded_track_candidates else []
+    for track in embedded_tracks:
+        track_review_rows.append({
+            "episode_date":track.get("episode_date",""),"episode_title":track.get("episode_title",""),
+            "episode_url":track.get("episode_url",""),"artist_candidate":track.get("artist_candidate",""),
+            "track_title":track.get("track_title",""),"track_position":track.get("track_position",""),
+            "extraction_method":"official_bbc_embedded_aod_tracks",
+            "review_status":"needs_manual_crosscheck","evidence_text":track.get("segment_urn",""),
+            "notes":(track.get("notes","")+" Official BBC page embedded data; compare with RadioFiles position-by-position.").strip()
+        })
     write_csv(out/"tracklist_candidate_review.csv",track_review_fields,track_review_rows)
     event_rows=read_csv(args.events,["event_date","venue","event_title","artist","artist_role","source_url","verified","notes"]) if args.events else []
     # Add Event JSON-LD candidates from inspected detail pages; they remain unverified.
