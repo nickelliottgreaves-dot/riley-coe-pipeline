@@ -16,7 +16,7 @@ User explicitly wants frank status updates if things are not going to plan, no e
 - Repository: `nickelliottgreaves-dot/riley-coe-pipeline`
 - Reference/legacy development branch: `rebuild/core-gig-finder`
 - New redesign branch: `redesign/workflow-contract`
-- Latest test run [38737693907](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38737693907) passed **132 tests** with the reviewed 847-row pool; it includes the shared contract, timeout guard, fuzzy-identity proposal tests, and bounded external ticket-page crawling. This handover commit will trigger a normal live sweep using the updated external-ticket-page logic.
+- Latest test run [38737840049](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38737840049) passed **132 tests** with the reviewed 847-row pool; it includes the shared contract, timeout guard, fuzzy-identity proposal tests, and bounded external ticket-page crawling. The next handover commit will trigger a deliberate source-failure run on the current code.
 - **Current authoritative pool:** `data/artist_pool.csv`, **847 unique names**. It was expanded from 833 to 847 in commit `cf649137aa31202e646d014c3b3885f5e761189e` after manual review of 14 exact-crosscheck artists.
 - **Preserved prior pool:** `data/artist_pool_backup_20261015.csv` is the 833-row pool immediately before that 14-artist review; `data/artist_pool_backup_20261015_pre_fuzzy_review.csv` preserves an earlier baseline. Do not replace or delete either backup.
 - Historical audit `data/artist_pool_update_audit_20261015.json` documents the earlier 747→833 update: 86 additions from eight exact BBC/RadioFiles full-tracklist matches. It is intentionally historical, not the final 847-row audit.
@@ -169,6 +169,21 @@ Run [38737058283](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/a
 - The latest full sweep [38737058283](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38737058283) predates this code. The next full sweep must confirm the allowlist yields useful external event evidence without reintroducing out-of-area Songkick matches or exceeding the cap.
 
 
+
+## Live sweep after bounded external ticket-page support
+
+Run [38737840049](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38737840049) completed successfully. Unit tests, gig-finder validation and artist-pool updater validation all passed.
+
+- Reporting window: 15 October–11 November 2026; current pool: 847 artists.
+- 20/20 configured venue rows and 847/847 rows for both artist comparisons.
+- Six candidate artist/event matches; zero rows promoted to verified by the automated runner; zero out-of-scope events.
+- 394 pages inspected, 24 fetch failures, 11 allowlisted external ticketing pages inspected, 77 external seed links skipped, zero crawl caps. Fourteen venues were checked within the captured scope and six are partial because some page fetches failed; **all 20 calendar-completeness flags remain false**.
+- The external ticket-page change found a sixth match: **Pys Melyn** in the lineup for Louis O'Hara and His Burley Chassis at The Globe, 27 October 2026, 19:00, £6 on DICE. The DICE page lists Pys Melyn, Gem Stark, Serafima & The Shakedowns and Louis O'Hara and His Burley Chassis. It does not explicitly label Pys Melyn's role as support, so the manual review ledger records “lineup; billing role not explicit”. This has been added to `artifacts/manual-review/gig-finder-candidate-review-2026-10-15.csv`.
+- The other five candidates are unchanged. Four Boiler Shop entries have official-page checks in the manual ledger. Barbican Estate has independent Songkick/Ticketmaster venue-calendar corroboration for 9 November at 19:30 but no official Cluny event page; price and ticket status remain unknown.
+- The crawl summary correctly describes the six-page external allowlist, but the **per-venue audit notes in this artifact still contain stale wording** saying external ticketing hosts are not crawled. This was fixed in commit `5057283e8b8db37868e7ba23c1d6d95e0f0d09f8`; the next run must verify the audit notes are consistent.
+- Artifact: `riley-coe-independent-gig-finder-38737840049` (artifact ID `11974723379`). Artist-updater artifact: `riley-coe-artist-pool-updater-38737840049` (artifact ID `11974303383`); it preserves the 847-row pool, reports 8 exact episode matches, 3 mismatches, 1 episode without a cross-check, zero new additions and one held identity collision.
+
+
 ## Key redesign decision
 
 Do not patch the legacy assembler/validator separately again. Build two independent processes around one contract:
@@ -190,13 +205,12 @@ Do not patch the legacy assembler/validator separately again. Build two independ
 
 ## Current immediate next actions
 
-1. **Immediate:** this handover commit includes `[full-sweep]` to run the normal live sweep against the current 847-row pool with the new bounded external ticketing-page support. Check the run ID, 20 venue rows, 847/847 artist comparison rows, `external_event_pages_inspected`, and candidate matches. Legacy all-in-one jobs should remain skipped.
-2. Confirm the crawler does not reintroduce non-local Songkick matches, does not recursively crawl ticketing sites, and respects the six external-page-per-venue cap. All candidate rows remain unverified until the separate manual ledger supports them.
-3. After reviewing the normal run, rerun the simulated Cobalt Studios source failure on this latest code and confirm a valid PARTIAL report with 20 venue rows and 847 artist rows.
-4. Improve source-level completeness, especially venues where a fetched landing page has no dated event rows (Cumberland Arms, Little Buildings, Lubber Fiend, ZEROX, NUSU and others). Use concrete source evidence and keep calendar coverage false unless pagination/coverage is established.
-5. Keep the three mismatch-episode candidates held; resolve The Headcoatees vs Thee Headcoatees only with reliable source evidence. The 14 `ADD_TO_POOL` decisions have explicit track/source rationale in the manual review CSV.
-6. Resolve the remaining Cluny issue: Ticketmaster's venue calendar corroborates Barbican Estate's date and venue, but the official Cluny event page is still unconfirmed; retain third-party-only status and unknown price/ticket status until better evidence is found.
-7. Do not merge to `main` until source coverage and verification criteria are satisfied.
+1. **Immediate:** this handover commit includes `[full-sweep] [simulate-source-failure]` to rerun the deliberate Cobalt Studios failure on the current code and 847-row pool. Confirm 20 venue rows and 847 rows for both artist comparisons; Cobalt must be partial; package validation must pass; and per-venue audit notes must no longer claim external ticket pages are never crawled.
+2. The clean normal sweep [38737840049](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38737840049) has 6 candidates and 11 external event pages inspected. Confirm the simulation preserves the same local-only safeguards and six-page cap.
+3. Improve source-level completeness, especially venues where a fetched landing page has no dated event rows (Cumberland Arms, Little Buildings, Lubber Fiend, ZEROX, NUSU and others). Use concrete source evidence and keep calendar coverage false unless pagination/coverage is established.
+4. Keep the three mismatch-episode candidates held; resolve The Headcoatees vs Thee Headcoatees only with reliable source evidence. The 14 `ADD_TO_POOL` decisions have explicit track/source rationale in the manual review CSV.
+5. Resolve the remaining Cluny issue: Ticketmaster's venue calendar corroborates Barbican Estate's date and venue, but the official Cluny event page is still unconfirmed; retain third-party-only status and unknown price/ticket status until better evidence is found.
+6. Do not merge to `main` until source coverage and verification criteria are satisfied.
 8. Audit the remaining legacy scripts against `docs/WORKFLOW_REDESIGN_SPEC.md`; keep `scripts/run_core_search.py` as reference only because it covers nine core venues, not the required 20.
 9. After each meaningful stage, update this handover with latest run ID/conclusion, tests, blockers and exact next action. Never add `[full-sweep]` to ordinary documentation or code commits unless a live scrape is intentional.
 
