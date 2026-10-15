@@ -418,6 +418,27 @@ Audition for the Newcastle University Symphony Orchestra!"""
         self.assertEqual(rows[1]["venue"], "Cluny 2")
         self.assertEqual(rows[2]["event_title"], "Discharge")
 
+    def test_citywide_gig_guide_keeps_actual_reporting_venue_and_rejects_out_of_scope(self):
+        visible = """Thu 15 Oct 2026
+Heaven 17 + Peter Coyle
+The Cumberland Arms
+Official event page
+Fri 16 Oct 2026
+Byker Grave: Ye Gods + Pale World + Y Gwacter + Depletion
+The Lubber Fiend
+Official event page
+Fri 16 Oct 2026
+Ariana Grande Club
+Digital Newcastle
+Official event page"""
+        rows = extract_visible_listing_events(visible, "The Lubber Fiend")
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(rows[0]["event_title"], "Heaven 17 + Peter Coyle")
+        self.assertEqual(rows[0]["venue"], "The Cumberland Arms")
+        self.assertEqual(rows[1]["event_title"], "Byker Grave: Ye Gods + Pale World + Y Gwacter + Depletion")
+        self.assertEqual(rows[1]["venue"], "The Lubber Fiend")
+        self.assertEqual(rows[1]["performer_names"], "Ye Gods; Pale World; Y Gwacter; Depletion")
+
     def test_listing_parser_skips_generic_cta_and_availability_labels(self):
         visible = """Allie X
 More Info
