@@ -16,10 +16,11 @@ User explicitly wants frank status updates if things are not going to plan, no e
 - Repository: `nickelliottgreaves-dot/riley-coe-pipeline`
 - Reference/legacy development branch: `rebuild/core-gig-finder`
 - New redesign branch: `redesign/workflow-contract`
-- Latest unit-test commit: `0b1e856becd9790c49521aa14fb68ce5fb5a1df2` (**127 tests passed**); workflow integration for both independent processes is in `ab1f093ba0bdc22dbef6b99ebaab382ff602ff92`. Gig finder has passed normal and simulated-failure runs.
-- Authoritative pool: `data/artist_pool.csv`, 833 unique names.
-- Backup: `data/artist_pool_backup_20261015.csv` (preserves 747-row baseline).
-- Dated update audit says 86 additions came from eight exact BBC/RadioFiles full-tracklist matches; three mismatched episodes and 15 fuzzy-name collisions remained review-only.
+- Latest test-covered code commit before the pending rerun: `6228522ccfefc63aaa0b90371aa3a8c2409fea24` (updates the pool-count assertion to 847; check Actions before claiming it passed). The 129-test run before the pool change passed, and the new timeout guard is tested.
+- **Current authoritative pool:** `data/artist_pool.csv`, **847 unique names**. It was expanded from 833 to 847 in commit `cf649137aa31202e646d014c3b3885f5e761189e` after manual review of 14 exact-crosscheck artists.
+- **Preserved prior pool:** `data/artist_pool_backup_20261015.csv` is the 833-row pool immediately before that 14-artist review; `data/artist_pool_backup_20261015_pre_fuzzy_review.csv` preserves an earlier baseline. Do not replace or delete either backup.
+- Historical audit `data/artist_pool_update_audit_20261015.json` documents the earlier 747→833 update: 86 additions from eight exact BBC/RadioFiles full-tracklist matches. It is intentionally historical, not the final 847-row audit.
+- Manual decisions are recorded in `artifacts/manual-review/artist-pool-fuzzy-review-2026-10-15.csv`: 14 distinct artists marked `ADD_TO_POOL`, while `The Headcoatees` remains `HOLD_IDENTITY_REVIEW`; three other artists from mismatched episodes remain held. The full 847-row pool has `data/artist_pool_20261015_reviewed.csv` as an identical dated snapshot.
 - Venue registry: `config/venue_sources.csv`, 20 rows.
 - Required registry: `config/required_venues.csv`, 20 rows and all currently marked mandatory. README prose is stale where it says 16 mandatory plus four optional; reconcile the docs to the actual registry rather than assuming that older wording is correct.
 
@@ -47,7 +48,7 @@ Another older run [38732211948](https://github.com/nickelliottgreaves-dot/riley-
    - registry consistency checks
    - shared manifest builder with required fields always present and explicit `unknown/not established` previous-run value.
 4. Added `tests/test_workflow_contract.py` for 28-day date math, minimum window enforcement, manifest fields, and current registry/pool consistency.
-5. Independent inspection of current registry data confirmed 20 source rows, 20 mandatory rows, no venue-key mismatches and 833 pool names with no duplicates under the new normalization check. This was a data inspection, not yet a passing automated test run.
+5. Independent inspection confirmed 20 source rows and 20 mandatory rows, with no venue-key mismatches. The original 833-row pool had no normalized duplicates; after the 14 manually reviewed additions, the current 847-row pool also passes the repository's artist-pool validator. The contract test initially failed because it hard-coded 833; the assertion was updated to 847 in commit `6228522ccfefc63aaa0b90371aa3a8c2409fea24`.
 6. Latest normal-push test run [38734218011](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38734218011) succeeded: **121 unit tests passed** and artist-pool validation passed. Ordinary pushes skip public-source collection on the redesign branch.
 
 
@@ -138,11 +139,11 @@ The combined run is a useful diagnostic run, but Process B should be re-run once
 ## Latest verified milestones (2026-10-15)
 
 - **Clean full sweep** [38736205749](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38736205749): workflow and unit tests succeeded; independent gig finder and independent pool updater both completed successfully; legacy jobs were skipped on the redesign branch.
-- Gig-finder artifact `riley-coe-independent-gig-finder-38736205749`: window 2026-10-15 through 2026-11-11 (28 inclusive days); 20/20 source coverage rows; 833/833 artist page-search rows and 833/833 dated-event comparison rows; 5 candidate artist/event matches; zero verified event rows; 18 source outcomes `checked_in_captured_scope`, 2 `partial`; 364 pages inspected, 4 page fetch failures, 0 crawl caps. Calendar coverage verified count remains zero by design. This is a valid **PARTIAL** candidate report, not a complete gig list.
+- Gig-finder artifact `riley-coe-independent-gig-finder-38736205749`: window 2026-10-15 through 2026-11-11 (28 inclusive days); 20/20 source coverage rows; 833/833 artist page-search rows and 833/833 dated-event comparison rows against the **then-current 833-row pool**; 5 candidate artist/event matches; zero verified event rows; 18 source outcomes `checked_in_captured_scope`, 2 `partial`; 364 pages inspected, 4 page fetch failures, 0 crawl caps. This artifact predates the current 847-row pool and must be rerun against 847. Calendar coverage verified count remains zero by design. It is a valid **PARTIAL** candidate report, not a complete gig list.
 - Candidate rows: Cabaret Voltaire (Boiler Shop, 17 Oct), The Wedding Present (Boiler Shop, 23 Oct), Radhika support (same event), Teenage Fanclub (Boiler Shop, 10 Nov), and Barbican Estate (The Cluny, 9 Nov; third-party Songkick evidence only).
 - Independent manual review file `artifacts/manual-review/gig-finder-candidate-review-2026-10-15.csv` records four official Boiler Shop page confirmations (Cabaret Voltaire, The Wedding Present, Radhika support, Teenage Fanclub; all marked sold out and price not visible) and Barbican Estate as needing official Cluny cross-check. This review file is separate from the automated artifact; future report assembly should merge prior reviewed records only under a clear date/source freshness policy.
 - **Simulated source failure** [38735167465](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38735167465): Cobalt Studios was deliberately replaced with a local failing URL. The runner still produced a valid PARTIAL report with all 20 source rows, all 833 artist rows, two collector stages recorded as failed, and Cobalt marked partial. This tests failure handling; it does not test exhaustive coverage.
-- **Artist updater** from [38736205749](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38736205749): 12 BBC episode rows and 12 RadioFiles episode rows; 11 episodes cross-checkable; 8 exact full-tracklist matches, 3 mismatches, 1 BBC episode with no cross-check, 4 episodes not exactly cross-checked; 15 ambiguous names in review queue; zero proposed additions; authoritative pool unchanged at 833 rows, and before/after SHA-256 identical. Status PARTIAL. Do not promote artists from the mismatched episodes.
+- **Artist updater** from [38736205749](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38736205749) ran before the manual 14-artist addition: 12 BBC episode rows and 12 RadioFiles episode rows; 11 episodes cross-checkable; 8 exact full-tracklist matches, 3 mismatches, 1 BBC episode with no cross-check, 4 episodes not exactly cross-checked. Its reported 0 proposed additions / 15 fuzzy holds is superseded by the separate manual review: 14 distinct names were added to the current 847-row pool, and The Headcoatees plus three mismatch-episode candidates remain held. The updater's before/after hash proves only that that run did not mutate the then-current 833-row pool; it does not describe the later reviewed update.
 - Timeout guard: `scripts/run_gig_finder.py` now applies a 300-second limit to each subprocess stage and preserves partial logs on timeout. Tests verify this behavior. The next full sweep should confirm this code works in a live scrape; if any stage times out, inspect its preserved log and adjust the bounded strategy rather than removing the timeout.
 
 
@@ -167,14 +168,15 @@ Do not patch the legacy assembler/validator separately again. Build two independ
 
 ## Current immediate next actions
 
-1. **Immediate:** this handover commit includes `[full-sweep]` to rerun both Process A and Process B with the corrected episode metric. Check both job conclusions and artifacts; legacy jobs should remain skipped.
-2. Confirm the updater reports 8 exact, 3 mismatched and 1 without cross-check (4 not exact overall), while keeping 0 additions, 15 ambiguous candidates and the authoritative pool unchanged.
-3. Confirm the gig-finder still yields only local venue candidates and all 20 calendars remain explicitly unverified.
-4. Resolve the remaining Cluny source issue: confirm Barbican Estate on an official Cluny listing if possible, or keep it explicitly third-party-only.
-5. If both jobs pass, begin final acceptance review. Do not merge to `main` until the coverage and verification criteria are satisfied.
-4. Audit the remaining legacy scripts against `docs/WORKFLOW_REDESIGN_SPEC.md`; keep `scripts/run_core_search.py` as reference only because it covers nine core venues, not the required 20.
-5. After the candidate finder has a reliable partial-report contract, implement and test the separate BBC/RadioFiles artist-pool updater. Do not wire the legacy assembler into the new path.
-6. After each meaningful stage, update this handover with latest run ID/conclusion, tests, blockers and exact next action. Never add `[full-sweep]` to ordinary documentation or code commits unless a live scrape is intentional.
+1. **Immediate:** this handover commit includes `[full-sweep]` to rerun Process A and Process B against the current 847-row pool and test the new 300-second stage timeout. Check the run ID, job conclusions and artifacts; legacy jobs should remain skipped.
+2. Confirm unit tests pass with the 847-row pool. The prior 129-test pass predates the pool-size change; the initial test after adding 14 artists failed only because the contract test expected 833, and that assertion has now been updated.
+3. Check that the gig finder produces 847/847 page-search rows and 847/847 event-comparison rows, with the same local-only match safeguards and explicit PARTIAL source statuses.
+4. Check the artist updater's counts on the current pool. Do not auto-mutate the pool: retain the reviewed 847 names, and preserve the 833-row backup. The old updater's zero-additions output is from before the 14 manually reviewed additions and must not be treated as the final pool update result.
+5. Keep the three mismatch-episode candidates held; resolve The Headcoatees vs Thee Headcoatees only with reliable source evidence. The 14 `ADD_TO_POOL` decisions already have explicit track/source rationale in the manual review CSV.
+6. Resolve the remaining Cluny source issue: confirm Barbican Estate on an official Cluny listing if possible, or keep it explicitly third-party-only.
+7. If both jobs pass, continue coverage verification; do not merge to `main` until the coverage and verification criteria are satisfied.
+8. Audit the remaining legacy scripts against `docs/WORKFLOW_REDESIGN_SPEC.md`; keep `scripts/run_core_search.py` as reference only because it covers nine core venues, not the required 20.
+9. After each meaningful stage, update this handover with latest run ID/conclusion, tests, blockers and exact next action. Never add `[full-sweep]` to ordinary documentation or code commits unless a live scrape is intentional.
 
 ## Acceptance gate
 
