@@ -126,6 +126,37 @@ def extract_visible_event(page_title, visible_text, default_venue=""):
     venue=next_value("Venue") or default_venue
     if not event_date or not venue:
         return None
+    # The Glasshouse programme can link to the same multi-date production at
+    # Sage One, Sage Two, and external touring venues. Prefer the explicit
+    # room/location shown beside the event date over the configured crawl seed,
+    # otherwise a regional date can be duplicated into every Glasshouse room.
+    local_locations={
+        "sage one":"Sage One",
+        "sage two":"Sage Two",
+        "the glasshouse":"Glasshouse International Centre for Music",
+        "glasshouse":"Glasshouse International Centre for Music",
+        "glasshouse international centre for music":"Glasshouse International Centre for Music",
+        "the barbour room":"The Barbour Room",
+    }
+    out_of_scope_locations={
+        "middlesbrough town hall",
+        "westmorland hall kendal",
+        "kings place",
+        "king s place",
+    }
+    date_line_index=0
+    date_line_pattern=re.compile(r"(?i)\b(?:\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+['’]?\s*(?:\d{2}|20\d{2})|(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)(?:day)?\s+\d{1,2}\s+[A-Za-z]+\s+20\d{2})\b")
+    for line_index,line in enumerate(lines):
+        if date_line_pattern.search(line) or event_date in line:
+            date_line_index=line_index
+            break
+    for location_line in lines[date_line_index:min(len(lines),date_line_index+28)]:
+        location_key=" ".join(re.sub(r"[^a-z0-9]+"," ",location_line.casefold()).split())
+        if location_key in local_locations:
+            venue=local_locations[location_key]
+            break
+        if location_key in out_of_scope_locations:
+            return None
     title=(page_title or "").strip()
     # Strip common venue suffixes, including pages titled "Artist at Venue".
     if re.search(r"\s[-|–—]\s",title):
