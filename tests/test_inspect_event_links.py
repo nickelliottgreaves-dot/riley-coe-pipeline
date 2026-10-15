@@ -139,6 +139,33 @@ Audition for the Newcastle University Symphony Orchestra!"""
                 rows=list(csv.DictReader(f))
             self.assertTrue(any(r["event_title"]=="Skating Polly" and r["status"]=="visible_event_candidate_needs_review" for r in rows))
 
+    def test_external_ticket_hosts_are_not_crawled_as_venue_pages(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp); links=root/"links.csv"; sources=root/"sources.csv"
+            with links.open("w",encoding="utf-8",newline="") as f:
+                w=csv.DictWriter(f,fieldnames=["venue","candidate_url","link_text"]); w.writeheader()
+                w.writerow({"venue":"Test Venue","candidate_url":"https://tickets.example/event/123","link_text":"Tickets"})
+                w.writerow({"venue":"Test Venue","candidate_url":"https://venue.example/events/act","link_text":"Act"})
+            with sources.open("w",encoding="utf-8",newline="") as f:
+                w=csv.DictWriter(f,fieldnames=["venue","source_url"]); w.writeheader()
+                w.writerow({"venue":"Test Venue","source_url":"https://venue.example/whats-on"})
+            fetched=[]
+            calendar='<title>Whats On</title><a href="/events/act">Act</a>'
+            detail='<title>Act - Test Venue</title><p>Date:</p><p>Thu 15 Oct 2026</p><p>Venue:</p><p>Test Venue</p>'
+            def fake_fetch(url):
+                fetched.append(url)
+                if url=="https://venue.example/whats-on": return 200,"text/html",calendar,False
+                if url=="https://venue.example/events/act": return 200,"text/html",detail,False
+                raise AssertionError("External URL must not be fetched: "+url)
+            with patch("inspect_event_links.fetch",side_effect=fake_fetch):
+                with patch("sys.argv",["inspect_event_links.py","--links",str(links),"--sources",str(sources),"--out-dir",str(root/"out"),"--start","2026-10-15","--end","2026-10-28","--delay","0"]):
+                    self.assertEqual(main(),0)
+            self.assertNotIn("https://tickets.example/event/123",fetched)
+            with (root/"out"/"event_page_crawl_audit.csv").open(newline="",encoding="utf-8") as f:
+                audit=list(csv.DictReader(f))[0]
+            self.assertEqual(audit["external_seed_links_skipped"],"1")
+            self.assertIn("External ticketing hosts are not crawled",audit["notes"])
+
     def test_crawler_preserves_unverified_status_and_audit(self):
         with tempfile.TemporaryDirectory() as tmp:
             d=Path(tmp); links=d/"links.csv"
