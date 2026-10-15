@@ -16,7 +16,7 @@ User explicitly wants frank status updates if things are not going to plan, no e
 - Repository: `nickelliottgreaves-dot/riley-coe-pipeline`
 - Reference/legacy development branch: `rebuild/core-gig-finder`
 - New redesign branch: `redesign/workflow-contract`
-- Current redesign branch latest commit at time of writing: `5efaa263d50718c0923ac67fe92a24df48a25e1e`
+- Current redesign branch latest commit at time of writing: `96ca3ba667b3aef9355e7d549a1e54b9bc12836c`
 - Authoritative pool: `data/artist_pool.csv`, 833 unique names.
 - Backup: `data/artist_pool_backup_20261015.csv` (preserves 747-row baseline).
 - Dated update audit says 86 additions came from eight exact BBC/RadioFiles full-tracklist matches; three mismatched episodes and 15 fuzzy-name collisions remained review-only.
@@ -48,7 +48,7 @@ Another older run [38732211948](https://github.com/nickelliottgreaves-dot/riley-
    - shared manifest builder with required fields always present and explicit `unknown/not established` previous-run value.
 4. Added `tests/test_workflow_contract.py` for 28-day date math, minimum window enforcement, manifest fields, and current registry/pool consistency.
 5. Independent inspection of current registry data confirmed 20 source rows, 20 mandatory rows, no venue-key mismatches and 833 pool names with no duplicates under the new normalization check. This was a data inspection, not yet a passing automated test run.
-6. Latest redesign-branch Actions run [38732361983](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38732361983) was pending at last check. Several push runs were cancelled/queued while the older full-sweep run occupied the branch concurrency group. Check actual run status and logs before claiming tests passed.
+6. Latest redesign-branch test run [38732427583](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38732427583) was pending at last check; earlier push runs were cancelled before jobs started, so automated tests have not yet been demonstrated to pass. The workflow was then changed on the redesign branch so BBC/RadioFiles collectors run only for schedule, manual dispatch or explicit `[full-sweep]` pushes; ordinary pushes should run unit tests without scraping public sources. Check the run for the latest commit and confirm this gating works.
 
 ## Key redesign decision
 
@@ -76,7 +76,7 @@ Do not patch the legacy assembler/validator separately again. Build two independ
 3. Audit the remaining legacy scripts against `docs/WORKFLOW_REDESIGN_SPEC.md`; prefer one canonical matching path. Keep `scripts/run_core_search.py` as reference only because it covers nine core venues, not the required 20.
 4. Build a minimal Process A vertical slice that consumes the shared contract, loads all 20 sources and the 833 pool, produces per-source outcomes and a dated candidate report, and can yield a valid PARTIAL result under simulated source failure.
 5. Do not wire the legacy assembler into the new path until its schema contract has been adapted and tested.
-6. Add a clear `[full-sweep]` trigger only when intentionally requesting a full live scrape. Documentation/spec commits should not contain that marker.
+6. Add a clear `[full-sweep]` trigger only when intentionally requesting a full live scrape. Documentation/spec commits should not contain that marker. The redesign branch now gates BBC/RadioFiles collection behind schedule/manual/explicit full-sweep conditions; verify that ordinary pushes run tests only.
 7. After each meaningful stage, update this handover with latest commit, run ID/conclusion, tests, blockers and exact next action.
 
 ## Acceptance gate
