@@ -115,6 +115,7 @@ Audition for the Newcastle University Symphony Orchestra!"""
                 w=csv.DictWriter(f,fieldnames=["venue","source_url"]); w.writeheader()
                 w.writerow({"venue":"The Cluny","source_url":"https://thecluny.com/gigs/"})
             calendar="""<title>Gigs - The Cluny</title>
+<script type="application/ld+json">{"@type":"Event","name":"JSONLD placeholder"}</script>
 <a href="/events/skating-polly/">Skating Polly</a>
 <a href="/events/old-act/">Old Act</a>
 <p>Skating Polly</p><p>Thu 15 Oct 2026</p><p>/</p><p>The Cluny</p><p>With support from</p><p>Lord Friday The 13th</p><p>Info</p>
@@ -134,6 +135,9 @@ Audition for the Newcastle University Symphony Orchestra!"""
             self.assertEqual(fetched,["https://thecluny.com/gigs/","https://thecluny.com/events/skating-polly/"])
             summary=json.loads((root/"out"/"event_page_crawl_summary.json").read_text())
             self.assertEqual(summary["pages_inspected"],2)
+            with (root/"out"/"event_page_inspection.csv").open(newline="",encoding="utf-8") as f:
+                rows=list(csv.DictReader(f))
+            self.assertTrue(any(r["event_title"]=="Skating Polly" and r["status"]=="visible_event_candidate_needs_review" for r in rows))
 
     def test_crawler_preserves_unverified_status_and_audit(self):
         with tempfile.TemporaryDirectory() as tmp:
