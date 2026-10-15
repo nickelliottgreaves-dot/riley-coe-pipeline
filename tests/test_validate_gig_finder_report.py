@@ -30,7 +30,7 @@ class ValidateGigFinderReportTests(unittest.TestCase):
         self.write_csv(pool, ["artist", "status"], [{"artist": "Test Artist", "status": "active"}])
         (run / "run_manifest.json").write_text(json.dumps({
             "run_id": "test-run", "run_date": "2026-10-15",
-            "window_start": "2026-10-15", "window_end": "2026-11-11",
+            "window_start": "2026-10-15", "window_end": "2026-10-28",
             "previous_successful_run": "unknown/not established",
             "researcher_notes": "test fixture", "claimed_status": "PARTIAL"
         }), encoding="utf-8")
