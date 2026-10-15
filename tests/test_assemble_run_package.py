@@ -152,6 +152,8 @@ class EvidencePackageTests(unittest.TestCase):
                 check=True,capture_output=True,text=True)
             manifest=json.loads((out/"run_manifest.json").read_text())
             self.assertIs(manifest["artist_pool_compared_against_captured_pages"],True)
+            self.assertIs(manifest["artist_pool_compared"],True)
+            self.assertIs(manifest["event_artist_comparison_complete"],True)
             self.assertEqual(manifest["artist_pool_page_search_completed"],len(pool))
             # Removing a pool row makes the search incomplete even if all
             # remaining rows are marked searched.
@@ -167,6 +169,7 @@ class EvidencePackageTests(unittest.TestCase):
                 check=True,capture_output=True,text=True)
             manifest2=json.loads((out2/"run_manifest.json").read_text())
             self.assertIs(manifest2["artist_pool_compared_against_captured_pages"],False)
+            self.assertIs(manifest2["artist_pool_compared"],False)
 
     def test_creates_partial_package_and_refuses_overwrite(self):
         with tempfile.TemporaryDirectory() as tmp:
