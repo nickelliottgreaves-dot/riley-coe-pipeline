@@ -118,7 +118,11 @@ def extract_visible_event(page_title, visible_text):
     # Common official event-page titles end with the venue after a separator.
     if re.search(r"\s[-|–—]\s",title):
         title=re.split(r"\s[-|–—]\s",title)[0].strip()
-    if not title or title.casefold() in {"gigs","events","what's on","whats on","home"}:
+    generic_titles={"gigs","events","what's on","whats on","home","more info","limited availability",
+                    "limited tickets","tickets","buy tickets","book tickets","book now","event details",
+                    "details","view details","view event","find out more","read more","on sale","on sale now",
+                    "sold out","coming soon","available now","advance tickets"}
+    if not title or title.casefold() in generic_titles:
         return None
     supports=[]
     support_mode=False
