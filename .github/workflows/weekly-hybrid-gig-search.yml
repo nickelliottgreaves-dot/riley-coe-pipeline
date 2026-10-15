@@ -123,11 +123,11 @@ jobs:
           INSPECTED="$OUT/inspection/event_page_inspection.csv"
           [ -f "$EVENTS" ] || printf 'event_date,venue,event_title,artist,artist_role,source_url,verified,price,ticket_status,discovery_method,notes\\n' > "$EVENTS"
           [ -f "$INSPECTED" ] || printf 'venue,page_url,http_status,content_type,page_title,event_title,event_date,performer_names,price,currency,availability,event_jsonld_found,visible_text_snapshot,verified,status,notes\\n' > "$INSPECTED"
-          python scripts/check_known_gig_regressions.py \\
-            --fixtures tests/fixtures/known_gig_regressions.csv \\
-            --events "$EVENTS" \\
-            --inspected "$INSPECTED" \\
-            --inspection-dir "$OUT/inspection" \\
+          python scripts/check_known_gig_regressions.py \
+            --fixtures tests/fixtures/known_gig_regressions.csv \
+            --events "$EVENTS" \
+            --inspected "$INSPECTED" \
+            --inspection-dir "$OUT/inspection" \
             --out "$OUT/known_gig_regressions.csv"
           echo "Regression check exit code: $?"
 
@@ -142,12 +142,14 @@ jobs:
           discovery = out / "discovery/event_discovery_audit.csv"
           inspection = out / "inspection/event_page_crawl_audit.csv"
           matches = out / "artist_window_event_matches.csv"
+          regression_path = out / "known_gig_regressions.summary.json"
           def rows(path):
               if not path.exists(): return []
               with path.open(encoding="utf-8-sig", newline="") as f: return list(csv.DictReader(f))
           venue_rows = rows(discovery)
           inspection_rows = rows(inspection)
           match_rows = rows(matches)
+          regression = json.loads(regression_path.read_text(encoding="utf-8")) if regression_path.exists() else {"fixtures": 5, "recovered": 0, "not_recovered": 5, "status": "NOT_RUN"}
           expected = 18
           usable = sum(1 for r in venue_rows if r.get("status") == "fetched_candidates_only")
           failed = [r.get("venue", "") for r in venue_rows if r.get("status") != "fetched_candidates_only"]
@@ -164,6 +166,7 @@ jobs:
               "event_page_venues_audited": len(inspection_rows),
               "event_page_crawl_caps": capped,
               "candidate_pool_matches": len(match_rows),
+              "known_gig_regressions": regression,
               "verified_gigs": 0,
               "status": "LIMITED_RESULTS",
               "reason": "This collector identifies candidates, not verified gigs; source fetches and bounded crawling do not prove full calendar coverage, and independent secondary-listing research is still required.",
