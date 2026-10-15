@@ -30,6 +30,7 @@ def main() -> int:
     ap.add_argument("--pool",type=Path,required=True)
     ap.add_argument("--events",type=Path,required=True)
     ap.add_argument("--inspected",type=Path,required=True)
+    ap.add_argument("--pool-page-matches",type=Path)
     ap.add_argument("--start",type=date.fromisoformat,required=True)
     ap.add_argument("--end",type=date.fromisoformat,required=True)
     ap.add_argument("--out",type=Path,required=True)
@@ -44,8 +45,10 @@ def main() -> int:
     unique={}
     for artist in names: unique.setdefault(norm(artist),artist)
     candidates=[]
+    source_rows={}
     for source_kind,path in (("structured_discovery",args.events),("event_page_inspection",args.inspected)):
-        for row in read_csv(path):
+        source_rows[source_kind]=read_csv(path)
+        for row in source_rows[source_kind]:
             if not in_window(row.get("event_date",""),args.start,args.end): continue
             event_date=(row.get("event_date") or "").strip()[:10]
             venue=(row.get("venue") or "").strip()
@@ -63,7 +66,36 @@ def main() -> int:
                     "candidate_status":row.get("status","candidate_needs_review"),
                     "price":row.get("price",""),
                     "ticket_status":row.get("ticket_status",row.get("availability","")),
+                    "notes":row.get("notes",""),
                 })
+    # If a dated event page exposes its lineup in visible copy but the parser
+    # cannot extract the performer field, join the full-pool text match to that
+    # same dated page. These remain lower-confidence review candidates.
+    if args.pool_page_matches:
+        for hit in read_csv(args.pool_page_matches):
+            if hit.get("result")!="found_in_collected_pages": continue
+            artist=" ".join((hit.get("artist") or "").split()).strip()
+            artist_key=norm(artist)
+            if not artist_key: continue
+            urls=[u.strip() for u in (hit.get("evidence_url") or "").split(";") if u.strip()]
+            for page_url in urls:
+                for row in source_rows.get("event_page_inspection",[]):
+                    row_url=(row.get("page_url") or row.get("source_url") or "").strip()
+                    if row_url!=page_url or not in_window(row.get("event_date",""),args.start,args.end):
+                        continue
+                    event_title=(row.get("event_title") or "").strip()
+                    if not event_title: continue
+                    candidates.append({
+                        "event_date":(row.get("event_date") or "").strip()[:10],
+                        "venue":(row.get("venue") or "").strip(),
+                        "event_title":event_title,
+                        "performer":artist,"performer_norm":artist_key,
+                        "source_url":row_url,"source_kind":"pool_page_text_match",
+                        "verified":"false","candidate_status":"pool_text_match_needs_review",
+                        "price":row.get("price",""),
+                        "ticket_status":row.get("ticket_status",row.get("availability","")),
+                        "notes":(hit.get("notes") or "")+" Joined from a full-pool text hit on this same dated event page; verify that the mention is actual billing, not a biography or reference.",
+                    })
     # Deduplicate the same event/performer surfaced by discovery and inspection.
     dedup={}
     for row in candidates:
@@ -76,12 +108,12 @@ def main() -> int:
         by_artist[artist]=matches
     args.out.parent.mkdir(parents=True,exist_ok=True)
     match_path=args.out
-    match_fields=["artist_pool_name","event_date","venue","event_title","matched_performer","source_url","source_kind","candidate_status","price","ticket_status","verified"]
+    match_fields=["artist_pool_name","event_date","venue","event_title","matched_performer","source_url","source_kind","match_basis","candidate_status","price","ticket_status","verified","notes"]
     with match_path.open("w",encoding="utf-8",newline="") as f:
         w=csv.DictWriter(f,fieldnames=match_fields);w.writeheader()
         for artist,matches in by_artist.items():
             for row in matches:
-                w.writerow({"artist_pool_name":unique[artist],"event_date":row["event_date"],"venue":row["venue"],"event_title":row["event_title"],"matched_performer":row["performer"],"source_url":row["source_url"],"source_kind":row["source_kind"],"candidate_status":row["candidate_status"],"price":row["price"],"ticket_status":row["ticket_status"],"verified":"false"})
+                w.writerow({"artist_pool_name":unique[artist],"event_date":row["event_date"],"venue":row["venue"],"event_title":row["event_title"],"matched_performer":row["performer"],"source_url":row["source_url"],"source_kind":row["source_kind"],"match_basis":"full_pool_page_text" if row["source_kind"]=="pool_page_text_match" else "exact_performer_name","candidate_status":row["candidate_status"],"price":row["price"],"ticket_status":row["ticket_status"],"verified":"false","notes":row.get("notes","")})
     coverage_path=match_path.with_name("artist_window_event_coverage.csv")
     with coverage_path.open("w",encoding="utf-8",newline="") as f:
         w=csv.DictWriter(f,fieldnames=["artist","searched","candidate_count","result","window_start","window_end","notes"]);w.writeheader()
