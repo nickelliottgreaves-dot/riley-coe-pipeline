@@ -64,8 +64,8 @@ def run_stage(name: str, command: list[str], out_dir: Path, results: list[dict[s
         )
         log_path.write_text(completed.stdout or "", encoding="utf-8")
         code = completed.returncode
-        status = "success" if code == 0 else "failed_with_outputs" if log_path.exists() else "failed"
-        notes = "Stage completed." if code == 0 else "Non-zero exit; retained outputs/log and continued to produce a PARTIAL report."
+        status = "success" if code == 0 else "failed"
+        notes = "Stage completed." if code == 0 else "Non-zero exit; any outputs and the stage log are retained; later stages continue to produce a PARTIAL report."
     except OSError as exc:
         code = 127
         status = "failed"
