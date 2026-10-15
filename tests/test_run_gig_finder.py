@@ -28,7 +28,7 @@ class GigFinderCoverageTests(unittest.TestCase):
 
     def test_empty_but_successfully_checked_capture_is_not_claimed_as_no_gigs(self):
         sources = [{"venue": "Venue A", "source_url": "https://example.test/a", "notes": ""}]
-        page = [{"venue": "Venue A", "status": "fetched", "http_status": "200", "notes": ""}]
+        page = [{"venue": "Venue A", "status": "fetched", "http_status": "200", "text_file": "page_text/venue-a.txt", "notes": ""}]
         discovery = [{"venue": "Venue A", "status": "ok", "structured_events_found": "0", "candidate_links_found": "0", "notes": ""}]
         row = combine_venue_coverage(sources, page, discovery, [])[0]
         self.assertEqual(row["outcome"], "checked_in_captured_scope")
