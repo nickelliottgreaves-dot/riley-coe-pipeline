@@ -463,7 +463,7 @@ def extract_visible_listing_events(visible_text, default_venue="", start_date=No
             forward_index=j
             break
         if forward_title and forward_index is not None:
-            title_parts=[part.strip() for part in re.split(r"\\s+\\+\\s+",forward_title) if part.strip()]
+            title_parts=[part.strip() for part in re.split(r"\s+\+\s+",forward_title) if part.strip()]
             performers=list(title_parts)
             for extra in lines[forward_index+1:min(len(lines),forward_index+4)]:
                 if date_pattern.search(extra) or inline_date_title.match(extra):
@@ -472,7 +472,7 @@ def extract_visible_listing_events(visible_text, default_venue="", start_date=No
                 if low in generic or is_page_furniture(extra) or low.startswith(("send us a message","or email ","email to book")):
                     break
                 if extra.strip().startswith("+ "):
-                    performers.extend(part.strip() for part in re.split(r"\\s+\\+\\s+",extra.strip().lstrip("+ ").strip()) if part.strip())
+                    performers.extend(part.strip() for part in re.split(r"\s+\+\s+",extra.strip().lstrip("+ ").strip()) if part.strip())
                     continue
                 if "," in extra and not re.search(r"[.!?]",extra):
                     performers.extend(part.strip() for part in extra.split(",") if part.strip())
@@ -481,7 +481,7 @@ def extract_visible_listing_events(visible_text, default_venue="", start_date=No
             for extra in lines[i+1:min(len(lines),i+10)]:
                 if date_pattern.search(extra) or inline_date_title.match(extra):
                     break
-                pm=re.search(r"£\\s?\\d+(?:\\.\\d{1,2})?(?:\\s*[-–]\\s*£?\\s?\\d+(?:\\.\\d{1,2})?)?",extra,re.I)
+                pm=re.search(r"£\s?\d+(?:\.\d{1,2})?(?:\s*[-–]\s*£?\s?\d+(?:\.\d{1,2})?)?",extra,re.I)
                 if pm and not price: price=pm.group(0).replace(" ","")
                 if "sold out" in extra.casefold(): availability="SoldOut"
             found.append({
