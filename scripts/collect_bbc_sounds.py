@@ -360,7 +360,7 @@ def main():
                     rms_url=rms_result["url"]
                     (out/"raw_html").mkdir(parents=True,exist_ok=True)
                     (out/"raw_html"/(episode_id(url)+"_rms.json")).write_text(
-                        json.dumps(rms_result["payload"],indent=2,ensure_ascii=False)+"\\n",encoding="utf-8")
+                        json.dumps(rms_result["payload"],indent=2,ensure_ascii=False)+"\n",encoding="utf-8")
                     for pos,item in enumerate(rms_result["rows"],1):
                         rms_trackrows.append({"episode_date":dt,"episode_title":ep["title"],"episode_url":url,
                             "episode_urn":rms_urn,"track_position":pos,"track_title":item["track_title"],
