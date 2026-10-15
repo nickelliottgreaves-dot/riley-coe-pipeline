@@ -105,6 +105,16 @@ def main() -> int:
                         continue
                     event_title=(row.get("event_title") or "").strip()
                     if not event_title: continue
+                    # A mention anywhere on a detail page is not billing. Only
+                    # join it to a dated event candidate when the artist is in
+                    # the event title or in the parser's explicit performer
+                    # field. Biography/history mentions stay in the raw page-hit
+                    # report and never become artist-to-gig candidates.
+                    parsed_performers=[norm(x) for x in re.split(r"\s*;\s*",(row.get("performer_names") or "").strip()) if norm(x)]
+                    title_key=norm(event_title)
+                    phrase=f" {artist_key} "
+                    if phrase not in f" {title_key} " and artist_key not in parsed_performers:
+                        continue
                     candidates.append({
                         "event_date":(row.get("event_date") or "").strip()[:10],
                         "venue":(row.get("venue") or "").strip(),
@@ -114,7 +124,7 @@ def main() -> int:
                         "verified":"false","candidate_status":"pool_text_match_needs_review",
                         "price":row.get("price",""),
                         "ticket_status":row.get("ticket_status",row.get("availability","")),
-                        "notes":(hit.get("notes") or "")+" Joined from a full-pool text hit on this same dated event page; verify that the mention is actual billing, not a biography or reference.",
+                        "notes":(hit.get("notes") or "")+" Artist name is also present in the event title or explicit performer field; still verify billing, source details, price and ticket status.",
                     })
     # Deduplicate the same event/performer surfaced by discovery and inspection.
     dedup={}
