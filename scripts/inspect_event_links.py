@@ -695,7 +695,7 @@ def is_plausible_event_page_url(target, source_url):
         return True
     # Pagination is allowed only when it stays on this configured calendar,
     # not when it jumps to a global /events or metro-wide listing.
-    if path.startswith(base+"/page/") and is_pagination_link(target,"",source_url):
+    if path.startswith(base+"/page/") and is_pagination_link(target,""):
         return True
     if re.match(r"^/venues/[^/]+(?:/calendar)?$",base) and path.startswith(base.split("/calendar",1)[0]+"/calendar"):
         return True
