@@ -207,6 +207,24 @@ Sheku Kanneh-Mason"""
         row=extract_visible_event("Sheku Kanneh-Mason plays Saint-Saëns | The Glasshouse",visible,"Sage Two")
         self.assertIsNone(row)
 
+    def test_glasshouse_regional_tour_location_with_city_suffix_is_excluded(self):
+        visible = """Sunday 25 October 2026 |
+3:00pm
+Book Now
+Vivaldi's Four Seasons
+Part of
+Royal Northern Sinfonia: Out and about
+Kings Place, London
+Book Now
+Who’s on stage
+Royal Northern Sinfonia
+Tickets
+Sunday 25 October 2026
+From: £28.00 - £35.00
+Kings Place, London"""
+        row=extract_visible_event("Vivaldi's Four Seasons | The Glasshouse",visible,"Sage Two")
+        self.assertIsNone(row)
+
     def test_extracts_multiple_dated_cards_from_cluny_calendar(self):
         visible = """Gigs
 October 2026
