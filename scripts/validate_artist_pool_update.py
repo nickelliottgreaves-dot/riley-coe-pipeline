@@ -127,8 +127,14 @@ def main() -> int:
     failed_stages = [row.get("stage", "") for row in stages if row.get("status") not in {"success", "skipped"}]
     if failed_stages:
         warnings.append(f"{len(failed_stages)} collection/proposal stages failed or timed out: {', '.join(failed_stages)}")
-    if manifest.get("incomplete_or_unavailable_bbc_episodes", 0):
-        warnings.append(f"{manifest['incomplete_or_unavailable_bbc_episodes']} BBC episode rows are incomplete or unavailable.")
+    unresolved_episodes = int(manifest.get("episodes_not_exactly_crosschecked", 0) or 0)
+    mismatched_episodes = int(manifest.get("mismatched_episode_rows", 0) or 0)
+    no_crosscheck = int(manifest.get("bbc_episodes_without_crosscheck", 0) or 0)
+    if unresolved_episodes:
+        warnings.append(
+            f"{unresolved_episodes} BBC episode rows lack an exact full-tracklist cross-check "
+            f"({mismatched_episodes} mismatches; {no_crosscheck} without a cross-check row)."
+        )
 
     result = {
         "valid": not errors,
