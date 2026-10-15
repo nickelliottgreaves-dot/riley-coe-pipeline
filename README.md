@@ -40,6 +40,10 @@ The workflow performs venue-first discovery and compares collected, dated event 
 
 Do not mark candidates as verified without independent evidence for the event date, venue/room and artist billing. Do not claim complete venue coverage merely because Actions is green. The legacy `scripts/validate_run.py` and `scripts/assemble_run_package.py` paths are retained for reference; the active redesigned report contract is `scripts/run_gig_finder.py` plus `scripts/validate_gig_finder_report.py`.
 
+### Interpreting the live report
+
+A passing report validator certifies the report's structure and consistency, not that venue calendars were exhaustively checked. During deployment acceptance, inspect `venue_coverage.csv` and `venue_pages/venue_page_collection_audit.json` in the uploaded artifact. If `venue_calendar_checks_completed` is zero, or any source is partial/not checked, retain `PARTIAL` status and do not describe the search as exhaustive. Inspect candidate matches individually; the candidate finder must not mark events verified automatically.
+
 ## Deployment acceptance
 
 Deployment is successful only when:
