@@ -350,10 +350,10 @@ def extract_visible_event(page_title, visible_text, default_venue="", page_url="
         "notes":"Candidate extracted from visible event-page text; independently verify title, artist billing/support, date, room, price and ticket status."+(" URL date conflicts with visible date; left undated for review." if date_conflict else (" Date inferred from URL slug because visible date was unavailable; verify before use." if slug_date and not visible_event_date else ""))
     }
 
-def extract_visible_listing_events(visible_text, default_venue=""):
+def extract_visible_listing_events(visible_text, default_venue="", start_date=None, end_date=None):
     """Extract event-card candidates from listing pages with title/date/venue lines."""
     lines=[line.strip() for line in visible_text.splitlines() if line.strip()]
-    date_pattern=re.compile(r"(?i)\b(?:(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)(?:day)?\s+)?\d{1,2}\s+[A-Za-z]{3,9}\s+20\d{2}\b")
+    date_pattern=re.compile(r"(?i)\b(?:(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)(?:day)?\s+)?\d{1,2}(?:st|nd|rd|th)?\s+[A-Za-z]{3,9}\s+(?:['’]?\d{2}|20\d{2})\b")
     generic={"gigs","events","what's on","whats on","info","more info","limited availability","limited tickets","tickets","buy tickets","book tickets","book now","details","event details","view event","view details","find out more","read more","on sale","on sale now","sold out","coming soon","view as list","choose date","search","next","previous","older","available now","full price","advance tickets","interval","timings are approximate and subject to change","what they say","the guardian","your visit","plan your journey","parking","eat and drink","access info","access information","take a listen","about samling academy"}
     known_venues={re.sub(r"[^a-z0-9]+","",name.casefold()) for name in [
         "The Cluny","Cluny 2","Boiler Shop","Wylam Brewery","The Grove","The Glasshouse",
@@ -363,7 +363,9 @@ def extract_visible_listing_events(visible_text, default_venue=""):
         "Lubber Fiend","The Globe","Little Buildings","Utilita Arena","Utilita Arena Newcastle","ZEROX","ZEROX Newcastle"
     ]}
     def parsed_date(value):
-        value=value.strip()
+        value=re.sub(r"(?i)(\d{1,2})(st|nd|rd|th)\b",r"\1",value.strip())
+        value=re.sub(r"(?<!\d)['’](\d{2})\b",r"20\1",value)
+        value=re.split(r"\s*[|,]\s*",value,1)[0].strip()
         for fmt in ("%a %d %b %Y","%A %d %B %Y","%a %d %B %Y","%d %B %Y","%d %b %Y"):
             try: return datetime.strptime(value,fmt).date().isoformat()
             except ValueError: pass
@@ -374,7 +376,58 @@ def extract_visible_listing_events(visible_text, default_venue=""):
                 except ValueError: pass
         return ""
     found=[]
+    # Some venue calendars put a date and event title on one line without a
+    # year (e.g. "Oct 15 – KMP Quintal" or "23rd Oct - The Fargo Railroad Co.").
+    # Parse those cards using the requested window to infer the year safely.
+    inline_date_title=re.compile(
+        r"(?i)^\s*(?:(?P<month_first>[A-Za-z]{3,9})\s+(?P<day_first>\d{1,2})(?:st|nd|rd|th)?|"
+        r"(?P<day_second>\d{1,2})(?:st|nd|rd|th)?\s+(?P<month_second>[A-Za-z]{3,9}))"
+        r"(?:\s+(?P<year>['’]?\d{2,4}))?\s*[-–—:]\s*(?P<title>.+?)\s*$"
+    )
+    def inferred_inline_date(match):
+        month=match.group("month_first") or match.group("month_second")
+        day=int(match.group("day_first") or match.group("day_second"))
+        raw_year=(match.group("year") or "").strip().lstrip("'’")
+        if raw_year:
+            year=int(raw_year)
+            if year<100: year+=2000
+            try: return date(year,datetime.strptime(month[:3],"%b").month,day).isoformat()
+            except ValueError: return ""
+        years={date.today().year}
+        if start_date: years.add(start_date.year)
+        if end_date: years.add(end_date.year)
+        candidates=[]
+        for year in years | {y-1 for y in years} | {y+1 for y in years}:
+            try: candidate=date(year,datetime.strptime(month[:3],"%b").month,day)
+            except ValueError: continue
+            candidates.append(candidate)
+        if not candidates: return ""
+        if start_date and end_date:
+            in_window=[d for d in candidates if start_date<=d<=end_date]
+            if in_window: return min(in_window).isoformat()
+        anchor=start_date or date.today()
+        return min(candidates,key=lambda d:abs((d-anchor).days)).isoformat()
     for i,line in enumerate(lines):
+        inline_match=inline_date_title.match(line)
+        if inline_match:
+            dt=inferred_inline_date(inline_match)
+            title=inline_match.group("title").strip(" -–—:")
+            title=re.sub(r"(?i)\s+@\s+"+re.escape(str(default_venue or ""))+r"\s*$","",title).strip()
+            title=re.sub(r"(?i)\s+at\s+"+re.escape(str(default_venue or ""))+r"\s*$","",title).strip()
+            if dt and title:
+                title_parts=[part.strip() for part in re.split(r"\s+\+\s+",title) if part.strip()]
+                price=""; availability="not_checked"
+                for extra in lines[i+1:min(len(lines),i+6)]:
+                    if inline_date_title.match(extra) or date_pattern.search(extra): break
+                    pm=re.search(r"£\s?\d+(?:\.\d{1,2})?(?:\s*[-–]\s*£?\s?\d+(?:\.\d{1,2})?)?",extra,re.I)
+                    if pm and not price: price=pm.group(0).replace(" ","")
+                    if "sold out" in extra.casefold(): availability="SoldOut"
+                found.append({
+                    "event_title":title,"event_date":dt,"venue":default_venue,
+                    "performer_names":"; ".join(title_parts),"price":price,
+                    "currency":"GBP" if price else "","availability":availability,
+                    "notes":"Candidate extracted from inline date/title on venue listing; year inferred from the requested window where absent. Independently verify billing, date, price and ticket status."
+                })
         if not date_pattern.search(line):
             continue
         dt=parsed_date(line)
@@ -665,7 +718,7 @@ def main():
                             if o.get("priceCurrency"): currencies.append(str(o["priceCurrency"]))
                             if o.get("availability"): avail.append(clean(o["availability"]).split("/")[-1])
                         all_rows.append({"venue":venue,"page_url":url,"http_status":status,"content_type":ctype,"page_title":page_title,"event_title":name,"event_date":start[:10],"performer_names":perf,"price":"; ".join(sorted(set(prices))),"currency":"; ".join(sorted(set(currencies))),"availability":"; ".join(sorted(set(avail))),"event_jsonld_found":"true","visible_text_snapshot":f"snapshots/{snap_name}","verified":"false","status":"structured_candidate_needs_review","notes":"Structured data is candidate evidence only; independently verify event, exact date, room, billing/support, price and ticket status."+(" Performer metadata absent; event title retained as an unverified artist candidate." if performer_fallback else "")+( " HTML truncated." if truncated else "")})
-                listing_events=extract_visible_listing_events(visible,venue)
+                listing_events=extract_visible_listing_events(visible,venue,args.start_date,args.end_date)
                 # Keep visible card rows even when JSON-LD exists: the structured
                 # data may omit dates, rooms or performers, while the visible card
                 # supplies useful complementary evidence. The assembler deduplicates
@@ -680,7 +733,7 @@ def main():
                     if visible_event:
                         all_rows.append({"venue":visible_event["venue"] or venue,"page_url":url,"http_status":status,"content_type":ctype,"page_title":page_title,"event_title":visible_event["event_title"],"event_date":visible_event["event_date"],"performer_names":visible_event["performer_names"],"price":visible_event["price"],"currency":visible_event["currency"],"availability":visible_event["availability"],"event_jsonld_found":"false","visible_text_snapshot":f"snapshots/{snap_name}","verified":"false","status":"visible_event_candidate_needs_review","notes":visible_event["notes"]+( " HTML truncated." if truncated else "")})
                     else:
-                        listing_events=extract_visible_listing_events(visible,venue)
+                        listing_events=extract_visible_listing_events(visible,venue,args.start_date,args.end_date)
                         if listing_events:
                             for candidate in listing_events:
                                 all_rows.append({"venue":candidate["venue"],"page_url":url,"http_status":status,"content_type":ctype,"page_title":page_title,"event_title":candidate["event_title"],"event_date":candidate["event_date"],"performer_names":candidate["performer_names"],"price":candidate["price"],"currency":candidate["currency"],"availability":candidate["availability"],"event_jsonld_found":"false","visible_text_snapshot":f"snapshots/{snap_name}","verified":"false","status":"visible_event_candidate_needs_review","notes":candidate["notes"]+( " HTML truncated." if truncated else "")})
