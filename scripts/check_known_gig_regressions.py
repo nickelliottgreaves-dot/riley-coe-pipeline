@@ -76,8 +76,7 @@ def main() -> int:
             if row_day != day or not venue_matches(row_venue, venue):
                 continue
             text_fields = [
-                row.get("event_title", ""), row.get("page_title", ""),
-                row.get("artist", ""), row.get("performer_names", ""),
+                row.get("event_title", ""), row.get("artist", ""), row.get("performer_names", ""),
             ]
             # Match the performer against this specific event row, not the
             # whole page snapshot: a listing page can contain many unrelated acts.
