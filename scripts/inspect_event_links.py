@@ -192,9 +192,10 @@ def extract_visible_event(page_title, visible_text, default_venue=""):
             supports.append(line)
     supports=list(dict.fromkeys(supports))
     price_text=next_value("Advance tickets") or next_value("Price") or next_value("Tickets")
-    if not price_text:
-        # Some venue pages render a price range inline, e.g. "Tickets – £5.00 to £53.00".
-        price_text=next((line for line in lines[:100] if re.search(r"£\s?\d",line)), "")
+    if not price_text or not re.search(r"£\s?\d",price_text):
+        # Some venue pages render a price range inline, e.g. "Tickets – £5.00 to £53.00",
+        # while a separate "Tickets" heading may be followed by a date instead of a price.
+        price_text=next((line for line in lines[:120] if re.search(r"£\s?\d",line)), price_text)
     price_match=re.search(r"£\s?\d+(?:\.\d{1,2})?(?:\s*(?:[-–]|to)\s*£?\s?\d+(?:\.\d{1,2})?)?",price_text,re.I)
     price=re.sub(r"\s+"," ",price_match.group(0)).strip() if price_match else ""
     ticket_text=" ".join(lines).casefold()
