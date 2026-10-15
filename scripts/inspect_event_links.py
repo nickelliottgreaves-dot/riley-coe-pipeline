@@ -330,7 +330,7 @@ def extract_visible_event(page_title, visible_text, default_venue="", page_url="
         "price":price,
         "currency":"GBP" if price else "",
         "availability":availability,
-        "notes":"Candidate extracted from visible event-page text; independently verify title, artist billing/support, date, room, price and ticket status."+(" Canonical event URL date overrides conflicting visible date text." if date_conflict else "")
+        "notes":"Candidate extracted from visible event-page text; independently verify title, artist billing/support, date, room, price and ticket status."+(" URL date conflicts with visible date; left undated for review." if date_conflict else "")
     }
 
 def extract_visible_listing_events(visible_text, default_venue=""):
