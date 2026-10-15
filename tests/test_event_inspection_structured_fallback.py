@@ -120,7 +120,7 @@ class StructuredDataFallbackTests(unittest.TestCase):
                 audit = list(csv.DictReader(f))[0]
             self.assertEqual(audit["pages_failed"], "4")
             self.assertEqual(audit["crawl_cap_reached"], "false")
-            self.assertIn("empty", audit["notes"].casefold())
+            self.assertEqual(audit["status"], "PARTIAL")
 
 
 if __name__ == "__main__":
