@@ -53,7 +53,7 @@ class MixcloudInventoryTests(unittest.TestCase):
             def __enter__(self): return self
             def __exit__(self, *args): return False
             def read(self, limit):
-                return b'<script>window.__DATA__={"url":"/SixMusicAlternative/riley-coe-tuesday-6th-october-2026/"}</script>'
+                return b'<script>window.__DATA__={"url":"\\/SixMusicAlternative\\/riley-coe-tuesday-6th-october-2026\\/"}</script>'
 
         with patch("scripts.collect_mixcloud.urlopen", return_value=FakeResponse()):
             items, errors = fetch_html_cloudcasts("SixMusicAlternative", date(2026, 10, 1), date(2026, 10, 21))
