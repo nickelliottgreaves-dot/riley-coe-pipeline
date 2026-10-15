@@ -325,14 +325,23 @@ def main():
             errors.append("RadioFiles episode discovery fallback failed: "+radiofiles_discovery_error)
     rows=[]; linkrows=[]; trackrows=[]; embedded_trackrows=[]; embedded_audit_rows=[]
     for ep in episodes:
-        url=ep["url"]
+        original_url=ep["url"]
+        url=original_url
         # The programme metadata page may omit the embedded tracklist state.
         # Prefer the equivalent Sounds player URL for the same official PID.
         pid=episode_id(url)
         if pid and "/sounds/play/" not in url:
             url=f"{ROOT_URL}/sounds/play/{pid}"
         try:
-            status,ctype,html=fetch(url)
+            try:
+                status,ctype,html=fetch(url)
+            except HTTPError as exc:
+                # A not-yet-broadcast episode can have a valid programme page
+                # but no Sounds player page yet. Fall back to that metadata page.
+                if exc.code != 404 or url == original_url:
+                    raise
+                url=original_url
+                status,ctype,html=fetch(url)
             if status!=200 or "html" not in ctype.lower(): raise ValueError(f"Unexpected episode response: {status} {ctype}")
             p=TextParser(); p.feed(html); text="\n".join(p.text)
             # Avoid guessing the episode date from an episode title; parse explicit page date only.
