@@ -103,6 +103,13 @@ def main():
                     raw=response.read(3_000_001)
                 response_cache[url]=(code,ctype,raw)
             item["http_status"]=str(code); item["content_type"]=ctype
+            # Some sites return HTTP 202 with an empty anti-bot/challenge body.
+            # That is not a usable calendar fetch and must not inflate coverage.
+            if not raw:
+                item.update(status="failed",notes=f"HTTP {code} returned an empty response body; treated as unusable source coverage.")
+                errors.append(venue+": "+item["notes"])
+                audit.append(item)
+                continue
             if len(raw)>3_000_000: raw=raw[:3_000_000]; item["notes"]="HTML truncated at 3 MB"
             if "html" not in item["content_type"].lower():
                 item.update(status="failed",notes="Response not identified as HTML"); errors.append(venue+": non-HTML"); audit.append(item); continue
