@@ -20,8 +20,13 @@ class VerifiedPoolProposalTests(unittest.TestCase):
                 {"episode_date":"2026-10-13","episode_pid":"m0031tk4","track_title":"Song A","artist_candidate":"Existing Artist","radiofiles_artist_candidate":"Existing Artist","crosscheck_status":"EXACT_FULL_TRACKLIST_MATCH","bbc_episode_url":"https://bbc.example/a","radiofiles_episode_url":"https://radiofiles.example/a"},
                 {"episode_date":"2026-10-13","episode_pid":"m0031tk4","track_title":"Song B","artist_candidate":"New Artist & Collaborator","radiofiles_artist_candidate":"New Artist","crosscheck_status":"EXACT_FULL_TRACKLIST_MATCH","bbc_episode_url":"https://bbc.example/a","radiofiles_episode_url":"https://radiofiles.example/a"},
                 {"episode_date":"2026-10-14","episode_pid":"m0031tk5","track_title":"Song C","artist_candidate":"Unsafe Candidate","radiofiles_artist_candidate":"Unsafe Candidate","crosscheck_status":"MISMATCH_REQUIRES_REVIEW","bbc_episode_url":"https://bbc.example/b","radiofiles_episode_url":"https://radiofiles.example/b"},
+                {"episode_date":"2026-10-13","episode_pid":"m0031tk4","track_title":"Song D","artist_candidate":"Blondie","radiofiles_artist_candidate":"Blondie","crosscheck_status":"EXACT_FULL_TRACKLIST_MATCH","bbc_episode_url":"https://bbc.example/a","radiofiles_episode_url":"https://radiofiles.example/a"},
             ])
-            subprocess.run([sys.executable,str(SCRIPT),"--pool",str(pool),"--verified-candidates",str(candidates),"--out-dir",str(out)],check=True,capture_output=True,text=True)
+            reconciliation=root/"reconciliation.csv"
+            self.write(reconciliation,["artist_candidate","reconciliation_status","best_similarity_score","closest_pool_candidates","episode_dates","track_examples","source_urls"],[
+                {"artist_candidate":"Blondie","reconciliation_status":"UNMATCHED_REVIEW_ONLY","best_similarity_score":"0.75","closest_pool_candidates":"Du Blonde","episode_dates":"2026-10-13","track_examples":"Song D","source_urls":"https://radiofiles.example/a"}
+            ])
+            subprocess.run([sys.executable,str(SCRIPT),"--pool",str(pool),"--verified-candidates",str(candidates),"--reconciliation",str(reconciliation),"--out-dir",str(out)],check=True,capture_output=True,text=True)
             import datetime
             stamp=datetime.date.today().strftime("%Y%m%d")
             with (out/f"artist_pool_proposed_{stamp}.csv").open(newline="",encoding="utf-8") as f:
@@ -31,6 +36,9 @@ class VerifiedPoolProposalTests(unittest.TestCase):
             audit=json.loads((out/f"artist_pool_proposal_audit_{stamp}.json").read_text())
             self.assertEqual([r["artist"] for r in proposed],["Existing Artist","New Artist"])
             self.assertEqual([r["artist"] for r in additions],["New Artist"])
+            with (out/f"artist_pool_ambiguous_review_{stamp}.csv").open(newline="",encoding="utf-8") as f:
+                ambiguous=list(csv.DictReader(f))
+            self.assertEqual([r["artist_candidate"] for r in ambiguous],["Blondie"])
             self.assertIn("New Artist & Collaborator", additions[0]["source_basis"])
             self.assertFalse(audit["authoritative_pool_modified"])
             self.assertEqual(pool.read_text().splitlines(),["index,artist,status,source_basis","1,Existing Artist,ACTIVE,baseline"])
