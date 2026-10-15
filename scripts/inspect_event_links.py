@@ -313,7 +313,8 @@ def extract_visible_event(page_title, visible_text, default_venue="", page_url="
                    "your visit","tickets","stay connected","this event takes place at",
                    "timings are approximate and subject to change","timings","interval",
                    "what they say","the guardian","plan your journey","parking","eat and drink",
-                   "access info","access information","more info","take a listen","about samling academy"}
+                   "access info","access information","more info","take a listen","about samling academy",
+                   "with support from","supports","support"}
     role_labels={"conductor","cello","violin","piano","vocals","guitar","drums","composer","leader",
                  "viola","orchestra","bass","percussion","director","tenor","soprano","mezzo soprano",
                  "baritone","flute","oboe","clarinet","harp","trumpet","trombone","saxophone","organ"}
