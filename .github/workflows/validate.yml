@@ -246,6 +246,15 @@ jobs:
             --event-snapshots "artifacts/riley-coe-event-page-inspection-${{ github.run_id }}/snapshots" \
             --venues config/venue_sources.csv \
             --out artifacts/regression_artist_checks.csv
+      - name: Search the full artist pool against captured venue pages
+        if: always()
+        run: |
+          python scripts/check_regression_artists.py \
+            --seeds data/artist_pool.csv \
+            --venue-snapshots "artifacts/riley-coe-venue-page-inventory-${{ github.run_id }}/page_text" \
+            --event-snapshots "artifacts/riley-coe-event-page-inspection-${{ github.run_id }}/snapshots" \
+            --venues config/venue_sources.csv \
+            --out artifacts/artist_pool_venue_page_matches.csv
       - name: Assemble dated PARTIAL evidence package
         run: |
           START=$(python -c "from datetime import date; print(date.today().isoformat())")
@@ -265,6 +274,7 @@ jobs:
             --event-page-inspection "artifacts/riley-coe-event-page-inspection-${{ github.run_id }}/event_page_inspection.csv" \
             --event-page-audit "artifacts/riley-coe-event-page-inspection-${{ github.run_id }}/event_page_crawl_audit.csv" \
             --regression-artist-checks "artifacts/regression_artist_checks.csv" \
+            --pool-venue-page-matches "artifacts/artist_pool_venue_page_matches.csv" \
             --out-dir artifacts/evidence-package
       - name: Preserve dated evidence scaffold for review
         if: always()
