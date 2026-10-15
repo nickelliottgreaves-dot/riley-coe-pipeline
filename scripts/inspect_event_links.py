@@ -296,6 +296,8 @@ def extract_visible_event(page_title, visible_text, default_venue="", page_url="
     ticket_text=" ".join(main_lines).casefold()
     if "sold out" in ticket_text:
         availability="SoldOut"
+    elif price and re.search(r"\\b(?:get tickets|buy tickets|book tickets|on sale now|tickets available)\\b", ticket_text):
+        availability="listed_for_purchase"
     else:
         availability="not_checked"
     # Event titles may include tour/series subtitles or descriptions such as
@@ -914,7 +916,17 @@ def main():
                             if o.get("price") is not None: prices.append(str(o["price"]))
                             if o.get("priceCurrency"): currencies.append(str(o["priceCurrency"]))
                             if o.get("availability"): avail.append(clean(o["availability"]).split("/")[-1])
-                        all_rows.append({"venue":venue,"page_url":url,"http_status":status,"content_type":ctype,"page_title":page_title,"event_title":name,"event_date":start[:10],"performer_names":perf,"price":"; ".join(sorted(set(prices))),"currency":"; ".join(sorted(set(currencies))),"availability":"; ".join(sorted(set(avail))),"event_jsonld_found":"true","visible_text_snapshot":f"snapshots/{snap_name}","verified":"false","status":"structured_candidate_needs_review","notes":"Structured data is candidate evidence only; independently verify event, exact date, room, billing/support, price and ticket status."+(" Performer metadata absent; event title retained as an unverified artist candidate." if performer_fallback else "")+( " HTML truncated." if truncated else "")})
+                        visible_meta = extract_visible_event(page_title, visible, venue, url) if len(event_objects) == 1 else None
+                        if visible_meta and visible_meta.get("event_date") and visible_meta["event_date"] != start[:10]:
+                            visible_meta = None
+                        used_visible_price = False
+                        if not prices and visible_meta and visible_meta.get("price"):
+                            prices = [re.sub(r"[^0-9.]", "", visible_meta["price"])]
+                            currencies = ["GBP"]
+                            used_visible_price = True
+                        if not avail and visible_meta and visible_meta.get("availability") not in {"", "not_checked"}:
+                            avail = [visible_meta["availability"]]
+                        all_rows.append({"venue":venue,"page_url":url,"http_status":status,"content_type":ctype,"page_title":page_title,"event_title":name,"event_date":start[:10],"performer_names":perf,"price":"; ".join(sorted(set(prices))),"currency":"; ".join(sorted(set(currencies))),"availability":"; ".join(sorted(set(avail))),"event_jsonld_found":"true","visible_text_snapshot":f"snapshots/{snap_name}","verified":"false","status":"structured_candidate_needs_review","notes":"Structured data is candidate evidence only; independently verify event, exact date, room, billing/support, price and ticket status."+(" Visible text supplied price/status missing from structured offers." if used_visible_price or (visible_meta and visible_meta.get("availability") not in {"", "not_checked"}) else "")+(" Performer metadata absent; event title retained as an unverified artist candidate." if performer_fallback else "")+( " HTML truncated." if truncated else "")})
                 listing_events=extract_visible_listing_events(visible,venue,args.start_date,args.end_date)
                 # Keep visible card rows even when JSON-LD exists: the structured
                 # data may omit dates, rooms or performers, while the visible card
