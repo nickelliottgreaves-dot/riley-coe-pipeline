@@ -90,6 +90,24 @@ class MixcloudInventoryTests(unittest.TestCase):
         self.assertEqual(len(items), 1)
         self.assertEqual(items[0]["created_time"][:10], "2026-10-06")
 
+    def test_duckduckgo_fallback_rejects_stale_mixcloud_urls(self):
+        class FakeResponse:
+            status = 200
+            def __enter__(self): return self
+            def __exit__(self, *args): return False
+            def read(self, limit):
+                return b'<a href="https://www.mixcloud.com/SixMusicAlternative/riley-coe-tuesday-6th-october-2026/">Riley &amp; Coe Tuesday 6th October 2026</a>'
+
+        def fake_urlopen(req, timeout=25):
+            if "html.duckduckgo.com" in req.full_url:
+                return FakeResponse()
+            raise HTTPError(req.full_url, 404, "Not Found", None, None)
+
+        with patch("scripts.collect_mixcloud.urlopen", side_effect=fake_urlopen):
+            items, errors = fetch_duckduckgo_cloudcasts("SixMusicAlternative", date(2026, 10, 1), date(2026, 10, 21))
+        self.assertEqual(items, [])
+        self.assertTrue(any("candidate page is inaccessible" in error and "404" in error for error in errors))
+
     def test_bing_rss_fallback_extracts_dated_mixcloud_show_candidates(self):
         class FakeResponse:
             def __enter__(self): return self
