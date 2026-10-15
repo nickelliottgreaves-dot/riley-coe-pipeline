@@ -3,7 +3,7 @@ from unittest.mock import patch
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/"scripts"))
-from inspect_event_links import canonicalize_url, event_link_matches, extract_visible_event, extract_visible_listing_events, is_calendar_navigation, is_event_object, likely, main
+from inspect_event_links import canonicalize_url, event_link_matches, event_performer_candidate, extract_visible_event, extract_visible_listing_events, is_calendar_navigation, is_event_object, likely, main
 
 class EventPageCrawlerTests(unittest.TestCase):
     def test_canonical_url_removes_tracking_but_preserves_pagination(self):
@@ -15,6 +15,14 @@ class EventPageCrawlerTests(unittest.TestCase):
             canonicalize_url("https://example.com/events/?page=3&utm_campaign=x"),
             "https://example.com/events/?page=3"
         )
+
+    def test_missing_structured_performer_uses_title_as_review_candidate(self):
+        performer, fallback = event_performer_candidate({"name":"The Strokes"})
+        self.assertEqual(performer,"The Strokes")
+        self.assertTrue(fallback)
+        performer, fallback = event_performer_candidate({"name":"The Strokes","performer":{"name":"The Strokes"}})
+        self.assertEqual(performer,"The Strokes")
+        self.assertFalse(fallback)
 
     def test_only_schema_event_types_are_event_objects(self):
         self.assertTrue(is_event_object({"@type":"MusicEvent","name":"A concert"}))
