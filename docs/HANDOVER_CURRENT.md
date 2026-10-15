@@ -16,7 +16,7 @@ User explicitly wants frank status updates if things are not going to plan, no e
 - Repository: `nickelliottgreaves-dot/riley-coe-pipeline`
 - Reference/legacy development branch: `rebuild/core-gig-finder`
 - New redesign branch: `redesign/workflow-contract`
-- Current redesign branch latest commit at time of writing: `96ca3ba667b3aef9355e7d549a1e54b9bc12836c`
+- Last pre-sweep code/workflow commit: `b1cd880809ad1ca66c2ad0ee9ceae129f873fd69` (the following handover commit intentionally triggers the first independent full sweep).
 - Authoritative pool: `data/artist_pool.csv`, 833 unique names.
 - Backup: `data/artist_pool_backup_20261015.csv` (preserves 747-row baseline).
 - Dated update audit says 86 additions came from eight exact BBC/RadioFiles full-tracklist matches; three mismatched episodes and 15 fuzzy-name collisions remained review-only.
@@ -48,7 +48,13 @@ Another older run [38732211948](https://github.com/nickelliottgreaves-dot/riley-
    - shared manifest builder with required fields always present and explicit `unknown/not established` previous-run value.
 4. Added `tests/test_workflow_contract.py` for 28-day date math, minimum window enforcement, manifest fields, and current registry/pool consistency.
 5. Independent inspection of current registry data confirmed 20 source rows, 20 mandatory rows, no venue-key mismatches and 833 pool names with no duplicates under the new normalization check. This was a data inspection, not yet a passing automated test run.
-6. Latest redesign-branch test run [38732427583](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38732427583) was pending at last check; earlier push runs were cancelled before jobs started, so automated tests have not yet been demonstrated to pass. The workflow was then changed on the redesign branch so BBC/RadioFiles collectors run only for schedule, manual dispatch or explicit `[full-sweep]` pushes; ordinary pushes should run unit tests without scraping public sources. Check the run for the latest commit and confirm this gating works.
+6. Latest normal-push test run [38732937472](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38732937472) succeeded: **116 unit tests passed**, including the new contract, candidate-runner coverage and report-validator tests; artist-pool validation also passed. All collection jobs were skipped on this ordinary push, confirming the redesign branch no longer launches public-source scrapes for every small code change. Earlier runs were cancelled before tests started; do not count those as test results.
+
+
+7. Added `scripts/run_gig_finder.py`, an independent orchestration path that uses the shared contract, attempts all 20 sources, preserves stage logs, compares the full pool, emits explicit per-source and per-artist outcomes, and creates a PARTIAL report even when individual collection stages fail.
+8. Added `scripts/validate_gig_finder_report.py` to check the new report schema and require one coverage row per configured source and pool artist, without claiming exhaustive coverage.
+9. Added tests for coverage semantics and report integrity. Latest successful normal-push run: 116 tests passed (run 38732937472).
+10. Changed the redesign branch workflow so legacy all-in-one full-sweep jobs do not run on `redesign/workflow-contract`; the new independent gig finder is the only collector job intended to run on that branch during an explicit full sweep.
 
 ## Key redesign decision
 
@@ -71,13 +77,12 @@ Do not patch the legacy assembler/validator separately again. Build two independ
 
 ## Current immediate next actions
 
-1. Check run 38732361983 and determine whether `tests/test_workflow_contract.py` actually ran. If cancelled due queue/concurrency, wait for the older run to finish and rerun tests; do not mark tests as passed based only on source inspection.
-2. Fix any actual test or contract errors on `redesign/workflow-contract`.
-3. Audit the remaining legacy scripts against `docs/WORKFLOW_REDESIGN_SPEC.md`; prefer one canonical matching path. Keep `scripts/run_core_search.py` as reference only because it covers nine core venues, not the required 20.
-4. Build a minimal Process A vertical slice that consumes the shared contract, loads all 20 sources and the 833 pool, produces per-source outcomes and a dated candidate report, and can yield a valid PARTIAL result under simulated source failure.
-5. Do not wire the legacy assembler into the new path until its schema contract has been adapted and tested.
-6. Add a clear `[full-sweep]` trigger only when intentionally requesting a full live scrape. Documentation/spec commits should not contain that marker. The redesign branch now gates BBC/RadioFiles collection behind schedule/manual/explicit full-sweep conditions; verify that ordinary pushes run tests only.
-7. After each meaningful stage, update this handover with latest commit, run ID/conclusion, tests, blockers and exact next action.
+1. **Immediate:** this handover commit intentionally includes `[full-sweep]` to trigger the first live run of `scripts/run_gig_finder.py` on the redesign branch. Check its run ID and artifact; the old all-in-one collection jobs must be skipped on this branch.
+2. Inspect the new report artifact and run logs. Verify all 20 source rows and 833 artist coverage rows exist; inspect any stage failures, empty source results, crawl caps and candidate links. Do not call the report complete.
+3. Fix only reproducible defects from that run, add regression tests, and rerun the full sweep.
+4. Audit the remaining legacy scripts against `docs/WORKFLOW_REDESIGN_SPEC.md`; keep `scripts/run_core_search.py` as reference only because it covers nine core venues, not the required 20.
+5. After the candidate finder has a reliable partial-report contract, implement and test the separate BBC/RadioFiles artist-pool updater. Do not wire the legacy assembler into the new path.
+6. After each meaningful stage, update this handover with latest run ID/conclusion, tests, blockers and exact next action. Never add `[full-sweep]` to ordinary documentation or code commits unless a live scrape is intentional.
 
 ## Acceptance gate
 
