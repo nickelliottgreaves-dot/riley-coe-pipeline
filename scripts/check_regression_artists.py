@@ -54,11 +54,17 @@ def main() -> int:
         key=norm(artist)
         hits=[]
         if key:
+            # Match complete normalized phrases, not substrings inside other
+            # names (e.g. "Thee" must not count as "The").
+            needle=f" {key} "
             for page in pages:
-                if key in page["normalized"]:
+                if needle in f" {page['normalized']} ":
                     hits.append(page)
         urls=list(dict.fromkeys(p["source_url"] for p in hits if p["source_url"]))
-        evidence_url=urls[0] if urls else (fallback_url if pages else "")
+        searched_urls=list(dict.fromkeys(p["source_url"] for p in pages if p["source_url"]))
+        # A negative result should identify the corpus actually searched, not
+        # misleadingly point at the first configured venue as if it matched.
+        evidence_url="; ".join(urls if urls else searched_urls)
         rows.append({
             "artist":artist,
             "searched":str(bool(pages)).lower(),
