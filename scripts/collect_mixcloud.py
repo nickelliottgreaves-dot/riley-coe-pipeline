@@ -238,7 +238,7 @@ def fetch_bing_rss_cloudcasts(username: str, since: date, until: date) -> tuple[
             continue
         if len(xml) > 2_000_000:
             errors.append(f"Public search-engine RSS truncated for query {term!r}.")
-        items = re.findall(r"<item\\b[^>]*>(.*?)</item>", xml, flags=re.I | re.S)
+        items = re.findall(r"<item\b[^>]*>(.*?)</item>", xml, flags=re.I | re.S)
         for item_xml in items:
             title_match = re.search(r"<title[^>]*>(.*?)</title>", item_xml, flags=re.I | re.S)
             link_match = re.search(r"<link[^>]*>(.*?)</link>", item_xml, flags=re.I | re.S)
