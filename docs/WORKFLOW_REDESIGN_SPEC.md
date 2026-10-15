@@ -1,10 +1,10 @@
 # Riley & Coe workflow redesign: audit and acceptance specification
 
-**Status:** design decision recorded; implementation not yet accepted  
+**Status:** Phase 1 contract/audit completed; Process A and Process B implemented in initial form; live source-scope acceptance still in progress  
 **Date:** 2026-10-15  
 **Design branch:** `redesign/workflow-contract`  
 **Reference branch:** `rebuild/core-gig-finder`  
-**Authoritative pool at audit:** `data/artist_pool.csv`, 833 unique artist rows  
+**Authoritative pool at latest audit (2026-10-15):** `data/artist_pool.csv`, 847 unique artist rows; earlier 833-row count is a historical baseline  
 **Reporting window:** rolling 28 calendar dates, today through today + 27 days
 
 ## Decision
@@ -64,7 +64,7 @@ One authoritative contract must define:
 2. Calculate the 28-day inclusive window once and pass it to all stages.
 3. Inspect each configured source regardless of whether an earlier discovery step found candidate links.
 4. Capture source snapshots, candidate event records, per-source crawl/coverage audit, failures and caps.
-5. Compare all 833 pool names against captured pages and dated event/performer records. Preserve candidate text hits separately from event-level matches.
+5. Compare every current pool name (847 as of 2026-10-15) against captured pages and dated event/performer records. Preserve candidate text hits separately from event-level matches.
 6. Verify what can be verified from source evidence; leave unresolved fields unresolved.
 7. Assemble a dated report and manifest even when some sources fail, provided the package itself can be assembled. Mark it PARTIAL and enumerate the gaps.
 8. Validate that package against the same run's outputs, not stale repository files.
@@ -85,10 +85,10 @@ Mixcloud is out of scope: prior attempts returned 404/soft-404 or unusable track
 
 ## Finite phases and exit criteria
 
-### Phase 1 — audit and contract (current)
+### Phase 1 — audit and contract (completed)
 **Deliverable:** this specification plus a verified inventory of reusable code, source configuration, existing evidence, and current failure modes.
 
-**Exit:** data preservation boundaries and shared schema/window/status semantics are agreed and recorded. No broad parser work during this phase.
+**Exit:** data preservation boundaries and shared schema/window/status semantics are recorded in `config/workflow_contract.json`, `scripts/workflow_contract.py` and this specification. The remaining acceptance work is live validation and bounded correction, not another open-ended redesign.
 
 ### Phase 2 — minimal independent gig finder
 Build the smallest end-to-end path that loads the existing pool, visits every configured source, produces dated event candidates, compares the pool and writes a report/manifest with explicit per-source outcomes.
@@ -168,3 +168,12 @@ This is a code-level inventory of the active reference branch, not a claim that 
 ## Current next action
 
 Do not fix the 28-day limit as a one-off patch on the reference branch. First implement a shared contract/configuration and a small testable Process A vertical slice on `redesign/workflow-contract`. Keep the existing collectors as adapters where useful, then test the new path against captured examples and controlled failure cases before wiring the full workflow.
+
+
+## Live implementation checkpoint (2026-10-15)
+
+- Current authoritative pool is 847 unique names, following a manually reviewed 14-artist addition to the previous 833-row pool. Preserve both dated backups and the manual decision ledger.
+- Initial Process A normal and simulated-failure sweeps demonstrated structurally valid PARTIAL reports, but the simulated run also exposed 103 out-of-scope event rows from Skiddle safety-net links to unrelated cities/venues. That is a research correctness failure, despite a green structural validator.
+- The URL-scope fix in commit `12376d0dd2d230730770b2787296e19667d4d336` restricts Skiddle discovery to the configured city and venue path; tests include a Cardiff-event integration regression. The latest test run `38739200928` passed 135 tests.
+- Full-sweep runs are queued/running to validate the fix against real pages. Do not accept the fix based only on tests; require a fresh report with all 20 sources and 847 artists represented and zero out-of-scope event rows.
+- External safety-net source coverage is still not equivalent to official calendar coverage. All 20 `calendar_coverage_verified` flags must remain false until a separately defined manual/independent verification procedure is actually satisfied.
