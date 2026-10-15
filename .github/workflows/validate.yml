@@ -165,7 +165,7 @@ jobs:
           path: artifacts/event-candidates
       - name: Inspect event detail pages and bounded same-host links
         run: |
-          python scripts/inspect_event_links.py --links artifacts/event-candidates/event_link_candidates.csv --sources config/venue_sources.csv --out-dir artifacts/event-page-inspection --max-pages-per-venue 20 --max-depth 2
+          python scripts/inspect_event_links.py --links artifacts/event-candidates/event_link_candidates.csv --sources config/venue_sources.csv --out-dir artifacts/event-page-inspection --max-pages-per-venue 50 --max-depth 3
       - name: Preserve event-page snapshots and crawl audit
         if: always()
         uses: actions/upload-artifact@v4
