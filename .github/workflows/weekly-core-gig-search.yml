@@ -1,6 +1,16 @@
 name: Weekly Riley & Coe Core Gig Search
 
 on:
+  push:
+    branches:
+      - rebuild/core-gig-finder
+    paths:
+      - '.github/workflows/weekly-core-gig-search.yml'
+      - 'scripts/run_core_search.py'
+      - 'scripts/discover_event_candidates.py'
+      - 'config/core_venues.csv'
+      - 'config/artist_aliases.csv'
+      - 'data/artist_pool.csv'
   workflow_dispatch:
   schedule:
     - cron: "0 8 * * 1"
@@ -25,6 +35,9 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+
+      - name: Run regression tests for the existing pipeline
+        run: python -m unittest discover -s tests -v
 
       - name: Confirm current pool and prepare 14-day window
         id: window
