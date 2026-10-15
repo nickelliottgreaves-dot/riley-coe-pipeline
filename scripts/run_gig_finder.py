@@ -78,6 +78,29 @@ def run_stage(name: str, command: list[str], out_dir: Path, results: list[dict[s
     })
 
 
+def prepare_source_registry(
+    source_path: Path,
+    out_dir: Path,
+    simulate_failure_venue: str | None = None,
+) -> tuple[Path, str | None]:
+    """Return collector input registry, optionally injecting one controlled failure."""
+    if not simulate_failure_venue:
+        return source_path, None
+    rows = read_csv(source_path)
+    target_key = normalize_key(simulate_failure_venue)
+    matches = [row for row in rows if normalize_key(row.get("venue", "")) == target_key]
+    if len(matches) != 1:
+        raise ValueError(f"Simulated failure venue must identify exactly one configured source: {simulate_failure_venue}")
+    selected = matches[0]
+    original_url = selected.get("source_url", "")
+    selected["source_url"] = "http://127.0.0.1:9/simulated-source-failure"
+    selected["source_status"] = "simulated_failure"
+    selected["notes"] = (selected.get("notes", "") + " | Acceptance-test-only simulated fetch failure; original URL: " + original_url).strip(" |")
+    out_path = out_dir / "source_registry_for_run.csv"
+    write_csv(out_path, SOURCE_FIELDS, rows)
+    return out_path, selected.get("venue", simulate_failure_venue)
+
+
 def combine_venue_coverage(
     sources: list[dict[str, str]],
     page_rows: list[dict[str, str]],
@@ -143,6 +166,7 @@ def main() -> int:
     parser.add_argument("--out-dir", type=Path, help="Unique output directory; defaults under artifacts/runs")
     parser.add_argument("--previous-successful-run", default="unknown/not established")
     parser.add_argument("--run-id", default=os.environ.get("GITHUB_RUN_ID", ""))
+    parser.add_argument("--simulate-source-failure", help="Inject a deterministic fetch failure for one configured venue; acceptance testing only.")
     args = parser.parse_args()
 
     contract = load_contract()
@@ -167,6 +191,13 @@ def main() -> int:
     sources_path = ROOT / contract["venue_sources_path"]
     pool_path = ROOT / contract["artist_pool_path"]
     sources = read_csv(sources_path)
+    try:
+        collector_sources_path, simulated_failure_venue = prepare_source_registry(
+            sources_path, out_dir, args.simulate_source_failure
+        )
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
     stage_results: list[dict[str, str]] = []
 
     venue_dir = out_dir / "venue_pages"
@@ -178,11 +209,11 @@ def main() -> int:
 
     py = sys.executable
     run_stage("venue_page_inventory", [
-        py, "scripts/collect_venue_pages.py", "--sources", str(sources_path),
+        py, "scripts/collect_venue_pages.py", "--sources", str(collector_sources_path),
         "--out-dir", str(venue_dir),
     ], out_dir, stage_results)
     run_stage("event_candidate_discovery", [
-        py, "scripts/discover_event_candidates.py", "--sources", str(sources_path),
+        py, "scripts/discover_event_candidates.py", "--sources", str(collector_sources_path),
         "--start", start.isoformat(), "--end", end.isoformat(), "--out-dir", str(discovery_dir),
     ], out_dir, stage_results)
 
@@ -191,7 +222,7 @@ def main() -> int:
     run_stage("event_page_inspection", [
         py, "scripts/inspect_event_links.py",
         "--links", str(discovery_dir / "event_link_candidates.csv"),
-        "--sources", str(sources_path), "--start", start.isoformat(), "--end", end.isoformat(),
+        "--sources", str(collector_sources_path), "--start", start.isoformat(), "--end", end.isoformat(),
         "--max-pages-per-venue", "120", "--max-depth", "3", "--out-dir", str(inspection_dir),
     ], out_dir, stage_results)
     ensure_csv(inspection_dir / "event_page_inspection.csv", INSPECTED_FIELDS)
@@ -205,7 +236,7 @@ def main() -> int:
         py, "scripts/check_regression_artists.py", "--seeds", str(pool_path),
         "--venue-snapshots", str(venue_dir / "page_text"),
         "--event-snapshots", str(inspection_dir / "snapshots"),
-        "--venues", str(sources_path), "--out", str(pool_page_matches),
+        "--venues", str(collector_sources_path), "--out", str(pool_page_matches),
     ], out_dir, stage_results)
     ensure_csv(pool_page_matches, ["artist", "searched", "result", "evidence_url", "notes"])
     pool_rows = read_csv(pool_path)
@@ -262,7 +293,11 @@ def main() -> int:
     manifest = build_manifest(
         run_date=run_date, window_start=start,
         previous_successful_run=args.previous_successful_run,
-        researcher_notes="Independent gig-finder run. Candidates are unverified; calendar completeness is not inferred from fetch success.",
+        researcher_notes=(
+            "Acceptance-test run with simulated source failure for " + simulated_failure_venue
+            if simulated_failure_venue else
+            "Independent gig-finder run. Candidates are unverified; calendar completeness is not inferred from fetch success."
+        ),
         run_id=run_id, branch=os.environ.get("GITHUB_REF_NAME", "local"),
         commit=os.environ.get("GITHUB_SHA", "unknown"), contract=contract,
     )
@@ -294,6 +329,7 @@ def main() -> int:
         "artist_event_coverage_rows": len(artist_coverage),
         "candidate_match_rows": len(matches),
         "out_of_scope_event_rows": len(out_of_scope_rows),
+        "simulated_source_failure": simulated_failure_venue,
         "verified_event_rows": sum((row.get("verified") or "").casefold() == "true" for row in matches),
         "stage_failures": sum(row["status"] != "success" for row in stage_results),
         "source_outcome_counts": source_outcome_counts,
@@ -315,6 +351,7 @@ def main() -> int:
         "pool_artist_count": registry_check["artist_count"],
         "candidate_match_rows": len(matches),
         "out_of_scope_event_rows": len(out_of_scope_rows),
+        "simulated_source_failure": simulated_failure_venue,
         "stage_failures": sum(row["status"] != "success" for row in stage_results),
         "output_directory": str(out_dir),
         "note": "A valid PARTIAL report is the expected result when any source is incomplete; no candidate is marked verified.",
