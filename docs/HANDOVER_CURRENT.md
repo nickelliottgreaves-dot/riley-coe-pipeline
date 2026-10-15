@@ -504,3 +504,17 @@ Do not merge without the user's approval. Once approved and merged, run one manu
 ## Final normal-sweep check on the clean deployment branch
 
 The clean branch has passed the simulated-source-failure acceptance run [38745828682](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38745828682) and latest unit tests [38746347848](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38746347848). This final handover commit triggers a **normal** live sweep on `deploy/weekly-gig-finder-clean`, so the exact PR head is tested without the simulated failure. Inspect the artifact for the same 20/847 coverage, seven candidate rows, zero out-of-scope rows, and a reconciled failure ledger. If it passes, update PR #9's acceptance evidence and wait for user approval; do not merge autonomously.
+
+
+## Final normal live sweep completed (clean deployment branch)
+
+Run [38746448504](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38746448504) completed successfully on the clean deployment branch. Artifact `riley-coe-independent-gig-finder-38746448504` (ID `11979575941`) was inspected.
+
+- Reporting window: 2026-10-15 through 2026-11-11 (28 inclusive dates).
+- 20 configured source rows and 20 coverage rows; 847/847 artist page searches and 847/847 dated-event comparisons.
+- Seven candidate matches; zero out-of-scope event rows; zero automated rows marked verified.
+- 21 failed-page ledger rows exactly match 21 failures in the crawl audit. No static media URLs appear in the failure ledger.
+- 19 sources are `checked_in_captured_scope`; Cobalt Studios remains `partial` because one same-host detail URL returns 404. All 20 `calendar_coverage_verified` flags remain false.
+- All jobs completed successfully and the report validator passed. This means the PARTIAL report is structurally valid; it does not establish exhaustive calendar coverage.
+
+**Release status:** PR #9 is open, based on `main`, mergeable and clean. PRs #5, #6, #7 and #8 are closed unmerged as superseded. No changes have been merged. The next action requires user review/approval of PR #9. After merge, manually dispatch the workflow on `main` once and inspect the deployed artifacts before relying on the Monday schedule.
