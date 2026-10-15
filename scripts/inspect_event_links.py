@@ -331,12 +331,14 @@ def main():
                 page_title=" ".join(" ".join(p.title).split())
                 snap_name=hashlib.sha1(url.encode()).hexdigest()[:14]+".txt"
                 (snapdir/snap_name).write_text("SOURCE: "+url+"\nVENUE: "+venue+"\n\n"+visible+"\n",encoding="utf-8")
-                found=0
+                event_objects=[]
                 for raw in p.scripts:
                     try: data=json.loads(raw)
                     except (ValueError,json.JSONDecodeError): continue
                     for ev in objects(data):
-                        found+=1
+                        if not is_event_object(ev):
+                            continue
+                        event_objects.append(ev)
                         name=clean(ev.get("name")); start=clean(ev.get("startDate"))
                         perf=clean(ev.get("performer") or ev.get("performers"))
                         offers=ev.get("offers") or []; offers=offers if isinstance(offers,list) else [offers]
@@ -347,7 +349,8 @@ def main():
                             if o.get("priceCurrency"): currencies.append(str(o["priceCurrency"]))
                             if o.get("availability"): avail.append(clean(o["availability"]).split("/")[-1])
                         all_rows.append({"venue":venue,"page_url":url,"http_status":status,"content_type":ctype,"page_title":page_title,"event_title":name,"event_date":start[:10],"performer_names":perf,"price":"; ".join(sorted(set(prices))),"currency":"; ".join(sorted(set(currencies))),"availability":"; ".join(sorted(set(avail))),"event_jsonld_found":"true","visible_text_snapshot":f"snapshots/{snap_name}","verified":"false","status":"structured_candidate_needs_review","notes":"Structured data is candidate evidence only; independently verify event, exact date, room, billing/support, price and ticket status."+( " HTML truncated." if truncated else "")})
-                if not found:
+                listing_events=extract_visible_listing_events(visible)
+                if not event_objects:
                     visible_event=extract_visible_event(page_title,visible)
                     if visible_event:
                         all_rows.append({"venue":visible_event["venue"] or venue,"page_url":url,"http_status":status,"content_type":ctype,"page_title":page_title,"event_title":visible_event["event_title"],"event_date":visible_event["event_date"],"performer_names":visible_event["performer_names"],"price":visible_event["price"],"currency":visible_event["currency"],"availability":visible_event["availability"],"event_jsonld_found":"false","visible_text_snapshot":f"snapshots/{snap_name}","verified":"false","status":"visible_event_candidate_needs_review","notes":visible_event["notes"]+( " HTML truncated." if truncated else "")})
