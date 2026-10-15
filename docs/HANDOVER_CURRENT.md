@@ -64,18 +64,40 @@ Run [38733027855](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/a
 - 833 pool artists; 833 page-search rows and 833 dated-event comparison rows.
 - 580 pages inspected, 4 page failures and 2 venue crawl caps.
 - 34 candidate match rows, 14 pool artists with matches, 0 verified events.
-- The initial validator reported only four partial/not-checked sources; a later audit found that it was not warning clearly enough that **all 20 calendars remained independently unverified**. This warning has been corrected.
-- **Critical correctness defect found:** many of the 34 matches were false positives. The Songkick Cluny/Cluny 2 venue crawls followed city metro-area and artist pages, then attributed those unrelated events to Cluny/Cluny 2. Examples included Arab Strap at Howard Assembly Room, A Certain Ratio at Brudenell Social Club, and acts at Brighton/Edinburgh venues. The crawler also emitted duplicate event/artist matches from discovery and inspection.
+- **Critical correctness defect found:** many of the 34 matches were false positives. The Songkick Cluny/Cluny 2 venue crawls followed city metro-area and artist pages, then attributed unrelated events to Cluny/Cluny 2. Examples included Arab Strap at Howard Assembly Room, A Certain Ratio at Brudenell Social Club, and acts at Brighton/Edinburgh venues. The crawler also emitted duplicate event/artist matches from discovery and inspection.
 - The first report must not be used as a gig recommendation list. Its value was diagnostic: it exposed a source-scope bug that green jobs and schema validation alone did not catch.
 
-### Fixes now on the redesign branch (tested)
+## Second independent live sweep: source-scope fixes passed initial validation
+
+Run [38734330424](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38734330424) completed successfully on the redesign branch. It ran the new independent gig finder and its report validator; the legacy all-in-one collection jobs were skipped as intended.
+
+**Measured result:**
+- Reporting window: **15 October–11 November 2026** (28 inclusive dates).
+- 20 configured source rows, 20 source coverage rows.
+- 833 artist-pool names; 833 page-search rows and 833 dated-event comparison rows.
+- 5 candidate match rows across 4 event dates/acts; **0 verified matches**.
+- 0 out-of-scope event rows in the final candidate list (Songkick metro/artist pages were blocked before inspection).
+- 0 collector stage exit failures; 4 individual detail-page fetch failures across Cobalt Studios (1) and The Globe (3). Those two sources are marked partial.
+- No venue crawl cap was reached in this run.
+- The validator passed structural integrity with no errors, and correctly warned that **all 20 source calendars remain independently unverified**. This is a valid PARTIAL candidate package, not proof of exhaustive coverage.
+
+The five candidate rows to review from the artifact are:
+1. 17 Oct — Cabaret Voltaire at Boiler Shop (official Boiler Shop event page; candidate, sold out).
+2. 23 Oct — The Wedding Present at Boiler Shop (official page; candidate, sold out).
+3. 23 Oct — Radhika associated with The Wedding Present bill at Boiler Shop (support-role candidate; sold out).
+4. 10 Nov — Teenage Fanclub at Boiler Shop (official page; candidate, sold out).
+5. 9 Nov — Barbican Estate at The Cluny (Songkick safety-net source; needs independent confirmation against the venue's own listings).
+
+The artifact is `riley-coe-independent-gig-finder-38734330424` (artifact ID `11972410390`). All candidate rows remain `verified=false`; blank price fields have not been inferred.
+
+### Fixes on the redesign branch, with regression tests
 
 - `scripts/inspect_event_links.py` restricts Songkick crawling to the configured venue calendar and concert URLs explicitly associated with that venue; metro-area and artist pages are rejected. External skipped links remain counted in the audit.
 - `scripts/match_pool_to_window_events.py` checks an explicit `@ Venue` suffix against the configured local venue registry, excludes non-local locations into `out_of_scope_event_candidates.csv`, corrects known local venue labels, and deduplicates same-event matches across source URLs while preferring detail-page evidence.
-- `scripts/run_gig_finder.py` now records accurate page-fetch outcomes, source-outcome counts and out-of-scope candidate counts.
-- `scripts/validate_gig_finder_report.py` explicitly warns when source calendars have not been independently verified.
+- `scripts/run_gig_finder.py` records actual page-fetch outcomes, source-outcome counts and out-of-scope candidate counts.
+- `scripts/validate_gig_finder_report.py` warns when source calendars have not been independently verified.
 - Regression tests cover Songkick metro/artist-page exclusion, explicit non-local venue rejection, local venue correction, duplicate event collapse and out-of-scope audit output.
-- Latest tested code commit `1701aed490bbbfd86b482ac11964c1e01e7b000a`: 121 tests passed in run 38734218011.
+- Latest test run [38734218011](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38734218011): **121 tests passed**. The live sweep run also passed the unit-tests job.
 
 ## Key redesign decision
 
@@ -98,9 +120,10 @@ Do not patch the legacy assembler/validator separately again. Build two independ
 
 ## Current immediate next actions
 
-1. **Immediate:** this handover commit intentionally includes `[full-sweep]` to trigger the second live run of `scripts/run_gig_finder.py` on the redesign branch. Check its run ID and artifact; the old all-in-one collection jobs must be skipped on this branch.
-2. Inspect the report and out-of-scope audit. Confirm that no event at an unrelated city/venue is attributed to Cluny/Cluny 2, duplicates are reduced, all 20 source rows and 833 artist coverage rows exist, and the validator warns that calendar coverage remains unverified. Do not call the report complete.
-3. If the fix behaves correctly, add no more speculative parser changes. Use the observed matches for targeted event-by-event verification and document any remaining specific defect with a regression test.
+1. Independently verify the five candidate rows from run 38734330424 against the original event sources, particularly Barbican Estate at The Cluny; check date, billing/support, price and ticket status where available. Keep all matches unverified until this is done.
+2. Add a deterministic simulated-source-failure acceptance test to prove a source failure still yields a valid PARTIAL report with a source-level failure record.
+3. Run the independent gig finder a second time after those changes, then compare outputs and confirm repeatability. Do not count the first sweep as passing acceptance because it exposed false positives.
+4. Only after Process A passes these checks, implement and test the separate BBC/RadioFiles artist-pool updater. Do not wire the legacy assembler into the new path.
 4. Audit the remaining legacy scripts against `docs/WORKFLOW_REDESIGN_SPEC.md`; keep `scripts/run_core_search.py` as reference only because it covers nine core venues, not the required 20.
 5. After the candidate finder has a reliable partial-report contract, implement and test the separate BBC/RadioFiles artist-pool updater. Do not wire the legacy assembler into the new path.
 6. After each meaningful stage, update this handover with latest run ID/conclusion, tests, blockers and exact next action. Never add `[full-sweep]` to ordinary documentation or code commits unless a live scrape is intentional.
