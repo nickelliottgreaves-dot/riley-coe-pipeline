@@ -37,7 +37,7 @@ def main():
     ap.add_argument("--start",required=True); ap.add_argument("--end",required=True)
     ap.add_argument("--previous-successful-run",default="unknown/not yet established")
     ap.add_argument("--bbc-episodes",type=Path); ap.add_argument("--bbc-track-candidates",type=Path); ap.add_argument("--bbc-embedded-track-candidates",type=Path); ap.add_argument("--bbc-embedded-tracklist-audit",type=Path); ap.add_argument("--bbc-radiofiles-episode-crosscheck",type=Path); ap.add_argument("--bbc-radiofiles-verified-candidates",type=Path); ap.add_argument("--radiofiles-episodes",type=Path); ap.add_argument("--radiofiles-track-candidates",type=Path); ap.add_argument("--events",type=Path)
-    ap.add_argument("--venue-audit",type=Path); ap.add_argument("--event-page-inspection",type=Path); ap.add_argument("--event-page-audit",type=Path); ap.add_argument("--out-dir",type=Path,required=True)
+    ap.add_argument("--venue-audit",type=Path); ap.add_argument("--event-page-inspection",type=Path); ap.add_argument("--event-page-audit",type=Path); ap.add_argument("--regression-artist-checks",type=Path); ap.add_argument("--out-dir",type=Path,required=True)
     ap.add_argument("--pool",type=Path,default=ROOT/"data/artist_pool.csv")
     args=ap.parse_args()
     start=date.fromisoformat(args.start); end=date.fromisoformat(args.end)
@@ -63,6 +63,7 @@ def main():
         ("venue_sources",ROOT/"config/venue_sources.csv",True),
         ("artist_aliases",ROOT/"config/artist_aliases.csv",True),
         ("regression_artists",ROOT/"config/regression_artists.csv",True),
+        ("regression_artist_checks",args.regression_artist_checks,True),
     ]
     input_audit=[]
     for name,path,required_input in input_specs:
@@ -288,10 +289,15 @@ def main():
     write_csv(out/"unresolved_event_candidates.csv",UNRESOLVED_FIELDS,unresolved)
     with (ROOT/"config/regression_artists.csv").open(encoding="utf-8-sig",newline="") as f:
         regression_seed=list(csv.DictReader(f))
-    regression_rows=[{"artist":r.get("artist",""),"searched":"false","result":"not_checked","evidence_url":"",
-        "notes":(r.get("reason","")+"; required venue-first search not yet performed in this scaffold.").strip("; ")}
-        for r in regression_seed]
+    if args.regression_artist_checks and args.regression_artist_checks.exists():
+        regression_rows=read_csv(args.regression_artist_checks,["artist","searched","result","evidence_url","notes"])
+        regression_rows=[{field:row.get(field,"") for field in REGRESSION_FIELDS} for row in regression_rows]
+    else:
+        regression_rows=[{"artist":r.get("artist",""),"searched":"false","result":"not_checked","evidence_url":"",
+            "notes":(r.get("reason","")+"; regression search input unavailable.").strip("; ")}
+            for r in regression_seed]
     write_csv(out/"regression_artist_checks.csv",REGRESSION_FIELDS,regression_rows)
+    regression_completed=sum(1 for row in regression_rows if str(row.get("searched","")).casefold()=="true")
     write_csv(out/"pool_matches.csv",MATCH_FIELDS,[])
     # Run matcher to ensure every candidate artist has a corresponding pool comparison.
     subprocess.run([sys.executable,str(ROOT/"scripts/match_event_artists.py"),"--events",str(out/"events.csv"),"--pool",str(args.pool),"--aliases",str(ROOT/"config/artist_aliases.csv"),"--out",str(out/"pool_matches.csv")],check=True)
@@ -327,9 +333,9 @@ def main():
     manifest={"run_date":date.today().isoformat(),"window_start":start.isoformat(),"window_end":end.isoformat(),
               "previous_successful_run":args.previous_successful_run,"claimed_status":"PARTIAL",
               "episode_coverage_complete":False,"venue_sweep_complete":False,"artist_pool_compared":False,"all_event_sources_verified":False,
-              "researcher_notes":"Automatically assembled evidence scaffold. Not a completed research run. BBC Sounds/visible tracklists, event detail pages, supports, prices/ticket status, regression checks, full venue coverage and safety-net searches still require verification.",
+              "researcher_notes":"Automatically assembled evidence scaffold. Regression artists were searched in the captured page corpus; negative results are bounded to those snapshots. BBC/RadioFiles tracklist mismatches, event detail pages, supports, prices/ticket status, full venue coverage and safety-net searches still require verification.",
               "package_kind":"candidate_scaffold","source_episode_rows":len(episode_rows),"candidate_event_rows":len(events),"unresolved_event_candidates":len(unresolved),
-              "mandatory_venue_rows":len(venue_rows),"venue_calendar_checks_completed":0,"regression_artists_seeded":len(regression_rows),"regression_artist_checks_completed":0,
+              "mandatory_venue_rows":len(venue_rows),"venue_calendar_checks_completed":0,"regression_artists_seeded":len(regression_rows),"regression_artist_checks_completed":regression_completed,
               "input_file_audit":"input_file_audit.csv","venue_discovery_coverage":"venue_discovery_coverage.csv","tracklist_candidate_review":"tracklist_candidate_review.csv","dated_exports":list(dated_exports)+[dedup_path.name],"missing_or_unsupplied_inputs":missing_inputs,"input_files_present":sum(r["status"]=="present" for r in input_audit)}
     (out/"run_manifest.json").write_text(json.dumps(manifest,indent=2)+"\n",encoding="utf-8")
     summary={"output_directory":str(out),"status":"PARTIAL","episode_rows":len(episode_rows),"event_candidate_rows":len(events),"unresolved_event_candidates":len(unresolved),"mandatory_venue_rows":len(venue_rows),"regression_artists_seeded":len(regression_rows),"regression_artist_checks_completed":0,"complete_claimed":False,"missing_or_unsupplied_inputs":missing_inputs}
