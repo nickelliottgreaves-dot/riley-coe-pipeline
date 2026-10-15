@@ -312,10 +312,16 @@ def main():
         all_rows=[]
         audits=[]
         queue=deque(); queued=set(); visited=set(); failed=0; added=0; cap=False
+        canonical_urls=[]
         for seed_url in urls:
             canonical=canonicalize_url(seed_url)
-            if canonical not in queued:
-                queue.append((canonical,0)); queued.add(canonical)
+            if canonical not in canonical_urls:
+                canonical_urls.append(canonical)
+        # The official source page is first. Candidate links are a fallback only
+        # for venues whose official page exposes no usable event structure.
+        if canonical_urls:
+            queue.append((canonical_urls[0],0)); queued.add(canonical_urls[0])
+        fallback_seed_urls=canonical_urls[1:]
         source_hosts={urlparse(u).netloc for u in urls if urlparse(u).netloc}
         while queue:
             url,depth=queue.popleft()
@@ -350,8 +356,10 @@ def main():
                             if o.get("availability"): avail.append(clean(o["availability"]).split("/")[-1])
                         all_rows.append({"venue":venue,"page_url":url,"http_status":status,"content_type":ctype,"page_title":page_title,"event_title":name,"event_date":start[:10],"performer_names":perf,"price":"; ".join(sorted(set(prices))),"currency":"; ".join(sorted(set(currencies))),"availability":"; ".join(sorted(set(avail))),"event_jsonld_found":"true","visible_text_snapshot":f"snapshots/{snap_name}","verified":"false","status":"structured_candidate_needs_review","notes":"Structured data is candidate evidence only; independently verify event, exact date, room, billing/support, price and ticket status."+( " HTML truncated." if truncated else "")})
                 listing_events=extract_visible_listing_events(visible)
+                visible_event_found=False
                 if not event_objects:
                     visible_event=extract_visible_event(page_title,visible)
+                    visible_event_found=visible_event is not None
                     if visible_event:
                         all_rows.append({"venue":visible_event["venue"] or venue,"page_url":url,"http_status":status,"content_type":ctype,"page_title":page_title,"event_title":visible_event["event_title"],"event_date":visible_event["event_date"],"performer_names":visible_event["performer_names"],"price":visible_event["price"],"currency":visible_event["currency"],"availability":visible_event["availability"],"event_jsonld_found":"false","visible_text_snapshot":f"snapshots/{snap_name}","verified":"false","status":"visible_event_candidate_needs_review","notes":visible_event["notes"]+( " HTML truncated." if truncated else "")})
                     else:
@@ -361,6 +369,10 @@ def main():
                                 all_rows.append({"venue":candidate["venue"],"page_url":url,"http_status":status,"content_type":ctype,"page_title":page_title,"event_title":candidate["event_title"],"event_date":candidate["event_date"],"performer_names":candidate["performer_names"],"price":candidate["price"],"currency":candidate["currency"],"availability":candidate["availability"],"event_jsonld_found":"false","visible_text_snapshot":f"snapshots/{snap_name}","verified":"false","status":"visible_event_candidate_needs_review","notes":candidate["notes"]+( " HTML truncated." if truncated else "")})
                         else:
                             all_rows.append({"venue":venue,"page_url":url,"http_status":status,"content_type":ctype,"page_title":page_title,"event_title":"","event_date":"","performer_names":"","price":"","currency":"","availability":"","event_jsonld_found":"false","visible_text_snapshot":f"snapshots/{snap_name}","verified":"false","status":"page_text_needs_review","notes":"No Event JSON-LD or reliable visible event-card fields found; inspect saved visible text manually."+( " HTML truncated." if truncated else "")})
+                if depth==0 and not event_objects and not listing_events and not visible_event_found:
+                    for seed_url in fallback_seed_urls:
+                        if seed_url not in visited and seed_url not in queued:
+                            queue.append((seed_url,1)); queued.add(seed_url)
                 if depth<args.max_depth:
                     listing_dates=[]
                     for candidate in listing_events:
@@ -384,7 +396,7 @@ def main():
                             if listing_events:
                                 if not navigation and not any(event_link_matches(candidate,href,txt) for candidate in in_window):
                                     continue
-                            elif event_objects and not navigation:
+                            elif (event_objects or visible_event_found) and not navigation:
                                 continue
                             elif not event_objects and not likely(href,txt):
                                 continue
