@@ -81,7 +81,7 @@ jobs:
           mkdir -p artifacts/bbc-sounds
           START=$(python -c "from datetime import date,timedelta; print((date.today()-timedelta(days=21)).isoformat())")
           END=$(python -c "from datetime import date; print(date.today().isoformat())")
-          python scripts/collect_bbc_sounds.py --start "$START" --end "$END" --out-dir artifacts/bbc-sounds
+          python scripts/collect_bbc_sounds.py --start "$START" --end "$END" --out-dir artifacts/bbc-sounds --radiofiles-discovery
       - name: Preserve BBC episode inventory, snapshots and audit
         if: always()
         uses: actions/upload-artifact@v4
