@@ -16,7 +16,7 @@ User explicitly wants frank status updates if things are not going to plan, no e
 - Repository: `nickelliottgreaves-dot/riley-coe-pipeline`
 - Reference/legacy development branch: `rebuild/core-gig-finder`
 - New redesign branch: `redesign/workflow-contract`
-- Last tested implementation commit: `3331f7e4c22e5fc53d59289f2785cea4f4759410` (**123 tests passed**); a manual review ledger is preserved. Both normal and simulated-failure end-to-end runs have now passed.
+- Latest unit-test commit: `9be67cf15dbb85ff81b878a5d629e68d9133e949` (**126 tests passed**); workflow integration for the independent artist-pool updater was added in `ab1f093ba0bdc22dbef6b99ebaab382ff602ff92`. Both normal and simulated-failure gig-finder runs have passed.
 - Authoritative pool: `data/artist_pool.csv`, 833 unique names.
 - Backup: `data/artist_pool_backup_20261015.csv` (preserves 747-row baseline).
 - Dated update audit says 86 additions came from eight exact BBC/RadioFiles full-tracklist matches; three mismatched episodes and 15 fuzzy-name collisions remained review-only.
@@ -112,6 +112,14 @@ Run [38735167465](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/a
 
 **Process A milestone:** the new candidate finder has passed one normal full run and one deliberate source-failure run. This is evidence of a repeatable PARTIAL-report path, not proof of exhaustive venue coverage or a complete verified gig report.
 
+## Process B implementation: independent artist-pool updater
+
+- Added `scripts/run_artist_pool_updater.py`: runs BBC Sounds inventory, RadioFiles tracklist collection, pool reconciliation, exact BBC/RadioFiles cross-check and review-only proposal generation as independent stages.
+- It writes a dated manifest, per-stage logs/results and a summary. It hashes the authoritative `data/artist_pool.csv` before and after; any mutation is treated as a hard failure.
+- Added `scripts/validate_artist_pool_update.py`: validates the report, pool hashes/counts, proposal/backup presence and preservation of all existing artists. Collection failures can still yield a valid PARTIAL report; the authoritative pool is never edited automatically.
+- Added tests for review-only proposal integrity, baseline preservation, explicit no-mutation, and failure injection. Latest unit test run [38735698804](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38735698804): **126 tests passed**.
+- Added the `independent-artist-pool-updater` workflow job, gated to the redesign branch and explicit full sweeps/scheduled/manual runs. It is independent of the gig-finder job and does not invoke the legacy assembler.
+
 ## Key redesign decision
 
 Do not patch the legacy assembler/validator separately again. Build two independent processes around one contract:
@@ -133,10 +141,11 @@ Do not patch the legacy assembler/validator separately again. Build two independ
 
 ## Current immediate next actions
 
-1. Resolve the remaining Cluny source issue: confirm Barbican Estate on an official Cluny listing if possible, or keep it explicitly third-party-only.
-2. Start Process B as a separate BBC Sounds/RadioFiles artist-pool updater job on the redesign branch. Reuse the existing collectors and exact cross-check/proposal logic, but keep it independent of Process A and do not mutate the authoritative pool automatically.
-3. Keep all venue coverage caveats visible; no source calendar has been independently proven exhaustive, and the overall report must remain PARTIAL until verification criteria are met.
-4. After Process B has a tested proposal output, run the combined redesign workflow twice and then review whether the branch is ready for a pull request. Do not merge to `main` until the acceptance criteria are satisfied.
+1. **Immediate:** this handover commit intentionally includes `[full-sweep]` to run both Process A and Process B together. Check both job conclusions and artifacts; the legacy jobs should remain skipped on the redesign branch.
+2. Inspect the artist-updater output: exact cross-check counts, incomplete/unavailable episodes, additions-only CSV, fuzzy/ambiguous review CSV, backup, and unchanged authoritative pool hash. A proposal is review-only, never an automatic pool update.
+3. Resolve the remaining Cluny source issue: confirm Barbican Estate on an official Cluny listing if possible, or keep it explicitly third-party-only.
+4. Keep all venue coverage caveats visible; no source calendar has been independently proven exhaustive, and the gig report must remain PARTIAL until verification criteria are met.
+5. If both independent jobs pass, perform another combined run and then review whether the branch is ready for a pull request. Do not merge to `main` until acceptance criteria are satisfied.
 4. Audit the remaining legacy scripts against `docs/WORKFLOW_REDESIGN_SPEC.md`; keep `scripts/run_core_search.py` as reference only because it covers nine core venues, not the required 20.
 5. After the candidate finder has a reliable partial-report contract, implement and test the separate BBC/RadioFiles artist-pool updater. Do not wire the legacy assembler into the new path.
 6. After each meaningful stage, update this handover with latest run ID/conclusion, tests, blockers and exact next action. Never add `[full-sweep]` to ordinary documentation or code commits unless a live scrape is intentional.
