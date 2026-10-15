@@ -122,7 +122,7 @@ def episode_urn(html):
 
 def fetch_rms_tracklist(urn):
     """Fetch BBC's public RMS track-list module for an episode URN."""
-    url="https://rms.api.bbc.co.uk/v2/my/experience/playable/"+urn+"?show_tracklist=true"
+    url="https://rms.api.bbc.co.uk/v2/experience/playable/"+urn+"?show_tracklist=true"
     req=Request(url,headers={"User-Agent":UA,"Accept":"application/json"})
     with urlopen(req,timeout=25) as response:
         ctype=response.headers.get("Content-Type","")
