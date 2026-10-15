@@ -4,7 +4,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
-from inspect_event_links import main, extract_visible_listing_events
+from inspect_event_links import main, extract_visible_listing_events, allowed_source_scoped_url
 
 
 class StructuredDataFallbackTests(unittest.TestCase):
@@ -389,6 +389,75 @@ Book Tickets
             self.assertEqual(fetched, ["https://venue.example/events/"])
             summary = json.loads((out / "event_page_crawl_summary.json").read_text())
             self.assertEqual(summary["pages_inspected"], 1)
+
+
+    def test_songkick_venue_scope_rejects_metro_and_artist_pages(self):
+        source = "https://www.songkick.com/venues/17634-cluny/calendar"
+        self.assertTrue(allowed_source_scoped_url(source, source, "The Cluny"))
+        self.assertTrue(allowed_source_scoped_url(
+            source, "https://www.songkick.com/concerts/43399167-barbican-estate-at-cluny", "The Cluny"
+        ))
+        self.assertFalse(allowed_source_scoped_url(
+            source, "https://www.songkick.com/en/metro-areas/24577-uk-newcastle-upon-tyne", "The Cluny"
+        ))
+        self.assertFalse(allowed_source_scoped_url(
+            source, "https://www.songkick.com/artists/1234-example-band", "The Cluny"
+        ))
+        self.assertFalse(allowed_source_scoped_url(
+            source, "https://www.songkick.com/concerts/123-band-at-boiler-shop", "The Cluny"
+        ))
+
+    def test_songkick_crawl_does_not_attribute_metro_events_to_cluny(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            links = root / "links.csv"
+            sources = root / "sources.csv"
+            out = root / "out"
+            source = "https://www.songkick.com/venues/17634-cluny/calendar"
+            concert = "https://www.songkick.com/concerts/43399167-barbican-estate-at-cluny"
+            with links.open("w", encoding="utf-8", newline="") as f:
+                w = csv.DictWriter(f, fieldnames=["venue", "candidate_url", "link_text"])
+                w.writeheader()
+                w.writerow({"venue": "The Cluny", "candidate_url": "https://www.songkick.com/en/metro-areas/24577-uk-newcastle-upon-tyne", "link_text": "Newcastle events"})
+                w.writerow({"venue": "The Cluny", "candidate_url": "https://www.songkick.com/artists/1234-example-band", "link_text": "Example Band"})
+                w.writerow({"venue": "The Cluny", "candidate_url": concert, "link_text": "Barbican Estate at The Cluny"})
+                w.writerow({"venue": "The Cluny", "candidate_url": "https://www.songkick.com/concerts/123-band-at-boiler-shop", "link_text": "Band at Boiler Shop"})
+            with sources.open("w", encoding="utf-8", newline="") as f:
+                w = csv.DictWriter(f, fieldnames=["venue", "source_url"])
+                w.writeheader()
+                w.writerow({"venue": "The Cluny", "source_url": source})
+
+            fetched = []
+            calendar = (
+                '<title>The Cluny calendar</title>'
+                '<a href="/en/metro-areas/24577-uk-newcastle-upon-tyne">Newcastle events</a>'
+                '<a href="/artists/1234-example-band">Example Band</a>'
+                '<a href="/concerts/43399167-barbican-estate-at-cluny">Barbican Estate at The Cluny</a>'
+                '<a href="/concerts/123-band-at-boiler-shop">Band at Boiler Shop</a>'
+            )
+            detail = '<title>Barbican Estate at The Cluny</title><p>Mon 9 Nov 2026</p><p>The Cluny</p>'
+
+            def fake_fetch(url):
+                fetched.append(url)
+                if url == source:
+                    return 200, "text/html", calendar, False
+                if url == concert:
+                    return 200, "text/html", detail, False
+                raise AssertionError("Out-of-scope Songkick URL fetched: " + url)
+
+            with patch("inspect_event_links.fetch", side_effect=fake_fetch):
+                with patch("sys.argv", [
+                    "inspect_event_links.py", "--links", str(links),
+                    "--sources", str(sources), "--out-dir", str(out),
+                    "--start", "2026-10-15", "--end", "2026-11-11",
+                    "--delay", "0",
+                ]):
+                    self.assertEqual(main(), 0)
+
+            self.assertEqual(set(fetched), {source, concert})
+            rows = list(csv.DictReader((out / "event_page_inspection.csv").open(encoding="utf-8-sig")))
+            self.assertFalse(any("metro-areas" in row["page_url"] for row in rows))
+            self.assertFalse(any("/artists/" in row["page_url"] for row in rows))
 
 
 if __name__ == "__main__":
