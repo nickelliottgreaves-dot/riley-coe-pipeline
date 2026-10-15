@@ -111,7 +111,15 @@ jobs:
           SINCE=$(python -c "from datetime import date,timedelta; print((date.today()-timedelta(days=21)).isoformat())")
           UNTIL=$(python -c "from datetime import date; print(date.today().isoformat())")
           python scripts/collect_radiofiles.py --since "$SINCE" --until "$UNTIL" --out-dir artifacts/radiofiles --bbc-inventory artifacts/bbc-sounds-inventory/bbc_episode_inventory.csv
-      - name: Preserve RadioFiles tracklists, raw JSON and audit even when collection fails
+      - name: Reconcile RadioFiles artists against the preserved pool (review only)
+        if: always()
+        run: |
+          if [ -f artifacts/radiofiles/radiofiles_episode_inventory.csv ] && [ -f artifacts/radiofiles/radiofiles_track_candidates.csv ]; then
+            python scripts/reconcile_radiofiles_artists.py --pool data/artist_pool.csv --aliases config/artist_aliases.csv --episodes artifacts/radiofiles/radiofiles_episode_inventory.csv --tracks artifacts/radiofiles/radiofiles_track_candidates.csv --out-dir artifacts/radiofiles/reconciliation
+          else
+            echo "RadioFiles episode/track files unavailable; reconciliation skipped and the collection audit remains the evidence of failure."
+          fi
+      - name: Preserve RadioFiles tracklists, raw JSON, reconciliation and audit even when collection fails
         if: always()
         uses: actions/upload-artifact@v4
         with:
