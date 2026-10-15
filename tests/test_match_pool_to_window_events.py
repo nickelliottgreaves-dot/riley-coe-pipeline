@@ -78,6 +78,35 @@ class PoolWindowEventMatchTests(unittest.TestCase):
                 coverage=list(csv.DictReader(f))
             self.assertEqual(coverage[0]["result"],"no_exact_dated_candidate_match")
 
+    def test_short_artist_name_in_parenthetical_country_label_is_not_a_match(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            d=Path(tmp)
+            pool=d/"pool.csv"
+            with pool.open("w",newline="",encoding="utf-8") as f:
+                w=csv.DictWriter(f,fieldnames=["artist"]);w.writeheader();w.writerow({"artist":"Can"})
+            events=d/"events.csv"
+            with events.open("w",newline="",encoding="utf-8") as f:
+                w=csv.DictWriter(f,fieldnames=["event_date","venue","event_title","artist","source_url"]);w.writeheader()
+            url="https://venue.example/listing/jake-vaadeland-can"
+            inspected=d/"inspected.csv"
+            with inspected.open("w",newline="",encoding="utf-8") as f:
+                w=csv.DictWriter(f,fieldnames=["event_date","venue","event_title","performer_names","page_url","status"]);w.writeheader()
+                w.writerow({"event_date":"2026-10-20","venue":"Venue A",
+                    "event_title":"Jake Vaadeland & The Sturgeon River Boys (Can)","performer_names":"Jake Vaadeland; Rob Heron",
+                    "page_url":url,"status":"visible_event_candidate_needs_review"})
+            page_hits=d/"page_hits.csv"
+            with page_hits.open("w",newline="",encoding="utf-8") as f:
+                w=csv.DictWriter(f,fieldnames=["artist","searched","result","evidence_url","notes"]);w.writeheader()
+                w.writerow({"artist":"Can","searched":"true","result":"found_in_collected_pages","evidence_url":url,
+                    "notes":"Matching text: (Can)"})
+            out=d/"matches.csv"
+            with patch("sys.argv",["match_pool_to_window_events.py","--pool",str(pool),"--events",str(events),
+                "--inspected",str(inspected),"--pool-page-matches",str(page_hits),"--start","2026-10-15",
+                "--end","2026-10-28","--out",str(out)]):
+                self.assertEqual(main(),0)
+            with out.open(newline="",encoding="utf-8") as f: rows=list(csv.DictReader(f))
+            self.assertEqual(rows,[])
+
     def test_matches_only_exact_performer_names_inside_date_window(self):
         with tempfile.TemporaryDirectory() as tmp:
             d=Path(tmp)
