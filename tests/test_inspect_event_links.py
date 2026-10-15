@@ -233,8 +233,8 @@ Tickets"""
                 w.writerow({"venue":"Test Venue","source_url":"https://venue.example/whats-on"})
             def fake_fetch(url, *args, **kwargs):
                 if "broken" in url:
-                    raise RuntimeError("simulated single-page failure")
-                return 503,"text/plain","",False
+                    return 503,"text/plain","",False
+                return 200,"text/html","<html><head><title>Test Venue gigs</title></head><body>Nothing else listed</body></html>",False
             with patch.object(crawler,"fetch",side_effect=fake_fetch):
                 with patch("sys.argv",["inspect_event_links.py","--links",str(links),"--sources",str(sources),
                     "--out-dir",str(root/"out"),"--start","2026-10-15","--end","2026-10-28","--delay","0"]):
