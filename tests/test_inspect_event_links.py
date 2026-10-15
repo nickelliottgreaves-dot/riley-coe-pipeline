@@ -5,7 +5,7 @@ from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/"scripts"))
 import inspect_event_links as crawler
-from inspect_event_links import calendar_target_in_window, canonicalize_url, event_link_matches, event_matches_configured_venue, event_performer_candidate, extract_visible_event, extract_visible_listing_events, is_calendar_navigation, is_event_object, is_plausible_event_page_url, likely, main
+from inspect_event_links import calendar_target_in_window, canonicalize_url, event_link_matches, event_matches_configured_venue, event_performer_candidate, extract_citywide_guide_events, extract_visible_event, extract_visible_listing_events, is_calendar_navigation, is_event_object, is_plausible_event_page_url, likely, main
 
 class EventPageCrawlerTests(unittest.TestCase):
     def test_structured_events_from_other_cities_are_not_attributed_to_venue_calendar(self):
@@ -431,10 +431,10 @@ Fri 16 Oct 2026
 Ariana Grande Club
 Digital Newcastle
 Official event page"""
-        rows = extract_visible_listing_events(visible, "The Lubber Fiend")
+        rows = extract_citywide_guide_events(visible, date(2026, 10, 15), date(2026, 10, 28))
         self.assertEqual(len(rows), 2)
         self.assertEqual(rows[0]["event_title"], "Heaven 17 + Peter Coyle")
-        self.assertEqual(rows[0]["venue"], "The Cumberland Arms")
+        self.assertEqual(rows[0]["venue"], "Cumberland Arms")
         self.assertEqual(rows[1]["event_title"], "Byker Grave: Ye Gods + Pale World + Y Gwacter + Depletion")
         self.assertEqual(rows[1]["venue"], "The Lubber Fiend")
         self.assertEqual(rows[1]["performer_names"], "Ye Gods; Pale World; Y Gwacter; Depletion")

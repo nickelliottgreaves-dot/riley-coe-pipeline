@@ -372,19 +372,6 @@ def extract_visible_listing_events(visible_text, default_venue="", start_date=No
     ]}
     # Allow both article-bearing and article-free venue labels in cards.
     known_venues |= {key[3:] for key in list(known_venues) if key.startswith("the")}
-    # Citywide safety-net pages must retain the actual card venue and may
-    # only contribute events at one of the configured reporting venues.
-    reporting_venues={re.sub(r"[^a-z0-9]+","",name.casefold()) for name in [
-        "The Cluny","Cluny 2","Boiler Shop","Wylam Brewery","The Grove",
-        "Glasshouse International Centre for Music","Sage One","Sage Two",
-        "Cumberland Arms","The Cumberland Arms","Cobalt Studios","The Lubber Fiend","Think Tank? NCL",
-        "Newcastle University Students' Union","Little Buildings","O2 City Hall Newcastle",
-        "Riverside Newcastle","ZEROX Newcastle","The Newgate Social","Head of Steam Newcastle"
-    ]}
-    reporting_venues.update(re.sub(r"[^a-z0-9]+","",name.casefold()) for name in [
-        "The Glasshouse","Glasshouse","Sage Gateshead","Sage 1","Sage 2","O2 City Hall",
-        "Think Tank","Think Tank?","Newcastle University S.U.","NUSU","ZEROX"
-    ])
     def parsed_date(value):
         value=re.sub(r"(?i)(\d{1,2})(st|nd|rd|th)\b",r"\1",value.strip())
         value=re.sub(r"(?<!\d)['’](\d{2})\b",r"20\1",value)
@@ -488,31 +475,10 @@ def extract_visible_listing_events(visible_text, default_venue="", start_date=No
             forward_index=j
             break
         if forward_title and forward_index is not None:
-            # Listing guides put the actual venue immediately after the
-            # billed title. Do not attribute every card to the source row's
-            # configured venue merely because it was crawled for that venue.
-            card_venue=""
-            following=lines[forward_index+1:min(len(lines),forward_index+5)]
-            for pos,extra in enumerate(following):
-                if date_pattern.search(extra) or inline_date_title.match(extra):
-                    break
-                candidate_key=re.sub(r"[^a-z0-9]+","",extra.casefold())
-                next_label=following[pos+1].casefold().strip() if pos+1<len(following) else ""
-                if candidate_key in known_venues or next_label in {"official event page","gig preview"}:
-                    card_venue=extra.strip()
-                    break
-                if is_page_furniture(extra) or extra.casefold().strip() in generic:
-                    continue
-            venue_line=card_venue or default_venue
-            if card_venue:
-                venue_key=re.sub(r"[^a-z0-9]+","",card_venue.casefold())
-                if venue_key not in reporting_venues:
-                    continue
-            artist_text=re.split(r"(?i)\bpresents:\s*",forward_title,maxsplit=1)[-1]
+            artist_text=re.split(r"(?i)\\bpresents:\\s*",forward_title,maxsplit=1)[-1]
             artist_text=artist_text.split("//",1)[-1].strip()
-            artist_text=re.sub(r"(?i)^byker grave\s*:\s*","",artist_text)
-            artist_text=re.sub(r"(?i)^(?:mercury prize fringe|fresh thursday)\s*:\s*","",artist_text)
-            title_parts=[part.strip(" -–—:") for part in re.split(r"\s+\+\s+",artist_text) if part.strip(" -–—:")]
+            artist_text=re.sub(r"(?i)^(?:mercury prize fringe|fresh thursday)\\s*:\\s*","",artist_text)
+            title_parts=[part.strip(" -–—:") for part in re.split(r"\\s+\\+\\s+",artist_text) if part.strip(" -–—:")]
             performers=list(title_parts or [forward_title])
             for extra in lines[forward_index+1:min(len(lines),forward_index+4)]:
                 if date_pattern.search(extra) or inline_date_title.match(extra):
@@ -521,7 +487,7 @@ def extract_visible_listing_events(visible_text, default_venue="", start_date=No
                 if low in generic or is_page_furniture(extra) or low.startswith(("send us a message","or email ","email to book")):
                     break
                 if extra.strip().startswith("+ "):
-                    performers.extend(part.strip() for part in re.split(r"\s+\+\s+",extra.strip().lstrip("+ ").strip()) if part.strip())
+                    performers.extend(part.strip() for part in re.split(r"\\s+\\+\\s+",extra.strip().lstrip("+ ").strip()) if part.strip())
                     continue
                 if "," in extra and not re.search(r"[.!?]",extra):
                     performers.extend(part.strip() for part in extra.split(",") if part.strip())
@@ -530,11 +496,11 @@ def extract_visible_listing_events(visible_text, default_venue="", start_date=No
             for extra in lines[i+1:min(len(lines),i+10)]:
                 if date_pattern.search(extra) or inline_date_title.match(extra):
                     break
-                pm=re.search(r"£\s?\d+(?:\.\d{1,2})?(?:\s*[-–]\s*£?\s?\d+(?:\.\d{1,2})?)?",extra,re.I)
+                pm=re.search(r"£\\s?\\d+(?:\\.\\d{1,2})?(?:\\s*[-–]\\s*£?\\s?\\d+(?:\\.\\d{1,2})?)?",extra,re.I)
                 if pm and not price: price=pm.group(0).replace(" ","")
                 if "sold out" in extra.casefold(): availability="SoldOut"
             found.append({
-                "event_title":forward_title,"event_date":dt,"venue":venue_line,
+                "event_title":forward_title,"event_date":dt,"venue":default_venue,
                 "performer_names":"; ".join(dict.fromkeys(performers)),"price":price,
                 "currency":"GBP" if price else "","availability":availability,
                 "notes":"Candidate extracted from date-first venue listing; independently verify title, billing/support, room, price and ticket status."
@@ -667,6 +633,63 @@ def is_pagination_link(href,text):
         or re.search(r"/page/\d+(?:/|$)",path)
         or re.search(r"\b(next|older|previous|newer)\b",text,re.I)
     )
+
+
+def extract_citywide_guide_events(visible_text, start_date, end_date):
+    """Parse SoundBite-style date/title/venue cards without assigning all cards to one venue."""
+    lines=[line.strip() for line in visible_text.splitlines() if line.strip()]
+    def norm(value):
+        return re.sub(r"[^a-z0-9]+","",str(value or "").casefold())
+    aliases={
+        "thecluny":"The Cluny","cluny":"The Cluny","cluny2":"Cluny 2",
+        "boilershop":"Boiler Shop","wylambrewery":"Wylam Brewery","thegrove":"The Grove",
+        "glasshouseinternationalcentrefor music":"Glasshouse International Centre for Music",
+        "glasshouseinternationalcentrefor music":"Glasshouse International Centre for Music",
+        "thesage":"Glasshouse International Centre for Music","sageone":"Glasshouse International Centre for Music",
+        "sage1":"Glasshouse International Centre for Music","sage2":"Sage Two","sagetwo":"Sage Two",
+        "thecumberlandarms":"Cumberland Arms","cumberlandarms":"Cumberland Arms",
+        "cobaltstudios":"Cobalt Studios","thelubberfiend":"The Lubber Fiend","lubberfiend":"The Lubber Fiend",
+        "thinktank":"Think Tank? NCL","thinktankncl":"Think Tank? NCL",
+        "newcastleuniversitystudentsunion":"Newcastle University Students' Union",
+        "newcastleuniversitysu":"Newcastle University Students' Union",
+        "littlebuildings":"Little Buildings","o2cityhall":"O2 City Hall Newcastle",
+        "o2cityhallnewcastle":"O2 City Hall Newcastle","riverside":"Riverside Newcastle",
+        "riversidenewcastle":"Riverside Newcastle","zerox":"ZEROX Newcastle","zeroxnewcastle":"ZEROX Newcastle",
+        "thenewgatesocial":"The Newgate Social","newgatesocial":"The Newgate Social",
+        "headofsteam":"Head of Steam Newcastle","headofsteamnewcastle":"Head of Steam Newcastle"
+    }
+    date_pattern=re.compile(r"(?i)\\b(?:(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)(?:day)?\\s+)?(\\d{1,2})(?:st|nd|rd|th)?\\s+([A-Za-z]{3,9})\\s+(20\\d{2})\\b")
+    found=[]
+    for i,line in enumerate(lines):
+        match=date_pattern.search(line)
+        if not match: continue
+        day,month,year=match.groups()
+        try:
+            event_day=datetime.strptime(f"{int(day)} {month} {year}","%d %B %Y").date()
+        except ValueError:
+            try: event_day=datetime.strptime(f"{int(day)} {month[:3]} {year}","%d %b %Y").date()
+            except ValueError: continue
+        if not (start_date<=event_day<=end_date): continue
+        if i+2>=len(lines): continue
+        title=lines[i+1].strip()
+        venue_text=lines[i+2].strip()
+        venue=aliases.get(norm(venue_text))
+        if not venue or not title: continue
+        if title.casefold() in {"official event page","gig preview","live music","tickets","view tickets"}: continue
+        billing=re.sub(r"(?i)^byker grave(?:\\s+presents?)?\\s*:\\s*","",title).strip()
+        billing=billing.split("//",1)[-1].strip()
+        performers=[part.strip(" -–—:") for part in re.split(r"\\s+\\+\\s+",billing) if part.strip(" -–—:")]
+        found.append({
+            "event_title":title,"event_date":event_day.isoformat(),"venue":venue,
+            "performer_names":"; ".join(dict.fromkeys(performers or [title])),
+            "price":"","currency":"","availability":"not_checked",
+            "notes":"Candidate extracted from a citywide guide's explicit date/title/venue card; verify billed acts, date, room, price and ticket status."
+        })
+    dedup={}
+    for row in found:
+        dedup.setdefault((row["event_date"],norm(row["venue"]),norm(row["event_title"])),row)
+    return list(dedup.values())
+
 
 
 def is_calendar_navigation(href,text,current_url=None):
@@ -1015,7 +1038,11 @@ def main():
                 # Detail pages often include "related events" from other venues.
                 # Parse event cards only on the configured calendar/pagination pages;
                 # use the dedicated event extractor for individual detail pages.
-                listing_events=extract_visible_listing_events(visible,venue,args.start_date,args.end_date) if is_calendar_page else []
+                is_citywide_guide=(urlparse(url).netloc.casefold().endswith("soundbitenortheast.com") and urlparse(url).path.rstrip("/") == "/newcastle-gigs")
+                if is_citywide_guide:
+                    listing_events=extract_citywide_guide_events(visible,args.start_date,args.end_date)
+                else:
+                    listing_events=extract_visible_listing_events(visible,venue,args.start_date,args.end_date) if is_calendar_page else []
                 # Keep visible card rows even when JSON-LD exists: the structured
                 # data may omit dates, rooms or performers, while the visible card
                 # supplies useful complementary evidence. The assembler deduplicates
