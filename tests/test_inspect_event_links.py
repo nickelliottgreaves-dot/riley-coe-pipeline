@@ -9,6 +9,7 @@ class EventPageCrawlerTests(unittest.TestCase):
         self.assertTrue(is_calendar_navigation("/gigs/page/2/", "Next"))
         self.assertTrue(is_calendar_navigation("/events/?page=3", "3"))
         self.assertFalse(is_calendar_navigation("/listing/ben-quad/", "Ben Quad"))
+        self.assertFalse(is_calendar_navigation("/events/ben-quad/", "Ben Quad"))
 
     def test_crawler_preserves_unverified_status_and_audit(self):
         with tempfile.TemporaryDirectory() as tmp:
