@@ -245,6 +245,11 @@ def is_calendar_navigation(href,text,current_url=None):
         return target_number == current_number + 1
     return path.rstrip("/") in {"/events","/event","/gigs","/gig","/whats-on","/whatson","/shows","/concerts"}
 
+def likely(href,text):
+    """Identify links worth inspecting after a venue page is fetched."""
+    return bool(re.search(r"event|gig|show|concert|ticket|whats-on|whatson|live-music|performance|listing|page=|next|older",href+" "+text,re.I))
+
+
 def main():
     ap=argparse.ArgumentParser()
     ap.add_argument("--links",type=Path,required=True)
