@@ -72,14 +72,22 @@ Other acceptance checks:
 - Confirm secondary discovery sources and research batches have explicit completion records.
 - A successful test suite alone must not label the live search complete.
 
-## Delivery sequence
+## Delivery sequence and live status
 
-1. Preserve the current 833-row pool and add the definitive 18-entry venue registry. **Recorded on this branch.**
-2. Add the five known-gig regression fixtures. **Recorded on this branch.**
-3. Inspect fixture quality and build deterministic matching/validation tests without changing the pool.
-4. Run a bounded, manually supervised discovery test that uses both venue-first and independent listing sources; save structured records and coverage checkpoints.
-5. Only after the five fixtures are recovered and incomplete coverage is represented honestly, build the repeatable import/match/report process.
-6. Schedule/automate only after the research process demonstrates it can resume safely and produce credible results.
+1. Preserve the 833-row pool and add the definitive 18-entry venue registry. **Done; the pool remains read-only.**
+2. Add the five known-gig regression fixtures. **Done.**
+3. Add deterministic matching and validation tests. **The existing unit suite and baseline/source-registry validation passed on this branch.**
+4. Build a repeatable two-pass discovery run. **Implemented:** 18 primary venue sources plus 18 independent secondary venue sources; bounded page inspection; full-pool candidate matching; deduplication; dated evidence snapshots; explicit coverage and known-gig regression outputs. The live 14-day run is still being evaluated against the five fixtures and must not be called accepted until its artifact is inspected.
+5. Correctness gate. **Not yet passed:** all five regression fixtures must be recovered from naturally collected date/venue/performer evidence. A green workflow status alone is insufficient.
+6. Weekly scheduling. The workflow contains a Monday 08:00 UTC schedule, but GitHub scheduled workflows only execute from the repository's default branch. Because this work remains on `hybrid-gig-research` and must not be merged to `main` before the acceptance gate, the weekly schedule is **not yet active**. Branch runs can be tested manually/through pushes.
+
+## Latest run and handover notes
+
+- Working branch: `hybrid-gig-research`; never merge to `main` before the acceptance gate is met.
+- Current source of truth for the pool: `data/artist_pool.csv`, expected 833 data rows. The weekly search must not modify it.
+- The live report window is the next 14 calendar days (today through today + 13 days), not 28 days.
+- Current run IDs and artifacts should be checked in GitHub Actions before resuming; earlier 28-day test runs are stale and must not be treated as the current report.
+- A run status of `LIMITED_RESULTS` is intentional until source coverage and all five regressions are demonstrated; candidate rows remain unverified until event-level evidence is reviewed.
 
 ## Explicitly out of scope for the first acceptance stage
 
