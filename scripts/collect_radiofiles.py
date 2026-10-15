@@ -100,6 +100,7 @@ def main() -> int:
     parser.add_argument("--until", required=True, help="Inclusive episode date YYYY-MM-DD")
     parser.add_argument("--out-dir", type=Path, required=True)
     parser.add_argument("--show-id", default=SHOW_ID)
+    parser.add_argument("--bbc-inventory", type=Path, help="Supplement RadioFiles episode discovery with the official BBC episode inventory CSV")
     args = parser.parse_args()
     since, until = date.fromisoformat(args.since), date.fromisoformat(args.until)
     if until < since:
@@ -121,6 +122,38 @@ def main() -> int:
         all_episodes = []
         errors.append(f"Episode-list request failed: {type(exc).__name__}: {exc}")
 
+    # RadioFiles' recent-episode listing can lag behind the BBC. Supplement it
+    # with episode IDs discovered by the official BBC collector so new episodes
+    # are fetched directly even when absent from the third-party listing.
+    by_pid = {}
+    for item in all_episodes:
+        if isinstance(item, dict) and str(item.get("pid") or "").strip():
+            by_pid[str(item["pid"]).strip()] = item
+    bbc_inventory_rows = 0
+    if args.bbc_inventory and args.bbc_inventory.exists():
+        with args.bbc_inventory.open(encoding="utf-8-sig", newline="") as handle:
+            for row in csv.DictReader(handle):
+                episode_url = str(row.get("episode_url") or "").strip()
+                pid = episode_url.rstrip("/").split("/")[-1]
+                dt = str(row.get("episode_date") or "").strip()
+                if not pid.startswith("m") or not dt:
+                    continue
+                bbc_inventory_rows += 1
+                existing = by_pid.get(pid)
+                if existing is None:
+                    try:
+                        parsed_dt = date.fromisoformat(dt)
+                    except ValueError:
+                        parsed_dt = parse_episode_date(dt)
+                    if parsed_dt:
+                        existing = {"pid": pid, "date": parsed_dt.isoformat(),
+                                    "label": str(row.get("episode_title") or f"Riley & Coe — {dt}"),
+                                    "has_tracklist": True, "discovered_via": "BBC inventory"}
+                        all_episodes.append(existing)
+                        by_pid[pid] = existing
+                elif existing is not None:
+                    existing["has_tracklist"] = True
+                    existing["discovered_via"] = "RadioFiles + BBC inventory"
     seen = set()
     dated_list = []
     for item in all_episodes:
@@ -189,6 +222,8 @@ def main() -> int:
         "window_end": until.isoformat(),
         "episode_list_endpoint": list_url,
         "episodes_returned_by_source": len(all_episodes),
+        "bbc_inventory_rows_considered": bbc_inventory_rows,
+        "episode_discovery_sources": ["RadioFiles public episode listing"] + (["official BBC episode inventory"] if args.bbc_inventory else []),
         "earliest_episode_returned": earliest_returned.isoformat() if earliest_returned else "",
         "latest_episode_returned": latest_returned.isoformat() if latest_returned else "",
         "episode_list_covers_requested_start_date": episode_list_covers_start,
