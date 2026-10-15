@@ -267,6 +267,7 @@ def main() -> int:
         commit=os.environ.get("GITHUB_SHA", "unknown"), contract=contract,
     )
     matches = read_csv(matches_path)
+    out_of_scope_rows = read_csv(out_dir / "out_of_scope_event_candidates.csv")
     artist_coverage = read_csv(out_dir / "artist_window_event_coverage.csv")
     pool_page_rows = read_csv(pool_page_matches)
     pool_count = registry_check["artist_count"]
@@ -292,6 +293,7 @@ def main() -> int:
         "artist_pool_rows": registry_check["artist_count"],
         "artist_event_coverage_rows": len(artist_coverage),
         "candidate_match_rows": len(matches),
+        "out_of_scope_event_rows": len(out_of_scope_rows),
         "verified_event_rows": sum((row.get("verified") or "").casefold() == "true" for row in matches),
         "stage_failures": sum(row["status"] != "success" for row in stage_results),
         "source_outcome_counts": source_outcome_counts,
@@ -312,6 +314,7 @@ def main() -> int:
         "source_coverage_rows": len(coverage),
         "pool_artist_count": registry_check["artist_count"],
         "candidate_match_rows": len(matches),
+        "out_of_scope_event_rows": len(out_of_scope_rows),
         "stage_failures": sum(row["status"] != "success" for row in stage_results),
         "output_directory": str(out_dir),
         "note": "A valid PARTIAL report is the expected result when any source is incomplete; no candidate is marked verified.",
