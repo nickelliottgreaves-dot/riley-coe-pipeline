@@ -92,19 +92,25 @@ jobs:
           retention-days: 30
 
   radiofiles-inventory:
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[full-sweep]'))
+    if: always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[full-sweep]')))
+    needs: [bbc-sounds-inventory]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Download official BBC episode inventory
+        uses: actions/download-artifact@v4
+        with:
+          name: riley-coe-bbc-sounds-inventory-${{ github.run_id }}
+          path: artifacts/bbc-sounds-inventory
       - name: Collect public RadioFiles episode tracklists
         run: |
           mkdir -p artifacts/radiofiles
           SINCE=$(python -c "from datetime import date,timedelta; print((date.today()-timedelta(days=21)).isoformat())")
           UNTIL=$(python -c "from datetime import date; print(date.today().isoformat())")
-          python scripts/collect_radiofiles.py --since "$SINCE" --until "$UNTIL" --out-dir artifacts/radiofiles
+          python scripts/collect_radiofiles.py --since "$SINCE" --until "$UNTIL" --out-dir artifacts/radiofiles --bbc-inventory artifacts/bbc-sounds-inventory/bbc_episode_inventory.csv
       - name: Preserve RadioFiles tracklists, raw JSON and audit even when collection fails
         if: always()
         uses: actions/upload-artifact@v4
