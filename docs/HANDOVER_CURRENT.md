@@ -16,7 +16,7 @@ User explicitly wants frank status updates if things are not going to plan, no e
 - Repository: `nickelliottgreaves-dot/riley-coe-pipeline`
 - Reference/legacy development branch: `rebuild/core-gig-finder`
 - New redesign branch: `redesign/workflow-contract`
-- Latest unit-test commit: `9be67cf15dbb85ff81b878a5d629e68d9133e949` (**126 tests passed**); workflow integration for the independent artist-pool updater was added in `ab1f093ba0bdc22dbef6b99ebaab382ff602ff92`. Both normal and simulated-failure gig-finder runs have passed.
+- Latest unit-test commit: `0b1e856becd9790c49521aa14fb68ce5fb5a1df2` (**127 tests passed**); workflow integration for both independent processes is in `ab1f093ba0bdc22dbef6b99ebaab382ff602ff92`. Gig finder has passed normal and simulated-failure runs.
 - Authoritative pool: `data/artist_pool.csv`, 833 unique names.
 - Backup: `data/artist_pool_backup_20261015.csv` (preserves 747-row baseline).
 - Dated update audit says 86 additions came from eight exact BBC/RadioFiles full-tracklist matches; three mismatched episodes and 15 fuzzy-name collisions remained review-only.
@@ -120,6 +120,20 @@ Run [38735167465](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/a
 - Added tests for review-only proposal integrity, baseline preservation, explicit no-mutation, and failure injection. Latest unit test run [38735698804](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38735698804): **126 tests passed**.
 - Added the `independent-artist-pool-updater` workflow job, gated to the redesign branch and explicit full sweeps/scheduled/manual runs. It is independent of the gig-finder job and does not invoke the legacy assembler.
 
+## First combined run: both processes executed, one metric corrected
+
+Run [38735796038](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38735796038) ran both independent jobs; unit tests, gig-finder validation and artist-updater validation succeeded. The old legacy collection/assembler jobs were correctly skipped on the redesign branch.
+
+Artist-pool updater results from its artifact:
+- 12 BBC episode inventory rows and 12 RadioFiles episode inventory rows.
+- 11 episode cross-check rows: **8 exact full-tracklist matches, 3 mismatches requiring review, and 1 BBC episode without a cross-check row**.
+- The review-only proposal had 211 verified candidate track rows / 167 unique artists, **0 new artist additions** (the matching artists are already in the 833-name pool), and 15 ambiguous/fuzzy candidates held for manual review.
+- The authoritative pool hash and row count were unchanged; the proposal audit confirms no automatic mutation.
+- A metric bug was identified: the first runner version counted every BBC inventory row whose pre-cross-check `tracklist_status` wasn't literally `complete`, producing a misleading “12 incomplete” warning. This is wrong because the collector intentionally leaves these rows as “needs review” until the exact cross-check. The code now reports the actual cross-check evidence: 4 episodes not exactly cross-checked (3 mismatches + 1 with no cross-check row).
+- Added a regression test for those exact counts. Latest unit run [38736050142](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38736050142): **127 tests passed**.
+
+The combined run is a useful diagnostic run, but Process B should be re-run once with the corrected metric before treating the combined acceptance as passed.
+
 ## Key redesign decision
 
 Do not patch the legacy assembler/validator separately again. Build two independent processes around one contract:
@@ -141,11 +155,11 @@ Do not patch the legacy assembler/validator separately again. Build two independ
 
 ## Current immediate next actions
 
-1. **Immediate:** this handover commit intentionally includes `[full-sweep]` to run both Process A and Process B together. Check both job conclusions and artifacts; the legacy jobs should remain skipped on the redesign branch.
-2. Inspect the artist-updater output: exact cross-check counts, incomplete/unavailable episodes, additions-only CSV, fuzzy/ambiguous review CSV, backup, and unchanged authoritative pool hash. A proposal is review-only, never an automatic pool update.
-3. Resolve the remaining Cluny source issue: confirm Barbican Estate on an official Cluny listing if possible, or keep it explicitly third-party-only.
-4. Keep all venue coverage caveats visible; no source calendar has been independently proven exhaustive, and the gig report must remain PARTIAL until verification criteria are met.
-5. If both independent jobs pass, perform another combined run and then review whether the branch is ready for a pull request. Do not merge to `main` until acceptance criteria are satisfied.
+1. **Immediate:** this handover commit includes `[full-sweep]` to rerun both Process A and Process B with the corrected episode metric. Check both job conclusions and artifacts; legacy jobs should remain skipped.
+2. Confirm the updater reports 8 exact, 3 mismatched and 1 without cross-check (4 not exact overall), while keeping 0 additions, 15 ambiguous candidates and the authoritative pool unchanged.
+3. Confirm the gig-finder still yields only local venue candidates and all 20 calendars remain explicitly unverified.
+4. Resolve the remaining Cluny source issue: confirm Barbican Estate on an official Cluny listing if possible, or keep it explicitly third-party-only.
+5. If both jobs pass, begin final acceptance review. Do not merge to `main` until the coverage and verification criteria are satisfied.
 4. Audit the remaining legacy scripts against `docs/WORKFLOW_REDESIGN_SPEC.md`; keep `scripts/run_core_search.py` as reference only because it covers nine core venues, not the required 20.
 5. After the candidate finder has a reliable partial-report contract, implement and test the separate BBC/RadioFiles artist-pool updater. Do not wire the legacy assembler into the new path.
 6. After each meaningful stage, update this handover with latest run ID/conclusion, tests, blockers and exact next action. Never add `[full-sweep]` to ordinary documentation or code commits unless a live scrape is intentional.
