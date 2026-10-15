@@ -772,6 +772,18 @@ def main():
                             continue
                         event_objects.append(ev)
                         name=clean(ev.get("name")); start=clean(ev.get("startDate"))
+                        # Structured calendars frequently embed events from
+                        # many months or years on every page. Keep dated rows
+                        # only when they fall inside this run's requested
+                        # window; otherwise unrelated future/past listings can
+                        # swamp the candidate pool and create false matches.
+                        event_day=None
+                        try:
+                            event_day=date.fromisoformat(start[:10])
+                        except (ValueError, TypeError):
+                            event_day=None
+                        if event_day is None or not (args.start_date <= event_day <= args.end_date):
+                            continue
                         perf,performer_fallback=event_performer_candidate(ev)
                         offers=ev.get("offers") or []; offers=offers if isinstance(offers,list) else [offers]
                         prices=[]; currencies=[]; avail=[]
@@ -867,6 +879,27 @@ def main():
             venue_rows, venue_audits = future.result()
             all_rows.extend(venue_rows)
             audits.extend(venue_audits)
+    # Deduplicate identical candidate rows emitted by repeated embedded
+    # JSON-LD blocks or overlapping visible-card parsing on the same venue.
+    # Keep source-page distinctions in the retained row's URL and snapshot.
+    deduped_rows=[]
+    seen_candidates=set()
+    for row in all_rows:
+        def norm(value):
+            return " ".join(re.sub(r"[^a-z0-9]+"," ",str(value or "").casefold()).split())
+        key=(norm(row.get("venue")),norm(row.get("event_title")),str(row.get("event_date") or "")[:10],norm(row.get("performer_names")),norm(row.get("status")))
+        if row.get("event_date") and row.get("event_date")[:10]:
+            try:
+                day=date.fromisoformat(row["event_date"][:10])
+                if not (args.start_date <= day <= args.end_date):
+                    continue
+            except ValueError:
+                pass
+        if key in seen_candidates:
+            continue
+        seen_candidates.add(key)
+        deduped_rows.append(row)
+    all_rows=deduped_rows
     with (args.out_dir/"event_page_inspection.csv").open("w",encoding="utf-8",newline="") as f:
         w=csv.DictWriter(f,fieldnames=EVENT_FIELDS);w.writeheader();w.writerows(all_rows)
     with (args.out_dir/"event_page_crawl_audit.csv").open("w",encoding="utf-8",newline="") as f:
