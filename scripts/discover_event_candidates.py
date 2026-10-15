@@ -86,17 +86,23 @@ def main():
     start=date.fromisoformat(args.start); end=date.fromisoformat(args.end)
     if end < start: ap.error("--end must not precede --start")
     args.out_dir.mkdir(parents=True,exist_ok=True)
-    events=[]; links=[]; audit=[]; errors=[]
+    events=[]; links=[]; audit=[]; errors=[]; response_cache={}
     for src in rows(args.sources):
         venue=(src.get("venue") or "").strip(); url=(src.get("source_url") or "").strip()
         item={"venue":venue,"source_url":url,"http_status":"","content_type":"","structured_events_found":0,"candidate_links_found":0,"status":"not_checked","notes":""}
         if not url.startswith(("https://","http://")):
             item.update(status="failed",notes="Missing configured HTTP(S) source URL"); errors.append(venue+": missing URL"); audit.append(item); continue
         try:
-            req=Request(url,headers={"User-Agent":AGENT,"Accept":"text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8","Accept-Language":"en-GB,en;q=0.9"})
-            with urlopen(req,timeout=25) as response:
-                item["http_status"]=str(response.status); item["content_type"]=response.headers.get("Content-Type","")
-                raw=response.read(3_000_001)
+            if url in response_cache:
+                code,ctype,raw=response_cache[url]
+                item["notes"]="Response reused from identical configured source URL; this does not certify calendar completeness."
+            else:
+                req=Request(url,headers={"User-Agent":AGENT,"Accept":"text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8","Accept-Language":"en-GB,en;q=0.9"})
+                with urlopen(req,timeout=25) as response:
+                    code=response.status; ctype=response.headers.get("Content-Type","")
+                    raw=response.read(3_000_001)
+                response_cache[url]=(code,ctype,raw)
+            item["http_status"]=str(code); item["content_type"]=ctype
             if len(raw)>3_000_000: raw=raw[:3_000_000]; item["notes"]="HTML truncated at 3 MB"
             if "html" not in item["content_type"].lower():
                 item.update(status="failed",notes="Response not identified as HTML"); errors.append(venue+": non-HTML"); audit.append(item); continue
