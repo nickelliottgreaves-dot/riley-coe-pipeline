@@ -2,7 +2,7 @@ import csv, json, subprocess, sys, tempfile, unittest
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/"scripts"))
-from inspect_event_links import canonicalize_url, extract_visible_event, extract_visible_listing_events, is_calendar_navigation
+from inspect_event_links import canonicalize_url, extract_visible_event, extract_visible_listing_events, is_calendar_navigation, likely
 
 class EventPageCrawlerTests(unittest.TestCase):
     def test_canonical_url_removes_tracking_but_preserves_pagination(self):
@@ -14,6 +14,11 @@ class EventPageCrawlerTests(unittest.TestCase):
             canonicalize_url("https://example.com/events/?page=3&utm_campaign=x"),
             "https://example.com/events/?page=3"
         )
+
+    def test_likely_filter_keeps_event_and_ticket_links(self):
+        self.assertTrue(likely("/listing/artist-name/", "Artist"))
+        self.assertTrue(likely("/tickets/", "Buy tickets"))
+        self.assertFalse(likely("/about-us/", "About us"))
 
     def test_calendar_pagination_is_prioritized_over_detail_pages(self):
         self.assertTrue(is_calendar_navigation("/gigs/page/2/", "Next"))
