@@ -44,19 +44,19 @@ jobs:
           python -m unittest discover -s tests -v
           python scripts/validate_hybrid_baseline.py
 
-      - name: Set dated 28-day window and create output directory
+      - name: Set dated 14-day window and create output directory
         id: window
         shell: bash
         run: |
           set -euo pipefail
           START="$(python -c 'from datetime import date; print(date.today().isoformat())')"
-          END="$(python -c 'from datetime import date,timedelta; print((date.today()+timedelta(days=27)).isoformat())')"
+          END="$(python -c 'from datetime import date,timedelta; print((date.today()+timedelta(days=13)).isoformat())')"
           POOL_ROWS="$(python -c 'import csv; f=open("data/artist_pool.csv",encoding="utf-8-sig",newline=""); print(sum(1 for _ in csv.DictReader(f)))')"
           echo "start=$START" >> "$GITHUB_OUTPUT"
           echo "end=$END" >> "$GITHUB_OUTPUT"
           echo "pool_rows=$POOL_ROWS" >> "$GITHUB_OUTPUT"
           mkdir -p "artifacts/hybrid-search-$START"
-          echo "Search window: $START to $END (28 calendar days)." >> "$GITHUB_STEP_SUMMARY"
+          echo "Search window: $START to $END (14 calendar days)." >> "$GITHUB_STEP_SUMMARY"
           echo "Artist pool: $POOL_ROWS rows; read-only during gig search." >> "$GITHUB_STEP_SUMMARY"
           echo "Coverage passes: 18 primary source rows + 18 independent secondary calendar rows." >> "$GITHUB_STEP_SUMMARY"
 
@@ -214,7 +214,7 @@ jobs:
           summary={
             "window_start":"${{ steps.window.outputs.start }}",
             "window_end":"${{ steps.window.outputs.end }}",
-            "window_days":28,
+            "window_days":14,
             "artist_pool_rows":int("${{ steps.window.outputs.pool_rows }}"),
             "venues_expected":18,
             "primary_sources_audited":len(primary_audit),
@@ -243,7 +243,7 @@ jobs:
           print(json.dumps(summary,indent=2))
           with open(os.environ["GITHUB_STEP_SUMMARY"],"a",encoding="utf-8") as f:
               f.write("## Weekly hybrid Riley & Coe Gig Search\n\n")
-              f.write(f"- Window: {summary['window_start']} to {summary['window_end']} (28 days)\n")
+              f.write(f"- Window: {summary['window_start']} to {summary['window_end']} (14 days)\n")
               f.write(f"- Artist pool rows: {summary['artist_pool_rows']}\n")
               f.write(f"- Primary sources usable: {primary_ok}/18\n")
               f.write(f"- Secondary sources usable: {secondary_ok}/18\n")
