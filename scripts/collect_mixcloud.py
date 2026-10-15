@@ -166,7 +166,10 @@ def fetch_html_cloudcasts(username: str, since: date, until: date) -> tuple[list
         + re.escape(username.strip("/"))
         + r"/riley[-_]coe[A-Za-z0-9/_-]*"
     )
-    raw_paths = re.findall(path_pattern, html_text)
+    # Hydration JSON often escapes forward slashes, so normalize those
+    # representations before scanning for same-account show paths.
+    scan_text = html_text.replace(r"\\/", "/").replace(r"\\u002F", "/").replace(r"\\u002f", "/")
+    raw_paths = re.findall(path_pattern, scan_text)
     link_candidates = list(parser.links)
     link_candidates.extend((path, "") for path in raw_paths)
     found: list[dict] = []
