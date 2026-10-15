@@ -77,7 +77,7 @@ Doors:
         self.assertEqual(row["performer_names"], "Skating Polly; Lord Friday The 13th")
         self.assertIn("independently verify", row["notes"])
 
-    def test_event_slug_date_conflict_is_withheld_for_review(self):
+    def test_event_slug_date_conflict_prefers_visible_date_for_review(self):
         visible = """Heaven 17
 Date:
 Thu 15 Oct 2026
@@ -89,8 +89,8 @@ Sold Out"""
         row=extract_visible_event("Heaven 17 - Boiler Shop",visible,"Boiler Shop",
             "https://www.boilershop.net/events/heaven-17-15-11-26")
         self.assertIsNotNone(row)
-        self.assertEqual(row["event_date"],"")
-        self.assertIn("URL date conflicts with visible date; left undated for review",row["notes"])
+        self.assertEqual(row["event_date"],"2026-10-15")
+        self.assertIn("URL date conflicts with visible date; visible date preferred",row["notes"])
 
     def test_category_first_cards_use_default_venue_and_extract_price(self):
         visible = """AUTUMN PROGRAMME 2026
@@ -133,7 +133,7 @@ Fri
 7:00 pm"""
         self.assertIsNone(extract_visible_event("Boiler Shop", visible, "Boiler Shop"))
 
-    def test_conflicting_url_and_visible_dates_remain_undated_for_review(self):
+    def test_conflicting_url_and_visible_dates_keep_visible_date(self):
         visible = """SOURCE: https://www.boilershop.net/events/heaven-17-15-11-26
 VENUE: Boiler Shop
 Heaven 17 - performing 'Penthouse and Pavement' at Boiler Shop Newcastle
@@ -149,8 +149,8 @@ SOLD OUT"""
         row = extract_visible_event("Heaven 17 - performing 'Penthouse and Pavement' at Boiler Shop Newcastle",
             visible,"Boiler Shop","https://www.boilershop.net/events/heaven-17-15-11-26")
         self.assertIsNotNone(row)
-        self.assertEqual(row["event_date"],"")
-        self.assertIn("URL date conflicts with visible date",row["notes"])
+        self.assertEqual(row["event_date"],"2026-10-15")
+        self.assertIn("URL date conflicts with visible date; visible date preferred",row["notes"])
 
     def test_cobalt_detail_uses_main_ordinal_date_price_and_billed_acts(self):
         visible = """SOURCE: https://cobaltstudios.co.uk/events/l-a-ds-presents-marion-hawkes/
