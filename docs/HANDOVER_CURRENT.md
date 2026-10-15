@@ -16,7 +16,7 @@ User explicitly wants frank status updates if things are not going to plan, no e
 - Repository: `nickelliottgreaves-dot/riley-coe-pipeline`
 - Reference/legacy development branch: `rebuild/core-gig-finder`
 - New redesign branch: `redesign/workflow-contract`
-- Last tested implementation commit: `4c38dba7343fde758fac229dd8b71ced67cf4801` (**123 tests passed**); a manual review ledger is also preserved. The following handover commit intentionally triggers the simulated-source-failure acceptance run.
+- Last tested implementation commit: `3331f7e4c22e5fc53d59289f2785cea4f4759410` (**123 tests passed**); a manual review ledger is preserved. Both normal and simulated-failure end-to-end runs have now passed.
 - Authoritative pool: `data/artist_pool.csv`, 833 unique names.
 - Backup: `data/artist_pool_backup_20261015.csv` (preserves 747-row baseline).
 - Dated update audit says 86 additions came from eight exact BBC/RadioFiles full-tracklist matches; three mismatched episodes and 15 fuzzy-name collisions remained review-only.
@@ -99,6 +99,19 @@ The artifact is `riley-coe-independent-gig-finder-38734330424` (artifact ID `119
 - Regression tests cover Songkick metro/artist-page exclusion, explicit non-local venue rejection, local venue correction, duplicate event collapse and out-of-scope audit output.
 - Latest test run [38735058918](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38735058918): **123 tests passed**. The live sweep run also passed the unit-tests job.
 
+## Simulated-source-failure acceptance run
+
+Run [38735167465](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38735167465) passed both the independent gig-finder job and report validator with `--simulate-source-failure "Cobalt Studios"`:
+- 20 configured sources and 20 coverage rows, 833 page-search rows and 833 event-comparison rows.
+- 5 candidate rows, same set as the normal run; no unrelated metro-area events introduced.
+- Cobalt Studios was deliberately pointed at a local closed port in a run-only copy of the source registry. The authoritative `config/venue_sources.csv` was not modified.
+- Cobalt Studios was recorded as `partial`; two collector stages exited non-zero, but later matching and package assembly continued.
+- The validator returned `valid: true`, `status: PARTIAL`, with no structural errors. It warned that Cobalt Studios and The Globe are partial and all 20 calendars remain independently unverified.
+- Artifact: `riley-coe-independent-gig-finder-38735167465` (artifact ID `11971812036`).
+- The stage ledger now labels non-zero stage exits as `failed` rather than inferring `failed_with_outputs` merely because a log exists. Latest tests after this change: 123 passed (run [38735469429](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38735469429)).
+
+**Process A milestone:** the new candidate finder has passed one normal full run and one deliberate source-failure run. This is evidence of a repeatable PARTIAL-report path, not proof of exhaustive venue coverage or a complete verified gig report.
+
 ## Key redesign decision
 
 Do not patch the legacy assembler/validator separately again. Build two independent processes around one contract:
@@ -120,10 +133,10 @@ Do not patch the legacy assembler/validator separately again. Build two independ
 
 ## Current immediate next actions
 
-1. **Immediate:** this handover commit includes `[full-sweep] [simulate-source-failure]` and will trigger an acceptance run with a controlled failure injected for Cobalt Studios. Confirm the report still assembles and validates as PARTIAL, with Cobalt marked partial and the original venue registry unchanged.
-2. Review the simulated-run artifact and logs; update this handover with its run ID, source outcomes and validation result.
-3. The normal run 38734330424 is the first passing Process A run; the next simulated-failure run should be the second acceptance run. Do not count the earlier false-positive run 38733027855 as passing acceptance.
-4. After the failure-injection run passes, the core gig finder has two useful end-to-end demonstrations. Then implement the separate BBC/RadioFiles artist-pool updater. Do not wire the legacy assembler into the new path.
+1. Resolve the remaining Cluny source issue: confirm Barbican Estate on an official Cluny listing if possible, or keep it explicitly third-party-only.
+2. Start Process B as a separate BBC Sounds/RadioFiles artist-pool updater job on the redesign branch. Reuse the existing collectors and exact cross-check/proposal logic, but keep it independent of Process A and do not mutate the authoritative pool automatically.
+3. Keep all venue coverage caveats visible; no source calendar has been independently proven exhaustive, and the overall report must remain PARTIAL until verification criteria are met.
+4. After Process B has a tested proposal output, run the combined redesign workflow twice and then review whether the branch is ready for a pull request. Do not merge to `main` until the acceptance criteria are satisfied.
 4. Audit the remaining legacy scripts against `docs/WORKFLOW_REDESIGN_SPEC.md`; keep `scripts/run_core_search.py` as reference only because it covers nine core venues, not the required 20.
 5. After the candidate finder has a reliable partial-report contract, implement and test the separate BBC/RadioFiles artist-pool updater. Do not wire the legacy assembler into the new path.
 6. After each meaningful stage, update this handover with latest run ID/conclusion, tests, blockers and exact next action. Never add `[full-sweep]` to ordinary documentation or code commits unless a live scrape is intentional.
