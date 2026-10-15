@@ -105,6 +105,43 @@ Mercury Prize Fringe: Ancient Infinity Orchestra + Weston (DJ)
         self.assertEqual(rows[2]["performer_names"], "Ancient Infinity Orchestra; Weston (DJ)")
         self.assertEqual(rows[2]["price"], "£0-12")
 
+    def test_extracts_unlabelled_boiler_shop_date_and_support_billing(self):
+        visible = """SOURCE: https://www.boilershop.net/events/the-wedding-present-23-10-26
+VENUE: Boiler Shop
+The Wedding Present at Boiler Shop Newcastle
+JS Promotions presents
+The Wedding Present
++ Radhika
+Fri
+23 Oct
+'
+26
+7:00 pm
+BUY TICKETS
+SOLD OUT"""
+        row = extract_visible_event("The Wedding Present at Boiler Shop Newcastle", visible, "Boiler Shop")
+        self.assertIsNotNone(row)
+        self.assertEqual(row["event_date"], "2026-10-23")
+        self.assertEqual(row["venue"], "Boiler Shop")
+        self.assertEqual(row["event_title"], "The Wedding Present")
+        self.assertEqual(row["performer_names"], "The Wedding Present; Radhika")
+        self.assertEqual(row["availability"], "SoldOut")
+
+    def test_extracts_lead_artist_from_tour_title(self):
+        visible = """VENUE: Boiler Shop
+Cabaret Voltaire: Final UK Tour
+Sat
+17 Oct
+'
+26
+7:00 pm
++ Gazelle Twin
+SOLD OUT"""
+        row = extract_visible_event("Cabaret Voltaire: Final UK Tour at Boiler Shop Newcastle", visible, "Boiler Shop")
+        self.assertEqual(row["event_date"], "2026-10-17")
+        self.assertEqual(row["event_title"], "Cabaret Voltaire: Final UK Tour")
+        self.assertEqual(row["performer_names"], "Cabaret Voltaire; Gazelle Twin")
+
     def test_detail_page_with_generic_page_title_is_not_promoted_as_an_event(self):
         visible = """Jack Savoretti
 Date:
