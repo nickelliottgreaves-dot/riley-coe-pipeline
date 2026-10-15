@@ -72,6 +72,45 @@ def radiofiles_app_url(url):
     from urllib.parse import urlencode
     return "https://radiofiles.io/app?"+urlencode({"show":"m001mf2c","pid":pid})
 
+def discover_radiofiles_episode_candidates(start, end):
+    """Use RadioFiles' public recent-episode list only to discover BBC PIDs.
+
+    RadioFiles is a discovery fallback, not the authoritative tracklist source.
+    Every candidate is subsequently fetched from its official BBC programme URL,
+    and its broadcast date is taken from the BBC page where available.
+    """
+    from datetime import datetime
+    url="https://radiofiles.io/episodes?show=m001mf2c&dest="
+    req=Request(url,headers={"User-Agent":UA,"Accept":"application/json"})
+    with urlopen(req,timeout=25) as response:
+        content_type=response.headers.get("Content-Type","")
+        if response.status != 200 or "json" not in content_type.casefold():
+            raise ValueError(f"Unexpected RadioFiles discovery response: {response.status} {content_type}")
+        payload=json.loads(response.read().decode("utf-8"))
+    items=payload.get("episodes")
+    if not isinstance(items,list):
+        raise ValueError("RadioFiles discovery JSON has no episodes array")
+    found=[]
+    for item in items:
+        if not isinstance(item,dict):
+            continue
+        pid=str(item.get("pid") or "").strip()
+        raw_date=str(item.get("date") or "").strip()
+        dt=parse_date(raw_date)
+        if not pid.startswith("m") or not re.fullmatch(r"m[0-9a-z]{7,}",pid,re.I) or not dt:
+            continue
+        broadcast_date=date.fromisoformat(dt)
+        if start <= broadcast_date <= end:
+            found.append({
+                "episode_id":pid,
+                "url":f"{ROOT_URL}/programmes/{pid}",
+                "title":str(item.get("label") or item.get("title") or f"Riley & Coe — {dt}"),
+                "listing_source_url":url,
+                "discovery_source":"RadioFiles PID fallback",
+                "discovery_date":dt,
+            })
+    return found
+
 def episode_id(url):
     m=re.search(r"/(?:programmes|sounds/play)/(m[0-9a-z]{7,})",url,re.I)
     return m.group(1) if m else ""
@@ -180,7 +219,7 @@ def main():
     ap=argparse.ArgumentParser()
     ap.add_argument("--start",required=True); ap.add_argument("--end",required=True)
     ap.add_argument("--out-dir",type=Path,required=True)
-    ap.add_argument("--listing-url",default=SERIES_URL)
+    ap.add_argument("--listing-url",default=SERIES_URL); ap.add_argument("--radiofiles-discovery",action="store_true",help="Supplement BBC listing discovery with recent RadioFiles episode PIDs, then fetch official BBC pages")
     args=ap.parse_args(); start=date.fromisoformat(args.start); end=date.fromisoformat(args.end)
     if end<start: ap.error("--end must not precede --start")
     out=args.out_dir; snaps=out/"snapshots"; snaps.mkdir(parents=True,exist_ok=True)
@@ -234,6 +273,21 @@ def main():
         ("page_cap_reached" if next_url and pages>=12 else
          ("sequential_page_fallback_exhausted" if fallback_pagination_used and listing_exhausted else
           ("sequential_page_fallback_incomplete" if fallback_pagination_used else "next_link_not_exposed_or_listing_exhausted"))))
+    radiofiles_discovered=0
+    radiofiles_discovery_error=""
+    if args.radiofiles_discovery:
+        try:
+            known_ids={episode_id(item["url"]) for item in episodes}
+            candidates=discover_radiofiles_episode_candidates(start,end)
+            for candidate in candidates:
+                if candidate["episode_id"] in known_ids:
+                    continue
+                episodes.append(candidate)
+                known_ids.add(candidate["episode_id"])
+                radiofiles_discovered+=1
+        except (HTTPError,URLError,TimeoutError,OSError,ValueError,json.JSONDecodeError) as exc:
+            radiofiles_discovery_error=f"{type(exc).__name__}: {exc}"
+            errors.append("RadioFiles episode discovery fallback failed: "+radiofiles_discovery_error)
     rows=[]; linkrows=[]; trackrows=[]
     for ep in episodes:
         url=ep["url"]
@@ -268,7 +322,8 @@ def main():
         w=csv.DictWriter(f,fieldnames=LINK_FIELDS); w.writeheader(); w.writerows(linkrows)
     with (out/"bbc_track_candidates.csv").open("w",encoding="utf-8",newline="") as f:
         w=csv.DictWriter(f,fieldnames=TRACK_FIELDS); w.writeheader(); w.writerows(trackrows)
-    summary={"window_start":start.isoformat(),"window_end":end.isoformat(),"series_url":args.listing_url,"listing_pages_fetched":len(listing_pages),"listing_pagination_status":pagination_status,"listing_page_cap_reached":pagination_status=="page_cap_reached","episodes_discovered":len(episodes),"episode_pages_in_window_or_undated":sum(r["page_fetch_status"]=="fetched" for r in rows),"visible_tracklist_headings_detected":sum(r["visible_tracklist_heading_detected"]=="true" for r in rows),"undated_episode_pages":sum(r["page_fetch_status"]=="fetched" and not bool(r["episode_date"]) for r in rows),"inaccessible_episode_pages":sum(r["page_fetch_status"]=="failed" for r in rows),"provisional_track_artist_candidates":len(trackrows),"episodes_certified_complete":0,"errors":errors,"listing_pages":listing_pages,"status":"PARTIAL","limitations":["BBC episode listing pagination may not expose every episode; inspect listing_pagination_status and page-cap flag.","Episode dates may not be machine-readable in visible text.","Tracklist heading detection is not completeness verification.","Track/artist candidates are extracted only from explicit JSON-LD or simple visible-text patterns; all candidates require manual review.","Text-pattern extraction may miss tracks and can misassign artist/title order; no episode is marked complete automatically."]}
+    summary={"window_start":start.isoformat(),"window_end":end.isoformat(),"series_url":args.listing_url,"listing_pages_fetched":len(listing_pages),"listing_pagination_status":pagination_status,"radiofiles_discovery_enabled":args.radiofiles_discovery,"radiofiles_discovery_candidates_added":radiofiles_discovered,"radiofiles_discovery_error":radiofiles_discovery_error,"listing_page_cap_reached":pagination_status=="page_cap_reached","episodes_discovered":len(episodes),"episode_pages_in_window_or_undated":sum(r["page_fetch_status"]=="fetched" for r in rows),"visible_tracklist_headings_detected":sum(r["visible_tracklist_heading_detected"]=="true" for r in rows),"undated_episode_pages":sum(r["page_fetch_status"]=="fetched" and not bool(r["episode_date"]) for r in rows),"inaccessible_episode_pages":sum(r["page_fetch_status"]=="failed" for r in rows),"provisional_track_artist_candidates":len(trackrows),"episodes_certified_complete":0,"errors":errors,"listing_pages":listing_pages,"status":"PARTIAL","limitations":["BBC episode listing pagination may not expose every episode; inspect listing_pagination_status and page-cap flag.",
+        "RadioFiles discovery is a recent-PID fallback only; every discovered candidate must be fetched from the official BBC page and tracklists still need completeness review.","Episode dates may not be machine-readable in visible text.","Tracklist heading detection is not completeness verification.","Track/artist candidates are extracted only from explicit JSON-LD or simple visible-text patterns; all candidates require manual review.","Text-pattern extraction may miss tracks and can misassign artist/title order; no episode is marked complete automatically."]}
     (out/"bbc_collection_audit.json").write_text(json.dumps(summary,indent=2)+"\n",encoding="utf-8")
     print(json.dumps(summary,indent=2))
     return 1 if errors else 0
