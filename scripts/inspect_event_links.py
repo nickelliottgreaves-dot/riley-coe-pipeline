@@ -48,6 +48,18 @@ class Parser(HTMLParser):
             if t: self.text.append(t)
             if self._anchor is not None and t: self._anchor["text"].append(t)
 
+NON_HTML_ASSET_EXTENSIONS = {
+    ".jpg", ".jpeg", ".png", ".gif", ".webp", ".avif", ".svg", ".ico",
+    ".mp4", ".m4v", ".mov", ".webm", ".mp3", ".wav", ".ogg", ".flac",
+    ".css", ".js", ".map", ".woff", ".woff2", ".ttf", ".otf", ".eot",
+}
+
+
+def is_non_html_asset_url(url):
+    """Return true for obvious static assets that the HTML event crawler cannot inspect."""
+    return Path(urlparse(url).path).suffix.casefold() in NON_HTML_ASSET_EXTENSIONS
+
+
 def canonicalize_url(url):
     """Remove tracking parameters so a calendar page is not crawled repeatedly."""
     parsed=urlparse(url)
@@ -831,6 +843,8 @@ def main():
         primary_host=urlparse(primary_source_url).netloc.casefold()
         for seed_url in urls:
             canonical=canonicalize_url(seed_url)
+            if is_non_html_asset_url(canonical):
+                continue
             target_host=urlparse(canonical).netloc.casefold()
             # Retain external links in the seed inventory so the audit can count
             # them as skipped, but never enqueue them for crawling.
@@ -978,6 +992,8 @@ def main():
                         for href,txt in p.links:
                             target=urljoin(url,href); parsed=urlparse(target)
                             if parsed.scheme not in {"https","http"} or parsed.netloc not in source_hosts:
+                                continue
+                            if is_non_html_asset_url(target):
                                 continue
                             if canonical_urls and not allowed_source_scoped_url(canonical_urls[0],target,venue):
                                 continue
