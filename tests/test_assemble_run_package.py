@@ -16,11 +16,6 @@ class EvidencePackageTests(unittest.TestCase):
                 w=csv.DictWriter(f,fieldnames=["episode_date","episode_title","episode_url","artist_candidate","track_title","extraction_method","review_status","evidence_text","notes"])
                 w.writeheader()
                 w.writerow({"episode_date":"2026-10-13","episode_title":"Example","episode_url":"https://www.bbc.co.uk/programmes/m0031tk4","artist_candidate":"Example Artist","track_title":"Example Song","extraction_method":"visible_text_title_by_artist","review_status":"needs_manual_review","evidence_text":"Example Song by Example Artist","notes":"review"})
-            mixcloud=tmp_path/"mixcloud_tracks.csv"
-            with mixcloud.open("w",newline="",encoding="utf-8") as f:
-                w=csv.DictWriter(f,fieldnames=["episode_date","episode_title","episode_url","artist","track_title","track_position","source","verification_status"])
-                w.writeheader()
-                w.writerow({"episode_date":"2026-10-14","episode_title":"Mixcloud Example","episode_url":"https://www.mixcloud.com/example/show","artist":"Mix Artist","track_title":"Mix Song","track_position":"1","source":"Mixcloud API","verification_status":"candidate"})
             radiofiles=tmp_path/"radiofiles_episodes.csv"
             with radiofiles.open("w",newline="",encoding="utf-8") as f:
                 w=csv.DictWriter(f,fieldnames=["episode_date","episode_title","episode_pid","source_url","has_tracklist","tracklist_status","track_count_reported","track_count_returned","count_match","notes"])
@@ -34,7 +29,7 @@ class EvidencePackageTests(unittest.TestCase):
             out=tmp_path/"run"
             subprocess.run([sys.executable,str(ROOT/"scripts/assemble_run_package.py"),
                 "--start","2026-10-13","--end","2026-10-26","--bbc-episodes",str(bbc),
-                "--bbc-track-candidates",str(candidates),"--mixcloud-track-candidates",str(mixcloud),
+                "--bbc-track-candidates",str(candidates),
                 "--radiofiles-episodes",str(radiofiles),"--radiofiles-track-candidates",str(radiofiles_tracks),
                 "--out-dir",str(out)],check=True,capture_output=True,text=True)
             with (out/"episodes.csv").open(newline="",encoding="utf-8") as f:
@@ -50,10 +45,9 @@ class EvidencePackageTests(unittest.TestCase):
             self.assertEqual(rows[0]["artist_candidate"],"Example Artist")
             with (out/"tracklist_candidate_review.csv").open(newline="",encoding="utf-8") as f:
                 review=list(csv.DictReader(f))
-            self.assertEqual(len(review),3)
-            self.assertEqual({row["artist_candidate"] for row in review},{"Example Artist","Mix Artist","Radio Artist"})
+            self.assertEqual(len(review),2)
+            self.assertEqual({row["artist_candidate"] for row in review},{"Example Artist","Radio Artist"})
             self.assertTrue(all(row["review_status"]=="needs_manual_review" for row in review))
-            self.assertTrue((out/"mixcloud_api_track_candidates.csv").exists())
             self.assertTrue(any(name.startswith("Riley_Coe_tracklist_candidate_review_") for name in json.loads((out/"run_manifest.json").read_text())["dated_exports"]))
             with (out/"input_file_audit.csv").open(newline="",encoding="utf-8") as f:
                 audit=list(csv.DictReader(f))
@@ -127,7 +121,7 @@ class EvidencePackageTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             out=Path(tmp)/"run"
             subprocess.run([sys.executable,str(ROOT/"scripts/assemble_run_package.py"),
-                "--start","2026-10-13","--end","2026-10-26","--episodes",str(Path(tmp)/"missing-mixcloud.csv"),"--out-dir",str(out)],check=True,capture_output=True,text=True)
+                "--start","2026-10-13","--end","2026-10-26","--bbc-episodes",str(Path(tmp)/"missing-bbc.csv"),"--out-dir",str(out)],check=True,capture_output=True,text=True)
             manifest=json.loads((out/"run_manifest.json").read_text())
             self.assertEqual(manifest["claimed_status"],"PARTIAL")
             self.assertIs(manifest["episode_coverage_complete"],False)
@@ -142,7 +136,7 @@ class EvidencePackageTests(unittest.TestCase):
             self.assertIn("missing_or_unsupplied_inputs",manifest)
             with (out/"input_file_audit.csv").open(newline="") as f:
                 inputs=list(csv.DictReader(f))
-            self.assertTrue(any(row["input_name"]=="mixcloud_episode_inventory" and row["status"]=="missing" for row in inputs))
+            self.assertTrue(any(row["input_name"]=="bbc_episode_inventory" and row["status"]=="missing" for row in inputs))
             self.assertTrue(any(row["input_name"]=="bbc_episode_inventory" and row["status"]=="not_supplied" for row in inputs))
             with (out/"venue_coverage.csv").open(newline="") as f:
                 rows=list(csv.DictReader(f))
