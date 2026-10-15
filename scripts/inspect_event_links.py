@@ -678,6 +678,39 @@ def likely(href,text):
     return bool(re.search(r"event|gig|show|concert|ticket|whats-on|whatson|live-music|performance|listing|page=|next|older",href+" "+text,re.I))
 
 
+def is_plausible_event_page_url(target, source_url):
+    """Reject same-host artist profiles and metro-wide pages that misattribute events to a venue."""
+    parsed=urlparse(target)
+    source=urlparse(source_url)
+    if parsed.scheme not in {"http","https"} or parsed.netloc != source.netloc:
+        return False
+    path=parsed.path.casefold().rstrip("/") or "/"
+    base=source.path.casefold().rstrip("/") or "/"
+    # Never crawl global search, artist, profile or city/metro result pages as
+    # if they were this venue's event detail pages.
+    blocked=("/artists/","/artist/","/metro-areas/","/search/","/users/","/profile/","/tags/")
+    if any(part in path for part in blocked):
+        return False
+    if path==base:
+        return True
+    # Pagination on the exact configured venue calendar is allowed.
+    if path==base and is_pagination_link(target,"",source_url):
+        return True
+    if re.match(r"^/venues/[^/]+(?:/calendar)?$",base) and path.startswith(base.split("/calendar",1)[0]+"/calendar"):
+        return True
+    if is_calendar_navigation(target,"",source_url):
+        return True
+    # Common event-detail patterns across official venues, Songkick and Ents24.
+    if re.search(r"/(?:concerts?|events?|gigs?|shows?|performances?|tickets?)/[^/]+",path):
+        return True
+    if re.search(r"/(?:newcastle-events|newcastle-upon-tyne-events)/.+/\d+/?$",path):
+        return True
+    # Some promoter sites nest individual event pages below their listing route.
+    if base!="/" and path.startswith(base+"/") and re.search(r"\d{4,}",path):
+        return True
+    return False
+
+
 def main():
     ap=argparse.ArgumentParser()
     ap.add_argument("--links",type=Path,required=True)
@@ -732,8 +765,10 @@ def main():
         if canonical_urls:
             queue.append((canonical_urls[0],0)); queued.add(canonical_urls[0])
         official_host=urlparse(canonical_urls[0]).netloc if canonical_urls else ""
-        fallback_seed_urls=[u for u in canonical_urls[1:] if urlparse(u).netloc == official_host]
-        external_seed_links_skipped=max(0,len(canonical_urls[1:])-len(fallback_seed_urls))
+        fallback_seed_urls=[u for u in canonical_urls[1:] if urlparse(u).netloc == official_host and is_plausible_event_page_url(u,canonical_urls[0])]
+        external_seed_links_skipped=max(0,len(canonical_urls[1:])-sum(urlparse(u).netloc == official_host for u in canonical_urls[1:]))
+        non_event_seed_links_skipped=sum(urlparse(u).netloc == official_host and not is_plausible_event_page_url(u,canonical_urls[0]) for u in canonical_urls[1:])
+        non_event_links_skipped=0
         # Follow links only on the official venue host. Third-party ticket links are
         # retained in discovery inputs but must not explode the crawl into global ticketing pages.
         source_hosts={official_host} if official_host else set()
@@ -882,6 +917,9 @@ def main():
                             elif not event_objects and not likely(href,txt):
                                 continue
                             target=canonicalize_url(target)
+                            if not navigation and not is_plausible_event_page_url(target,url):
+                                non_event_links_skipped+=1
+                                continue
                             if target in visited or target in queued:
                                 continue
                             item=(target,depth+1)
@@ -895,7 +933,7 @@ def main():
                 failed+=1
                 all_rows.append({"venue":venue,"page_url":url,"http_status":"","content_type":"","page_title":"","event_title":"","event_date":"","performer_names":"","price":"","currency":"","availability":"","event_jsonld_found":"false","visible_text_snapshot":"","verified":"false","status":"fetch_failed","notes":f"{type(exc).__name__}: {exc}"})
             time.sleep(max(0,args.delay))
-        audits.append({"venue":venue,"seed_candidate_links":len(set(urls)),"external_seed_links_skipped":external_seed_links_skipped,"pages_fetched":len(visited)-failed,"pages_failed":failed,"same_host_links_added":added,"crawl_cap_reached":str(cap).lower(),"status":"PARTIAL" if urls else "NO_SEED_LINKS","notes":("Bounded crawl only; cap, JavaScript content, pagination and event/support completeness require review. External ticketing hosts are not crawled in this pass." if urls else "No candidate links supplied for this configured venue. This is a discovery gap, not evidence that the calendar is empty.")})
+        audits.append({"venue":venue,"seed_candidate_links":len(set(urls)),"external_seed_links_skipped":external_seed_links_skipped,"non_event_seed_links_skipped":non_event_seed_links_skipped,"non_event_links_skipped":non_event_links_skipped,"pages_fetched":len(visited)-failed,"pages_failed":failed,"same_host_links_added":added,"crawl_cap_reached":str(cap).lower(),"status":"PARTIAL" if urls else "NO_SEED_LINKS","notes":("Bounded crawl only; cap, JavaScript content, pagination and event/support completeness require review. External ticketing hosts are not crawled in this pass." if urls else "No candidate links supplied for this configured venue. This is a discovery gap, not evidence that the calendar is empty.")})
         return all_rows, audits
 
     # Crawl independent venues concurrently so a slow or blocked site cannot
