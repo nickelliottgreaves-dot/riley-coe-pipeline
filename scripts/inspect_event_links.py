@@ -134,6 +134,68 @@ def extract_visible_event(page_title, visible_text):
         "notes":"Candidate extracted from visible event-page text; independently verify title, artist billing/support, date, room, price and ticket status."
     }
 
+def extract_visible_listing_events(visible_text):
+    """Extract event-card candidates from listing pages with title/date/venue lines."""
+    lines=[line.strip() for line in visible_text.splitlines() if line.strip()]
+    date_pattern=re.compile(r"(?i)\b(?:(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)(?:day)?\s+)?\d{1,2}\s+[A-Za-z]{3,9}\s+20\d{2}\b")
+    generic={"gigs","events","what's on","whats on","info","tickets","buy tickets","details","view as list","choose date","search","next","previous","older"}
+    known_venues=[
+        "The Cluny","Cluny 2","Boiler Shop","Wylam Brewery","The Grove","Glasshouse","Sage Two","Sage One",
+        "Cumberland Arms","Cobalt Studios","NX Newcastle","Think Tank","O2 City Hall","Central Bar",
+        "Gosforth Civic Theatre","Newcastle University","Students' Union","Lubber Fiend","The Globe",
+        "Little Buildings","Utilita Arena","ZEROX"
+    ]
+    def parsed_date(value):
+        value=value.strip()
+        for fmt in ("%a %d %b %Y","%A %d %B %Y","%a %d %B %Y","%d %B %Y","%d %b %Y"):
+            try: return datetime.strptime(value,fmt).date().isoformat()
+            except ValueError: pass
+        match=re.search(r"(?i)\b(\d{1,2}\s+[A-Za-z]{3,9}\s+20\d{2})\b",value)
+        if match:
+            for fmt in ("%d %B %Y","%d %b %Y"):
+                try: return datetime.strptime(match.group(1),fmt).date().isoformat()
+                except ValueError: pass
+        return ""
+    found=[]
+    for i,line in enumerate(lines):
+        if not date_pattern.search(line):
+            continue
+        dt=parsed_date(line)
+        if not dt or i==0:
+            continue
+        title=lines[i-1].strip(" -–—:")
+        if not title or title.casefold() in generic or len(title)>180:
+            continue
+        j=i+1
+        while j<len(lines) and lines[j] in {"/","|","–","—","-"}: j+=1
+        if j>=len(lines): continue
+        venue_line=lines[j]
+        if not any(name.casefold() in venue_line.casefold() for name in known_venues):
+            continue
+        supports=[]
+        k=j+1
+        if k<len(lines) and lines[k].casefold()=="with support from":
+            k+=1
+            while k<len(lines):
+                low=lines[k].casefold()
+                if low in {"info","tickets","buy tickets","details","date","venue","advance tickets","doors","age restrictions"} or date_pattern.search(lines[k]):
+                    break
+                if len(lines[k])<=120 and lines[k].casefold() not in generic and lines[k] not in {"/","|"}:
+                    supports.append(lines[k])
+                k+=1
+        performers=list(dict.fromkeys([title]+supports))
+        found.append({
+            "event_title":title,"event_date":dt,"venue":venue_line,
+            "performer_names":"; ".join(performers),"price":"","currency":"","availability":"not_checked",
+            "notes":"Candidate extracted from visible venue calendar card; independently verify artist billing/support, exact room, date, price and ticket status."
+        })
+    unique=[]; seen=set()
+    for row in found:
+        key=(row["event_date"],row["event_title"].casefold(),row["venue"].casefold())
+        if key not in seen:
+            seen.add(key); unique.append(row)
+    return unique
+
 def likely(href,text):
     return bool(re.search(r"event|gig|show|concert|ticket|whats-on|whatson|live-music|performance|listing|page=|next|older",href+" "+text,re.I))
 
@@ -220,7 +282,12 @@ def main():
                     if visible_event:
                         all_rows.append({"venue":visible_event["venue"] or venue,"page_url":url,"http_status":status,"content_type":ctype,"page_title":page_title,"event_title":visible_event["event_title"],"event_date":visible_event["event_date"],"performer_names":visible_event["performer_names"],"price":visible_event["price"],"currency":visible_event["currency"],"availability":visible_event["availability"],"event_jsonld_found":"false","visible_text_snapshot":f"snapshots/{snap_name}","verified":"false","status":"visible_event_candidate_needs_review","notes":visible_event["notes"]+( " HTML truncated." if truncated else "")})
                     else:
-                        all_rows.append({"venue":venue,"page_url":url,"http_status":status,"content_type":ctype,"page_title":page_title,"event_title":"","event_date":"","performer_names":"","price":"","currency":"","availability":"","event_jsonld_found":"false","visible_text_snapshot":f"snapshots/{snap_name}","verified":"false","status":"page_text_needs_review","notes":"No Event JSON-LD or reliable visible Date/Venue fields found; inspect saved visible text manually."+( " HTML truncated." if truncated else "")})
+                        listing_events=extract_visible_listing_events(visible)
+                        if listing_events:
+                            for candidate in listing_events:
+                                all_rows.append({"venue":candidate["venue"],"page_url":url,"http_status":status,"content_type":ctype,"page_title":page_title,"event_title":candidate["event_title"],"event_date":candidate["event_date"],"performer_names":candidate["performer_names"],"price":candidate["price"],"currency":candidate["currency"],"availability":candidate["availability"],"event_jsonld_found":"false","visible_text_snapshot":f"snapshots/{snap_name}","verified":"false","status":"visible_event_candidate_needs_review","notes":candidate["notes"]+( " HTML truncated." if truncated else "")})
+                        else:
+                            all_rows.append({"venue":venue,"page_url":url,"http_status":status,"content_type":ctype,"page_title":page_title,"event_title":"","event_date":"","performer_names":"","price":"","currency":"","availability":"","event_jsonld_found":"false","visible_text_snapshot":f"snapshots/{snap_name}","verified":"false","status":"page_text_needs_review","notes":"No Event JSON-LD or reliable visible event-card fields found; inspect saved visible text manually."+( " HTML truncated." if truncated else "")})
                 if depth<args.max_depth:
                     for href,txt in p.links:
                         target=urljoin(url,href); parsed=urlparse(target)
