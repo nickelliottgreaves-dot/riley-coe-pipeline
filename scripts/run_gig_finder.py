@@ -208,6 +208,19 @@ def main() -> int:
         "--venues", str(sources_path), "--out", str(pool_page_matches),
     ], out_dir, stage_results)
     ensure_csv(pool_page_matches, ["artist", "searched", "result", "evidence_url", "notes"])
+    pool_rows = read_csv(pool_path)
+    page_match_rows = read_csv(pool_page_matches)
+    page_match_keys = {normalize_key(row.get("artist", "")) for row in page_match_rows}
+    for pool_row in pool_rows:
+        artist = (pool_row.get("artist") or "").strip()
+        key = normalize_key(artist)
+        if key and key not in page_match_keys:
+            page_match_rows.append({
+                "artist": artist, "searched": "false",
+                "result": "not_searched_due_to_stage_failure", "evidence_url": "",
+                "notes": "No per-artist search result was emitted by the page-comparison stage.",
+            })
+    write_csv(pool_page_matches, ["artist", "searched", "result", "evidence_url", "notes"], page_match_rows)
 
     matches_path = out_dir / "artist_window_event_matches.csv"
     run_stage("date_window_artist_matching", [
@@ -218,9 +231,25 @@ def main() -> int:
         "--start", start.isoformat(), "--end", end.isoformat(), "--out", str(matches_path),
     ], out_dir, stage_results)
     ensure_csv(matches_path, MATCH_FIELDS)
-    ensure_csv(out_dir / "artist_window_event_coverage.csv", [
+    coverage_path = out_dir / "artist_window_event_coverage.csv"
+    ensure_csv(coverage_path, [
         "artist", "searched", "candidate_count", "result", "window_start", "window_end", "notes",
     ])
+    event_coverage_rows = read_csv(coverage_path)
+    event_coverage_keys = {normalize_key(row.get("artist", "")) for row in event_coverage_rows}
+    for pool_row in pool_rows:
+        artist = (pool_row.get("artist") or "").strip()
+        key = normalize_key(artist)
+        if key and key not in event_coverage_keys:
+            event_coverage_rows.append({
+                "artist": artist, "searched": "false", "candidate_count": "0",
+                "result": "not_searched_due_to_stage_failure",
+                "window_start": start.isoformat(), "window_end": end.isoformat(),
+                "notes": "No per-artist event comparison row was emitted by the matching stage.",
+            })
+    write_csv(coverage_path, [
+        "artist", "searched", "candidate_count", "result", "window_start", "window_end", "notes",
+    ], event_coverage_rows)
 
     page_audit = read_csv(venue_dir / "venue_page_access_audit.csv")
     discovery_audit = read_csv(discovery_dir / "event_discovery_audit.csv")
