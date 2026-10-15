@@ -162,7 +162,7 @@ def fetch_html_cloudcasts(username: str, since: date, until: date) -> tuple[list
     # Cloudcast cards may be embedded in hydration JSON rather than ordinary
     # anchors. Scan the captured public HTML for same-account show paths too.
     path_pattern = (
-        r"(?i)(?:https?://(?:www\\.)?mixcloud\\.com)?/?"
+        r"(?i)(?:https?://(?:www\.)?mixcloud\.com)?/?"
         + re.escape(username.strip("/"))
         + r"/riley[-_]coe[A-Za-z0-9/_-]*"
     )
