@@ -29,6 +29,24 @@ class GigFinderCoverageTests(unittest.TestCase):
         self.assertEqual(row["detail_pages_failed"], "1")
         self.assertEqual(row["calendar_coverage_verified"], "false")
 
+    def test_external_ticket_page_failures_do_not_mark_calendar_capture_partial(self):
+        sources = [{"venue": "Venue A", "source_url": "https://venue.example/events", "notes": ""}]
+        page = [{"venue": "Venue A", "text_file": "page_text/venue-a.txt", "http_status": "200", "notes": ""}]
+        discovery = [{"venue": "Venue A", "status": "ok", "structured_events_found": "3", "candidate_links_found": "4", "notes": ""}]
+        crawl = [{"venue": "Venue A", "pages_fetched": "3", "pages_failed": "2", "external_event_pages_inspected": "2",
+                  "crawl_cap_reached": "false", "status": "PARTIAL", "notes": "Two ticket links failed."}]
+        failures = [
+            {"venue": "Venue A", "page_url": "https://tickets.example/1", "external_page": "true"},
+            {"venue": "Venue A", "page_url": "https://tickets.example/2", "external_page": "true"},
+        ]
+        row = combine_venue_coverage(sources, page, discovery, crawl, failures)[0]
+        self.assertEqual(row["outcome"], "checked_in_captured_scope")
+        self.assertEqual(row["detail_pages_failed"], "2")
+        self.assertEqual(row["same_host_pages_failed"], "0")
+        self.assertEqual(row["external_detail_pages_failed"], "2")
+        self.assertEqual(row["calendar_coverage_verified"], "false")
+        self.assertIn("event-level details remain unresolved", row["notes"])
+
     def test_empty_but_successfully_checked_capture_is_not_claimed_as_no_gigs(self):
         sources = [{"venue": "Venue A", "source_url": "https://example.test/a", "notes": ""}]
         page = [{"venue": "Venue A", "status": "fetched", "http_status": "200", "text_file": "page_text/venue-a.txt", "notes": ""}]
