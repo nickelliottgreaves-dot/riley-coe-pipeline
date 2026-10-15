@@ -61,6 +61,19 @@ class ValidateGigFinderReportTests(unittest.TestCase):
         self.write_csv(run / "out_of_scope_event_candidates.csv", [
             "event_date", "source_venue", "explicit_location", "event_title", "artist", "source_url", "notes"
         ], [])
+        inspection_dir = run / "event_inspection"
+        inspection_dir.mkdir()
+        self.write_csv(inspection_dir / "event_page_crawl_audit.csv", [
+            "venue", "seed_candidate_links", "external_seed_links_skipped", "external_event_pages_inspected",
+            "pages_fetched", "pages_failed", "same_host_links_added", "crawl_cap_reached", "status", "notes"
+        ], [{
+            "venue": "Test Venue", "seed_candidate_links": "1", "external_seed_links_skipped": "0",
+            "external_event_pages_inspected": "0", "pages_fetched": "1", "pages_failed": "0",
+            "same_host_links_added": "0", "crawl_cap_reached": "false", "status": "PARTIAL", "notes": "fixture"
+        }])
+        self.write_csv(inspection_dir / "event_page_fetch_failures.csv", [
+            "venue", "page_url", "crawl_depth", "http_status", "external_page", "error_type", "error_message"
+        ], [])
         self.write_csv(run / "stage_results.csv", ["stage", "status", "exit_code", "command", "log_file", "notes"], [])
         return run, pool, sources
 
@@ -74,6 +87,25 @@ class ValidateGigFinderReportTests(unittest.TestCase):
             result = json.loads(output.getvalue())
             self.assertTrue(result["valid"])
             self.assertEqual(result["status"], "PARTIAL")
+
+    def test_failure_ledger_must_match_crawl_audit_count(self):
+        with tempfile.TemporaryDirectory() as temp:
+            run, pool, sources = self.build_fixture(Path(temp))
+            failures = run / "event_inspection" / "event_page_fetch_failures.csv"
+            with failures.open("a", encoding="utf-8", newline="") as handle:
+                writer = csv.DictWriter(handle, fieldnames=[
+                    "venue", "page_url", "crawl_depth", "http_status", "external_page", "error_type", "error_message"
+                ])
+                writer.writerow({
+                    "venue": "Test Venue", "page_url": "https://example.test/broken",
+                    "crawl_depth": "1", "http_status": "503", "external_page": "false",
+                    "error_type": "ValueError", "error_message": "HTTP 503 returned no visible text"
+                })
+            output = StringIO()
+            with patch("sys.argv", ["validate_gig_finder_report.py", "--run-dir", str(run), "--pool", str(pool), "--sources", str(sources)]), redirect_stdout(output):
+                code = main()
+            self.assertEqual(code, 1)
+            self.assertIn("event_page_fetch_failures.csv has 1 rows but venue crawl audit records 0 failed fetches", output.getvalue())
 
     def test_missing_source_coverage_row_fails_integrity_check(self):
         with tempfile.TemporaryDirectory() as temp:
