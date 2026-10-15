@@ -117,6 +117,26 @@ class EvidencePackageTests(unittest.TestCase):
             self.assertTrue(all(r["discovery_method"]=="shared_calendar_room_ambiguous" for r in unresolved))
             self.assertTrue(all("actual room is independently confirmed" in r["notes"] for r in unresolved))
 
+    def test_includes_full_pool_page_text_search_and_match_count(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp); search=root/"pool_search.csv"; out=root/"run"
+            with search.open("w",newline="",encoding="utf-8") as f:
+                w=csv.DictWriter(f,fieldnames=["artist","searched","result","evidence_url","notes"]); w.writeheader()
+                w.writerow({"artist":"Example Artist","searched":"true","result":"found_in_collected_pages",
+                    "evidence_url":"https://venue.example/calendar","notes":"Candidate text match; manual verification required."})
+            subprocess.run([sys.executable,str(ROOT/"scripts/assemble_run_package.py"),
+                "--start","2026-10-15","--end","2026-10-28","--pool-venue-page-matches",str(search),"--out-dir",str(out)],
+                check=True,capture_output=True,text=True)
+            with (out/"artist_pool_venue_page_matches.csv").open(newline="",encoding="utf-8") as f:
+                rows=list(csv.DictReader(f))
+            self.assertEqual(len(rows),1)
+            self.assertEqual(rows[0]["artist"],"Example Artist")
+            manifest=json.loads((out/"run_manifest.json").read_text())
+            self.assertEqual(manifest["artist_pool_page_search_rows"],1)
+            self.assertEqual(manifest["artist_pool_page_search_completed"],1)
+            self.assertEqual(manifest["artist_pool_page_text_matches"],1)
+            self.assertIs(manifest["artist_pool_compared_against_captured_pages"],False)
+
     def test_creates_partial_package_and_refuses_overwrite(self):
         with tempfile.TemporaryDirectory() as tmp:
             out=Path(tmp)/"run"
@@ -127,6 +147,10 @@ class EvidencePackageTests(unittest.TestCase):
             self.assertIs(manifest["episode_coverage_complete"],False)
             self.assertIs(manifest["venue_sweep_complete"],False)
             self.assertIs(manifest["artist_pool_compared"],False)
+            self.assertIs(manifest["artist_pool_compared_against_captured_pages"],False)
+            self.assertEqual(manifest["artist_pool_page_search_rows"],833)
+            self.assertEqual(manifest["artist_pool_page_search_completed"],0)
+            self.assertEqual(manifest["artist_pool_page_text_matches"],0)
             self.assertIs(manifest["all_event_sources_verified"],False)
             self.assertEqual(manifest["venue_calendar_checks_completed"],0)
             self.assertEqual(manifest["regression_artists_seeded"],9)
