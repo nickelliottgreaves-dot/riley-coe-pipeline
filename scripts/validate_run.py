@@ -8,6 +8,7 @@ from __future__ import annotations
 import argparse, csv, json, sys
 from datetime import date, timedelta
 from pathlib import Path
+from urllib.parse import parse_qs, urlparse
 
 ROOT = Path(__file__).resolve().parents[1]
 REQUIRED_VENUES_FILE = ROOT / "config" / "required_venues.csv"
@@ -40,6 +41,13 @@ def read_csv(path: Path, required: list[str], errors: list[str]) -> list[dict[st
 
 def truthy(value: str) -> bool:
     return (value or "").strip().lower() in {"true", "yes", "1", "y"}
+
+def episode_pid_from_url(value: str) -> str:
+    parsed=urlparse(value or "")
+    query=parse_qs(parsed.query)
+    if query.get("pid"):
+        return query["pid"][0].strip()
+    return parsed.path.rstrip("/").rsplit("/",1)[-1]
 
 def main() -> int:
     ap = argparse.ArgumentParser()
@@ -109,13 +117,35 @@ def main() -> int:
         if status not in TRACKLIST_STATES:
             errors.append(f"episodes.csv row {i}: invalid tracklist_status {status!r}")
         if status != "complete":
-            warnings.append(f"Episode row {i} is {status or 'blank'}; coverage cannot be complete")
+            message=f"Episode row {i} is {status or 'blank'}; coverage cannot be complete"
+            if manifest.get("claimed_status")=="COMPLETE":
+                errors.append(message)
+            else:
+                warnings.append(message)
         if status == "complete" and (not row.get("url", "").strip() or not row.get("source", "").strip()):
             errors.append(f"episodes.csv row {i}: complete episode lacks source and URL")
         try:
             date.fromisoformat(row.get("episode_date", ""))
         except ValueError:
             errors.append(f"episodes.csv row {i}: invalid episode_date")
+
+    # A row marked complete must be backed by the actual BBC–RadioFiles
+    # position/title/artist crosscheck, not just a manually edited status cell.
+    crosscheck_path=run_dir/"bbc_radiofiles_episode_crosscheck.csv"
+    complete_episode_rows=[(i,row) for i,row in enumerate(episodes,2)
+        if (row.get("tracklist_status") or "").strip().lower()=="complete"]
+    crosscheck_by_pid={}
+    if crosscheck_path.exists():
+        crosscheck_rows=read_csv(crosscheck_path,["episode_pid","crosscheck_status"],errors)
+        crosscheck_by_pid={row.get("episode_pid","").strip():row for row in crosscheck_rows if row.get("episode_pid","").strip()}
+    if complete_episode_rows and not crosscheck_path.exists():
+        errors.append("episodes.csv marks tracklists complete but bbc_radiofiles_episode_crosscheck.csv is missing")
+    else:
+        for row_number,row in complete_episode_rows:
+            pid=episode_pid_from_url(row.get("url",""))
+            crosscheck=crosscheck_by_pid.get(pid)
+            if not pid or not crosscheck or crosscheck.get("crosscheck_status")!="EXACT_FULL_TRACKLIST_MATCH":
+                errors.append(f"episodes.csv row {row_number}: complete status lacks an EXACT_FULL_TRACKLIST_MATCH crosscheck for PID {pid or '(missing)'}")
 
     venue_rows = tables.get("venue_coverage.csv", [])
     try:
@@ -172,9 +202,13 @@ def main() -> int:
         if state not in VENUE_STATES:
             errors.append(f"Venue {venue}: invalid status {state!r}")
         if state in {"inaccessible", "not_checked"}:
-            warnings.append(f"Venue {venue} not fully checked (status={state})")
+            message=f"Venue {venue} not fully checked (status={state})"
+            if manifest.get("claimed_status")=="COMPLETE": errors.append(message)
+            else: warnings.append(message)
         elif state == "partial":
-            warnings.append(f"Venue {venue} has bounded discovery evidence but calendar coverage is not certified")
+            message=f"Venue {venue} has bounded discovery evidence but calendar coverage is not certified"
+            if manifest.get("claimed_status")=="COMPLETE": errors.append(message)
+            else: warnings.append(message)
         if not row.get("source_url", "").strip():
             errors.append(f"Venue {venue}: missing evidence/source URL")
 
@@ -203,7 +237,9 @@ def main() -> int:
         if row.get("source_url", "").strip() and not row.get("source_url", "").strip().startswith(("https://", "http://")):
             errors.append(f"events.csv row {i}: source_url is not an HTTP(S) URL")
         if not truthy(row.get("verified", "")):
-            warnings.append(f"Event row {i} is not marked verified")
+            message=f"Event row {i} is not marked verified"
+            if manifest.get("claimed_status")=="COMPLETE": errors.append(message)
+            else: warnings.append(message)
         window_events.append(row)
 
     matches = tables.get("pool_matches.csv", [])
