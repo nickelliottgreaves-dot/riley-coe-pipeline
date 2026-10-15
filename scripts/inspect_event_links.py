@@ -128,9 +128,9 @@ def extract_visible_event(page_title, visible_text, default_venue="", page_url="
             if year<100: year+=2000
             try: event_date=datetime.strptime(f"{day} {month} {year}","%d %b %Y").date().isoformat()
             except ValueError: event_date=""
-    # Several official ticket/event pages encode the date in their canonical
-    # slug (e.g. heaven-17-15-11-26). Prefer that event-specific date when the
-    # visible page text appears to expose a page/current date or conflicts.
+    # Some event slugs encode a date, but slugs can be stale. If the URL date
+    # conflicts with the visible event date, preserve the page as an undated
+    # review candidate rather than silently choosing either date.
     slug_date=""
     slug_match=re.search(r"(?:^|[-/])(\d{1,2})-(\d{1,2})-(\d{2}|20\d{2})(?:/|$)",urlparse(page_url).path)
     if slug_match:
@@ -139,10 +139,12 @@ def extract_visible_event(page_title, visible_text, default_venue="", page_url="
         try: slug_date=date(year,month,day).isoformat()
         except ValueError: slug_date=""
     date_conflict=bool(slug_date and event_date and slug_date!=event_date)
-    if slug_date:
+    if date_conflict:
+        event_date=""
+    elif slug_date:
         event_date=slug_date
     venue=next_value("Venue") or default_venue
-    if not event_date or not venue:
+    if (not event_date and not date_conflict) or not venue:
         return None
     # The Glasshouse programme can link to the same multi-date production at
     # Sage One, Sage Two, and external touring venues. Prefer the explicit
