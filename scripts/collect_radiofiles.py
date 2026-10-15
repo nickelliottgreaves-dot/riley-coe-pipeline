@@ -5,7 +5,7 @@ RadioFiles states that its tracklists are sourced from BBC Sounds. This collecto
 uses its public JSON endpoints as an alternate route when the BBC page is not
 available to the GitHub Actions runner and Mixcloud's account/show URLs return
 soft-404s. It verifies internal track counts but NEVER certifies a tracklist
-complete or adds artists to the authoritative pool.
+complete or adds artists to the authoritative pool. Empty track arrays are\nexplicitly treated as unavailable, even when the reported count is zero.\n\n[full-sweep] Recheck all available episode tracklists and reconciliation outputs.
 """
 from __future__ import annotations
 import argparse, csv, json, time
