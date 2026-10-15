@@ -90,7 +90,7 @@ def clean(v):
     if isinstance(v,list): return "; ".join(x for x in (clean(i) for i in v) if x)
     return unescape(str(v or "").strip())
 
-def extract_visible_event(page_title, visible_text, default_venue=""):
+def extract_visible_event(page_title, visible_text, default_venue="", page_url=""):
     """Extract review-only event candidates from common visible event-detail layouts."""
     lines=[line.strip() for line in visible_text.splitlines() if line.strip()]
     related_start=next((i for i,line in enumerate(lines)
@@ -128,6 +128,19 @@ def extract_visible_event(page_title, visible_text, default_venue=""):
             if year<100: year+=2000
             try: event_date=datetime.strptime(f"{day} {month} {year}","%d %b %Y").date().isoformat()
             except ValueError: event_date=""
+    # Several official ticket/event pages encode the date in their canonical
+    # slug (e.g. heaven-17-15-11-26). Prefer that event-specific date when the
+    # visible page text appears to expose a page/current date or conflicts.
+    slug_date=""
+    slug_match=re.search(r"(?:^|[-/])(\d{1,2})-(\d{1,2})-(\d{2}|20\d{2})(?:/|$)",urlparse(page_url).path)
+    if slug_match:
+        day,month,year=map(int,slug_match.groups())
+        if year<100: year+=2000
+        try: slug_date=date(year,month,day).isoformat()
+        except ValueError: slug_date=""
+    date_conflict=bool(slug_date and event_date and slug_date!=event_date)
+    if slug_date:
+        event_date=slug_date
     venue=next_value("Venue") or default_venue
     if not event_date or not venue:
         return None
@@ -315,7 +328,7 @@ def extract_visible_event(page_title, visible_text, default_venue=""):
         "price":price,
         "currency":"GBP" if price else "",
         "availability":availability,
-        "notes":"Candidate extracted from visible event-page text; independently verify title, artist billing/support, date, room, price and ticket status."
+        "notes":"Candidate extracted from visible event-page text; independently verify title, artist billing/support, date, room, price and ticket status."+(" Canonical event URL date overrides conflicting visible date text." if date_conflict else "")
     }
 
 def extract_visible_listing_events(visible_text, default_venue=""):
@@ -625,7 +638,7 @@ def main():
                         all_rows.append({"venue":candidate["venue"],"page_url":url,"http_status":status,"content_type":ctype,"page_title":page_title,"event_title":candidate["event_title"],"event_date":candidate["event_date"],"performer_names":candidate["performer_names"],"price":candidate["price"],"currency":candidate["currency"],"availability":candidate["availability"],"event_jsonld_found":"false","visible_text_snapshot":f"snapshots/{snap_name}","verified":"false","status":"visible_event_candidate_needs_review","notes":candidate["notes"]+( " HTML truncated." if truncated else "")})
                 visible_event_found=False
                 if not event_objects:
-                    visible_event=extract_visible_event(page_title,visible,venue)
+                    visible_event=extract_visible_event(page_title,visible,venue,url)
                     visible_event_found=visible_event is not None
                     if visible_event:
                         all_rows.append({"venue":visible_event["venue"] or venue,"page_url":url,"http_status":status,"content_type":ctype,"page_title":page_title,"event_title":visible_event["event_title"],"event_date":visible_event["event_date"],"performer_names":visible_event["performer_names"],"price":visible_event["price"],"currency":visible_event["currency"],"availability":visible_event["availability"],"event_jsonld_found":"false","visible_text_snapshot":f"snapshots/{snap_name}","verified":"false","status":"visible_event_candidate_needs_review","notes":visible_event["notes"]+( " HTML truncated." if truncated else "")})
