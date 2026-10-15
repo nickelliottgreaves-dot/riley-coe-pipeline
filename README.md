@@ -4,7 +4,14 @@ Private repository for building an auditable, fail-closed weekly Riley & Coe art
 
 ## Current milestone
 
-This repository contains a versioned artist pool, a mandatory venue registry, a fail-closed evidence validator, regression tests, and scheduled/manual collectors for official BBC Sounds episode pages, RadioFiles tracklist fallback, official venue page discovery, and bounded event-page inspection. BBC and RadioFiles tracklists are cross-checked before any new artist can be proposed for the pool. Episode rows are marked `complete` only when track counts and every position/title match across the official BBC embedded tracklist and RadioFiles, with artist credits compatible at each position (RadioFiles may store the primary artist while BBC lists a fuller collaboration credit); mismatches become `incomplete`, and episodes with no usable tracklist become `unavailable`. Exact-matched track rows are marked `verified_full_tracklist_match` in the review CSV, while mismatches remain review-only. The validator independently requires an `EXACT_FULL_TRACKLIST_MATCH` row for every episode marked complete; a manually edited status cell cannot satisfy the evidence gate. A `COMPLETE` claim also fails if any episode is incomplete, any mandatory venue is unchecked/partial, or any event row remains unverified. The assembler creates a dated `PARTIAL` evidence package and exports the requested CSV families.
+The active implementation is split into two independent processes that share `config/workflow_contract.json` and `scripts/workflow_contract.py`:
+
+- **Weekly gig finder:** `scripts/run_gig_finder.py` loads the authoritative artist pool and all 20 required venue sources, searches a rolling 28-day inclusive window, and writes a dated evidence artifact with per-source coverage, page snapshots, event candidates, full-pool comparisons, candidate matches, stage logs and a manifest. Its companion `scripts/validate_gig_finder_report.py` validates report structure and explicit coverage. The report deliberately remains `PARTIAL` until venue calendars and individual gigs are independently verified.
+- **Artist-pool updater:** `scripts/run_artist_pool_updater.py` inventories BBC Sounds episodes, cross-checks BBC embedded tracklists against RadioFiles, and produces a review-only pool proposal. `scripts/validate_artist_pool_update.py` checks evidence and verifies the authoritative pool was not changed. It never adds artists automatically.
+
+The authoritative pool currently has 847 unique names: 747 baseline names, 86 additions supported by eight exact BBC/RadioFiles full-tracklist matches, and 14 manually reviewed distinct artists. The 833-row pre-manual-review pool and original 747-row baseline are preserved as dated backups. Three episode mismatches and one artist-identity collision remain review-only. Mixcloud is out of scope.
+
+The redesign branch is `redesign/workflow-contract`; `rebuild/core-gig-finder` is the legacy reference branch. Do not merge to `main` or claim a `COMPLETE` report merely because Actions is green.
 
 **Important limitation:** the workflow is reproducible, but its output remains a candidate report until the bounded evidence checks are complete. A green Actions run means the collectors, tests and evidence assembly executed without integrity errors; it does not mean every venue calendar is exhaustive or every event is verified. The report remains `PARTIAL` whenever a venue reaches a crawl cap, a source is unavailable, or any event/tracklist needs review.
 
@@ -13,24 +20,22 @@ This repository contains a versioned artist pool, a mandatory venue registry, a 
 **Reporting window:** The recurring workflow now searches a rolling 28-day window (today through 27 days ahead). This exceeds the minimum 14-day requirement and allows useful gigs just beyond the first fortnight to remain in the candidate report. Every event retains its actual date; this broader window does not imply that event billing, price or availability has been verified.
 
 
-A dated folder under `data/runs/` must contain:
-- `run_manifest.json`
-- `episodes.csv`
-- `venue_coverage.csv`
-- `events.csv`
-- `pool_matches.csv`
-- `regression_artist_checks.csv`
+The current Actions artifacts are named `riley-coe-independent-gig-finder-<run-id>` and `riley-coe-artist-pool-updater-<run-id>`. The gig-finder package includes `run_manifest.json`, `run_summary.json`, `venue_coverage.csv`, `artist_pool_page_matches.csv`, `artist_window_event_coverage.csv`, `artist_window_event_matches.csv`, `event_discovery/`, `event_inspection/`, `stage_results.csv`, snapshots and stage logs. The updater artifact includes BBC/RadioFiles source snapshots, episode and track cross-checks, a dated proposed pool, additions/ambiguity files, the preserved pool backup, and before/after pool hashes.
 
-Every mandatory venue must have a row with a source URL and a checked status. Episode coverage must explicitly be complete, the venue sweep must be complete, the artist pool must have been compared, and event sources must be verified. Inaccessible pages, incomplete tracklists, missing sources, or missing evidence prevent `COMPLETE`.
+All 20 configured sources are currently required. A valid `PARTIAL` report must include one coverage row for every source and one explicit searched/not-searched row for every pool artist. Missing or inaccessible sources remain partial/failed; they must never be interpreted as an empty calendar. A `COMPLETE` verified report remains prohibited until calendar coverage and each reported event's date, venue/room, billing/support, price and ticket status are independently verified.
 
 ## Run locally
 
 ```bash
 python -m unittest discover -s tests -v
-python scripts/validate_run.py --run-dir data/runs/current --pool data/artist_pool.csv
+python scripts/run_gig_finder.py --run-id local-review --out-dir artifacts/gig-finder-local-2026-10-15
+python scripts/validate_gig_finder_report.py --run-dir artifacts/gig-finder-local-2026-10-15 --pool data/artist_pool.csv --sources config/venue_sources.csv
+
+python scripts/run_artist_pool_updater.py --run-id local-review --out-dir artifacts/artist-pool-updater-local-2026-10-15
+python scripts/validate_artist_pool_update.py --run-dir artifacts/artist-pool-updater-local-2026-10-15 --pool data/artist_pool.csv
 ```
 
-The second command is expected to fail until a genuine evidence package exists. In scheduled/manual Actions runs, the gate now validates that same run's downloaded `artifacts/evidence-package` after assembly, rather than relying on a stale checked-in `data/runs/current` folder.
+Use a fresh output directory for each run; both runners refuse to overwrite non-empty evidence. The gig finder and artist updater are independent: an episode-collection failure must not block the weekly gig search. The legacy `validate_run.py` / `assemble_run_package.py` path remains for reference and is not the active redesign-branch report contract.
 
 ## Safety against false completion
 
@@ -47,7 +52,7 @@ The workflow also writes a dated artist-pool proposal, a backup of the previous 
 
 The scheduled/manual workflow fetches each configured venue source (official pages where parseable, otherwise explicitly labelled venue-specific safety nets) and preserves visible text plus `venue_page_access_audit.csv` as an Actions artifact. This proves only that a page was reachable and its text was captured. It does **not** prove that every date, pagination page, event detail, or support act in the 28-day window was checked. The event-page inspector follows same-host candidate links when structured Event JSON-LD exists but visible event cards are not parseable; a lone structured record must not suppress fallback discovery. If a host returns an empty non-200 response, or a source exposes no parseable visible event cards despite structured data, the inspector probes at most three fallback URLs instead of expanding into hundreds of same-host event pages. The visible-listing parser now handles ordinal full-year dates, apostrophe-year date lines, date-first cards, and inline month/day titles with a year inferred only from the requested window. Structured Event JSON-LD rows are filtered to the requested 28-day reporting window and duplicate event candidates are collapsed; out-of-window JSON-LD does not suppress an in-window visible-card candidate. When in-window structured data already supplies performer billing and price, the crawler avoids redundant detail-page fetches; it follows detail links when key data is missing. The Cluny and Cluny 2 entries use separate Songkick calendars as explicitly labelled external safety nets because the official site returned empty HTTP 202 responses; Ticketmaster also corroborates the reviewed Barbican Estate date, but the official Cluny event page remains unconfirmed. Utilita Arena Newcastle uses its Ticketmaster venue calendar, while Lubber Fiend, Little Buildings and ZEROX use venue-specific Skiddle calendars because their official pages yielded no parseable dated event links; original official URLs are retained in the registry notes for manual cross-check. Cumberland Arms, The Grove and NUSU point at their actual event calendars. External ticketing detail pages linked directly from venue sources are now followed only from an allowlist, capped at six per venue; other external links are recorded as skipped, and external pages are not recursively crawled. Regression tests cover the Wylam structured-data fallback, bounded empty-response retries, Cumberland Arms date-first cards, Central Bar yearless inline listings, ordinal dates on the Grove promoter calendar, and structured-candidate date-window filtering/deduplication. Structured Event JSON-LD is filtered to the requested 28-day window before candidate creation, and identical same-venue event rows are deduplicated before evidence assembly so a third-party calendar's year-round feed cannot swamp the candidate pool. These are targeted completeness and load safeguards, not proof of exhaustive coverage. The collector therefore reports zero completed calendar checks by design.
 
-The matching engine is `scripts/match_event_artists.py`. Given an event CSV and the full artist pool, it emits one row per distinct event artist:
+The legacy standalone matching helper is `scripts/match_event_artists.py`. The active gig finder uses `scripts/match_pool_to_window_events.py` to compare the full pool with dated event candidates. Given an event CSV and the full artist pool, the standalone helper emits one row per distinct event artist:
 - `exact`: normalized exact pool match;
 - `alias`: only an alias explicitly marked `approved` in `config/artist_aliases.csv`;
 - `fuzzy_candidate`: similarity suggestion for manual review, not a confirmed hit;
@@ -57,14 +62,12 @@ Do not approve an alias without a source/reason. Fuzzy candidates never become p
 
 ## Finite implementation exit criteria
 
-This implementation phase has a fixed finish point. Stop making exploratory parser changes once **one full-sweep run on the latest branch head** satisfies all of these:
-1. Unit tests pass on that exact commit.
-2. BBC Sounds, RadioFiles, venue inventory, event discovery, event-page inspection, assembly and the evidence gate all finish without a data-integrity error.
-3. The run uploads a dated evidence artifact containing the episode cross-check, dated event candidates, all configured venue-coverage rows, pool comparisons and source audit files.
-4. Every row in the authoritative artist pool has exactly one explicit searched result; no missing row is interpreted as a negative result.
-5. The evidence gate reports the actual state honestly. It may exit successfully with status `PARTIAL`; it must not call the report `COMPLETE` while required venue coverage or event verification is missing.
+The initial independent runner acceptance is now demonstrated by two live runs on the Skiddle scope-guard code:
+- Normal sweep [38739286368](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38739286368): 20/20 source rows, 847/847 artist-page searches, 847/847 dated-event comparison rows, six candidate matches, zero out-of-scope rows; report validated as `PARTIAL`.
+- Simulated Cobalt Studios failure [38739731517](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38739731517): same 20/20 and 847/847 coverage, six candidates, zero out-of-scope rows, Cobalt correctly partial; report validated as `PARTIAL`.
+- The latest test run passed 135 tests. The artist-pool updater ran independently and preserved the authoritative pool hash.
 
-After those criteria pass, the workflow assembly milestone is done. Further changes require a concrete failing test or a documented missing source/venue, not another open-ended round of general improvements. Producing a genuinely `COMPLETE` gig report is a separate, bounded research deliverable for a specific 28-day window: it requires checking every mandatory venue's calendar/pagination, reviewing event title/date/room/billing/support/price/ticket status, resolving pool matches, and recording evidence for each result. If any source cannot be exhausted, publish `PARTIAL` with the gaps listed instead of looping indefinitely.
+This is enough to accept the **initial repeatable PARTIAL-report path**, not a complete verified gig report. Freeze broad architecture work unless a concrete defect is reproduced. Remaining bounded research tasks are to resolve the seven partial venue sources (especially Utilita Arena's HTTP 403), manually verify candidate event details, and decide how manually reviewed evidence can be carried forward with a freshness policy.
 
 The workflow currently compares official BBC embedded tracklists with RadioFiles by position, title and compatible artist credits, and only applies artist additions supported by exact full-list matches. Its latest authoritative pool has 847 names (747 baseline names retained, 86 initial evidence-backed additions, and 14 manually resolved additions from exact full-tracklist matches); one fuzzy identity and three mismatched episodes remain review-only. The latest full sweep searches all 847 pool names against captured page text, but those text mentions are discovery hints, not verified gigs. Venue crawl caps and incomplete calendar coverage still keep the report `PARTIAL`. A structurally valid PARTIAL package exits successfully so Actions can deliver review artifacts; data-integrity errors still fail, and any `COMPLETE` claim remains blocked until every evidence gate passes.
 
@@ -130,7 +133,7 @@ Every assembled run now emits `venue_discovery_coverage.csv` plus `Riley_Coe_ven
 
 ### Safety-net venue sweep and zero-link audits
 
-The configured registry contains 20 required venue sources. Some sources are explicitly labelled venue-specific safety-net calendars (including The Globe, Little Buildings, Utilita Arena Newcastle and ZEROX Newcastle) where official pages are not crawler-friendly; these are still coverage rows and are not silently treated as optional or complete. All sources are searched venue-first and compared against the full artist pool, without reverting to artist-by-artist venue searches.
+The configured registry contains 20 required venue sources. Some sources are explicitly labelled venue-specific safety-net calendars (including Songkick for The Cluny/Cluny 2, Ticketmaster for Utilita Arena Newcastle, and Skiddle for Lubber Fiend, Little Buildings and ZEROX Newcastle) where official pages are not crawler-friendly; these are still coverage rows and are not silently treated as optional or complete. All sources are searched venue-first and compared against the full artist pool, without reverting to artist-by-artist venue searches.
 
 The event-page inspector receives the full venue registry and writes one crawl-audit row per configured venue, including venues for which discovery found zero candidate links. Such rows use `NO_SEED_LINKS` and explicitly mean "discovery gap"—never "no relevant gigs". The dated discovery coverage export includes all 20 required venues; every row blocks a COMPLETE claim unless its calendar coverage is explicitly verified.
 
