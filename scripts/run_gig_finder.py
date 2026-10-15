@@ -98,7 +98,7 @@ def combine_venue_coverage(
         crawl = crawl_by.get(key, {})
         failed_pages = (crawl.get("pages_failed") or "").strip()
         cap = (crawl.get("crawl_cap_reached") or "").strip().casefold()
-        page_status = (page.get("status") or page.get("fetch_status") or "not_checked").strip()
+        page_status = ("page_captured" if page.get("text_file") else "fetch_failed") if page else "not_checked"
         discovery_status = (discovery.get("status") or "not_checked").strip()
         notes = " ".join(x.strip() for x in [
             source.get("notes", ""), page.get("notes", ""),
@@ -277,8 +277,12 @@ def main() -> int:
         len(artist_coverage) == pool_count
         and all((row.get("searched") or "").casefold() == "true" for row in artist_coverage)
     )
+    source_outcome_counts = {}
+    for row in coverage:
+        source_outcome_counts[row["outcome"]] = source_outcome_counts.get(row["outcome"], 0) + 1
     manifest.update({
         "claimed_status": "PARTIAL",
+        "source_outcome_counts": source_outcome_counts,
         "artist_pool_compared": page_comparison_complete,
         "artist_pool_event_comparison_complete": event_comparison_complete,
         "configured_source_count": len(sources),
@@ -289,6 +293,7 @@ def main() -> int:
         "candidate_match_rows": len(matches),
         "verified_event_rows": sum((row.get("verified") or "").casefold() == "true" for row in matches),
         "stage_failures": sum(row["status"] != "success" for row in stage_results),
+        "source_outcome_counts": source_outcome_counts,
         "episode_discovery_required_for_gig_finder": False,
         "limitations": [
             "A negative match applies only to the captured corpus.",
