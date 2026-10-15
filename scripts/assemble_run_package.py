@@ -94,9 +94,12 @@ def main():
     crosscheck_by_pid={row.get("episode_pid","").strip():row for row in crosscheck_rows if row.get("episode_pid","").strip()}
     verified_candidate_rows=read_csv(args.bbc_radiofiles_verified_candidates,
         ["episode_pid","track_position","track_title","artist_candidate","crosscheck_status","evidence"]) if args.bbc_radiofiles_verified_candidates else []
+    # The verifier has already checked title and compatible artist credit at
+    # this position. Key by PID+position so a compatible primary-artist credit
+    # (e.g. RadioFiles stores the lead artist while BBC lists the collaboration)
+    # does not incorrectly send an already-verified row back to manual review.
     verified_track_keys={
-        (row.get("episode_pid","").strip(),str(row.get("track_position","")).strip(),
-         normalize_artist(row.get("track_title","")),normalize_artist(row.get("artist_candidate","")))
+        (row.get("episode_pid","").strip(),str(row.get("track_position","")).strip())
         for row in verified_candidate_rows if row.get("crosscheck_status")=="EXACT_FULL_TRACKLIST_MATCH"
     }
     def pid_from_url(url):
@@ -153,8 +156,7 @@ def main():
     track_review_fields=["episode_date","episode_title","episode_url","artist_candidate","track_title","track_position","extraction_method","review_status","evidence_text","notes"]
     track_review_rows=[]
     for track in radiofiles_tracks:
-        key=(str(track.get("episode_pid","")).strip(),str(track.get("track_position","")).strip(),
-             normalize_artist(track.get("track_title","")),normalize_artist(track.get("artist_candidate","")))
+        key=(str(track.get("episode_pid","")).strip(),str(track.get("track_position","")).strip())
         verified=key in verified_track_keys
         track_review_rows.append({"episode_date":track.get("episode_date",""),"episode_title":track.get("episode_title",""),
             "episode_url":track.get("source_url",""),"artist_candidate":track.get("artist_candidate",""),"track_title":track.get("track_title",""),
@@ -165,7 +167,7 @@ def main():
         track_review_rows.append({k:track.get(k,"") for k in track_review_fields})
     for track in embedded_tracks:
         pid=pid_from_url(track.get("episode_url",""))
-        key=(pid,str(track.get("track_position","")).strip(),normalize_artist(track.get("track_title","")),normalize_artist(track.get("artist_candidate","")))
+        key=(pid,str(track.get("track_position","")).strip())
         verified=key in verified_track_keys
         track_review_rows.append({
             "episode_date":track.get("episode_date",""),"episode_title":track.get("episode_title",""),
