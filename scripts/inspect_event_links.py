@@ -296,7 +296,7 @@ def extract_visible_event(page_title, visible_text, default_venue="", page_url="
     ticket_text=" ".join(main_lines).casefold()
     if "sold out" in ticket_text:
         availability="SoldOut"
-    elif price and re.search(r"\\b(?:get tickets|buy tickets|book tickets|on sale now|tickets available)\\b", ticket_text):
+    elif price and re.search(r"\b(?:get tickets|buy tickets|book tickets|on sale now|tickets available)\b", ticket_text):
         availability="listed_for_purchase"
     else:
         availability="not_checked"
