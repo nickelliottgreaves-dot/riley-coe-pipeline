@@ -103,8 +103,13 @@ def main():
                     raw=response.read(3_000_001)
                 response_cache[url]=(code,ctype,raw)
             item["http_status"]=str(code); item["content_type"]=ctype
-            # Some sites return HTTP 202 with an empty anti-bot/challenge body.
-            # That is not a usable calendar fetch and must not inflate coverage.
+            # Treat non-200 responses (including HTTP 202 challenge/app shells)
+            # as unusable coverage; a response body alone is not a calendar fetch.
+            if code != 200:
+                item.update(status="failed",notes=f"HTTP {code} is not accepted as a usable calendar response.")
+                errors.append(venue+": "+item["notes"])
+                audit.append(item)
+                continue
             if not raw:
                 item.update(status="failed",notes=f"HTTP {code} returned an empty response body; treated as unusable source coverage.")
                 errors.append(venue+": "+item["notes"])
