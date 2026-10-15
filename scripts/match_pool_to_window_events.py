@@ -141,8 +141,13 @@ def main() -> int:
             prior=dedup[key]
             urls=[u.strip() for u in (prior.get("source_url","")+";"+row.get("source_url","")).split(";") if u.strip()]
             prior["source_url"]="; ".join(dict.fromkeys(urls))
-            kinds=[k for k in (prior.get("source_kind",""),row.get("source_kind","")) if k]
-            prior["source_kind"]="+".join(dict.fromkeys("+".join(kinds).split("+")))
+            kinds=list(dict.fromkeys(k for k in (prior.get("source_kind",""),row.get("source_kind","")) if k))
+            # Preserve the established full-page billing match as the primary
+            # match basis when it is one of the deduplicated evidence paths.
+            if "pool_page_text_match" in kinds:
+                prior["source_kind"]="pool_page_text_match"
+            else:
+                prior["source_kind"]="+".join(dict.fromkeys("+".join(kinds).split("+")))
             notes=[n for n in (prior.get("notes",""),row.get("notes","")) if n]
             prior["notes"]=" | ".join(dict.fromkeys(notes))
     candidates=list(dedup.values())
