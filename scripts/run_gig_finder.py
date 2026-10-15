@@ -29,7 +29,8 @@ LINK_FIELDS = ["venue", "link_text", "candidate_url", "source_page_url", "candid
 INSPECTED_FIELDS = ["venue", "page_url", "http_status", "content_type", "page_title", "event_title", "event_date", "performer_names", "price", "currency", "availability", "event_jsonld_found", "visible_text_snapshot", "verified", "status", "notes"]
 MATCH_FIELDS = ["artist_pool_name", "event_date", "venue", "event_title", "matched_performer", "source_url", "source_kind", "match_basis", "candidate_status", "price", "ticket_status", "verified", "notes"]
 COVERAGE_FIELDS = ["venue", "source_url", "page_fetch_status", "http_status", "discovery_status", "candidate_events", "candidate_links", "detail_pages_fetched", "detail_pages_failed", "crawl_cap_reached", "calendar_coverage_verified", "outcome", "notes"]
-STAGE_FIELDS = ["stage", "status", "exit_code", "command", "log_file", "notes"]
+STAGE_FIELDS = ["stage", "status", "exit_code", "timeout_seconds", "command", "log_file", "notes"]
+STAGE_TIMEOUT_SECONDS = 300
 
 
 def read_csv(path: Path) -> list[dict[str, str]]:
@@ -60,12 +61,20 @@ def run_stage(name: str, command: list[str], out_dir: Path, results: list[dict[s
     try:
         completed = subprocess.run(
             command, cwd=ROOT, text=True, stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT, check=False,
+            stderr=subprocess.STDOUT, check=False, timeout=STAGE_TIMEOUT_SECONDS,
         )
         log_path.write_text(completed.stdout or "", encoding="utf-8")
         code = completed.returncode
         status = "success" if code == 0 else "failed"
         notes = "Stage completed." if code == 0 else "Non-zero exit; any outputs and the stage log are retained; later stages continue to produce a PARTIAL report."
+    except subprocess.TimeoutExpired as exc:
+        code = 124
+        status = "timed_out"
+        partial_output = exc.stdout or b""
+        if isinstance(partial_output, bytes):
+            partial_output = partial_output.decode("utf-8", errors="replace")
+        log_path.write_text(str(partial_output) + f"\nStage exceeded {STAGE_TIMEOUT_SECONDS}s timeout and was terminated.\n", encoding="utf-8")
+        notes = f"Stage exceeded {STAGE_TIMEOUT_SECONDS}s timeout; retained partial log/outputs and continued to produce a PARTIAL report."
     except OSError as exc:
         code = 127
         status = "failed"
@@ -73,6 +82,7 @@ def run_stage(name: str, command: list[str], out_dir: Path, results: list[dict[s
         log_path.write_text(notes + "\n", encoding="utf-8")
     results.append({
         "stage": name, "status": status, "exit_code": str(code),
+        "timeout_seconds": str(STAGE_TIMEOUT_SECONDS),
         "command": rendered, "log_file": str(log_path.relative_to(out_dir)),
         "notes": notes,
     })
