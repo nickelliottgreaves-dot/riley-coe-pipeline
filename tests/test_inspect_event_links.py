@@ -270,6 +270,8 @@ Saint-Saëns' packs energy into his concerto."""
         Violin
         Dinis Sousa
         Conductor
+        With support from
+        Support Act
         Timings are approximate and subject to change
         8.30pm - 9pm
         Interval
@@ -285,7 +287,7 @@ Saint-Saëns' packs energy into his concerto."""
         About Samling Academy"""
         row=extract_visible_event("Sheku Kanneh-Mason plays Saint-Saëns | The Glasshouse",visible,"Sage Two")
         self.assertIsNotNone(row)
-        self.assertEqual(row["performer_names"],"Sheku Kanneh-Mason; Dinis Sousa")
+        self.assertEqual(row["performer_names"],"Sheku Kanneh-Mason; Support Act; Dinis Sousa")
 
     def test_listing_parser_rejects_timing_and_access_labels_as_event_titles(self):
         visible="""8.30pm - 9pm
