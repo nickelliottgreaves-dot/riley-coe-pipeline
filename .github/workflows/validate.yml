@@ -77,7 +77,7 @@ jobs:
       - name: Inventory official BBC Riley & Coe episode pages
         run: |
           mkdir -p artifacts/bbc-sounds
-          START=$(python -c "from datetime import date,timedelta; print((date.today()-timedelta(days=7)).isoformat())")
+          START=$(python -c "from datetime import date,timedelta; print((date.today()-timedelta(days=21)).isoformat())")
           END=$(python -c "from datetime import date; print(date.today().isoformat())")
           python scripts/collect_bbc_sounds.py --start "$START" --end "$END" --out-dir artifacts/bbc-sounds
       - name: Preserve BBC episode inventory, snapshots and audit
