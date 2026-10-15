@@ -80,5 +80,46 @@ class KnownGigRegressionTests(unittest.TestCase):
             self.assertEqual(summary["status"], "PARSER_PASS_NATURAL_DISCOVERY_INCOMPLETE")
 
 
+    def test_listing_source_url_does_not_turn_an_explicit_seed_into_natural_discovery(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            fixtures = root / "fixtures.csv"
+            with fixtures.open("w", encoding="utf-8", newline="") as f:
+                w = csv.DictWriter(f, fieldnames=["fixture_id", "event_date", "venue", "event_title", "performer"])
+                w.writeheader()
+                w.writerow({"fixture_id": "1", "event_date": "2026-10-23", "venue": "Boiler Shop",
+                            "event_title": "The Wedding Present", "performer": "The Wedding Present"})
+            events = root / "events.csv"
+            with events.open("w", encoding="utf-8", newline="") as f:
+                w = csv.DictWriter(f, fieldnames=["event_date", "venue", "event_title", "artist", "source_url", "notes"])
+                w.writeheader()
+            inspected = root / "inspected.csv"
+            with inspected.open("w", encoding="utf-8", newline="") as f:
+                w = csv.DictWriter(f, fieldnames=["event_date", "venue", "event_title", "page_url", "notes"])
+                w.writeheader()
+                w.writerow({"event_date": "2026-10-23", "venue": "Boiler Shop", "event_title": "The Wedding Present",
+                            "page_url": "https://venue.example/wedding-present",
+                            "notes": "Explicit regression seed page; parser coverage only."})
+            natural_links = root / "natural_links.csv"
+            with natural_links.open("w", encoding="utf-8", newline="") as f:
+                w = csv.DictWriter(f, fieldnames=["candidate_url", "source_page_url"])
+                w.writeheader()
+                # The event page appears only as a source/listing URL, not as a
+                # naturally discovered event candidate.
+                w.writerow({"candidate_url": "https://venue.example/other-event",
+                            "source_page_url": "https://venue.example/wedding-present"})
+            out = root / "regressions.csv"
+            with patch("sys.argv", ["check_known_gig_regressions.py", "--fixtures", str(fixtures),
+                                    "--events", str(events), "--inspected", str(inspected),
+                                    "--inspection-dir", str(root), "--natural-links", str(natural_links),
+                                    "--out", str(out)]):
+                self.assertEqual(main(), 1)
+            with out.open(encoding="utf-8", newline="") as f:
+                row = next(csv.DictReader(f))
+            self.assertEqual(row["result"], "recovered")
+            self.assertEqual(row["natural_result"], "not_naturally_recovered")
+            self.assertEqual(row["explicit_seed_recovered"], "true")
+
+
 if __name__ == "__main__":
     unittest.main()
