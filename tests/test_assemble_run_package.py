@@ -82,7 +82,7 @@ class EvidencePackageTests(unittest.TestCase):
             with embedded.open("w",newline="",encoding="utf-8") as f:
                 w=csv.DictWriter(f,fieldnames=["episode_date","episode_title","episode_url","track_position","track_title","artist_candidate","source_url","review_status","notes","segment_urn"]);w.writeheader()
                 w.writerows([
-                    {"episode_date":"2026-10-13","episode_title":"Exact","episode_url":"https://www.bbc.co.uk/sounds/play/m001","track_position":"1","track_title":"Track A","artist_candidate":"Artist A","source_url":"https://www.bbc.co.uk/sounds/play/m001","review_status":"candidate","notes":"","segment_urn":"urn:1"},
+                    {"episode_date":"2026-10-13","episode_title":"Exact","episode_url":"https://www.bbc.co.uk/sounds/play/m001","track_position":"1","track_title":"Track A","artist_candidate":"Artist A & Guest","source_url":"https://www.bbc.co.uk/sounds/play/m001","review_status":"candidate","notes":"","segment_urn":"urn:1"},
                     {"episode_date":"2026-10-12","episode_title":"Mismatch","episode_url":"https://www.bbc.co.uk/sounds/play/m002","track_position":"1","track_title":"Track B","artist_candidate":"Artist B","source_url":"https://www.bbc.co.uk/sounds/play/m002","review_status":"candidate","notes":"","segment_urn":"urn:2"},
                 ])
             with crosscheck.open("w",newline="",encoding="utf-8") as f:
@@ -93,7 +93,7 @@ class EvidencePackageTests(unittest.TestCase):
                 ])
             with verified.open("w",newline="",encoding="utf-8") as f:
                 w=csv.DictWriter(f,fieldnames=["episode_date","episode_pid","episode_title","track_position","track_title","artist_candidate","radiofiles_artist_candidate","bbc_episode_url","radiofiles_episode_url","crosscheck_status","evidence"]);w.writeheader()
-                w.writerow({"episode_date":"2026-10-13","episode_pid":"m001","episode_title":"Exact","track_position":"1","track_title":"Track A","artist_candidate":"Artist A","radiofiles_artist_candidate":"Artist A","bbc_episode_url":"https://www.bbc.co.uk/sounds/play/m001","radiofiles_episode_url":"https://radiofiles.io/app?pid=m001","crosscheck_status":"EXACT_FULL_TRACKLIST_MATCH","evidence":"Exact position/title/artist match."})
+                w.writerow({"episode_date":"2026-10-13","episode_pid":"m001","episode_title":"Exact","track_position":"1","track_title":"Track A","artist_candidate":"Artist A & Guest","radiofiles_artist_candidate":"Artist A","bbc_episode_url":"https://www.bbc.co.uk/sounds/play/m001","radiofiles_episode_url":"https://radiofiles.io/app?pid=m001","crosscheck_status":"EXACT_FULL_TRACKLIST_MATCH","evidence":"Exact position/title match with compatible artist credits."})
             subprocess.run([sys.executable,str(ROOT/"scripts/assemble_run_package.py"),
                 "--start","2026-10-11","--end","2026-10-24","--bbc-episodes",str(bbc),
                 "--radiofiles-episodes",str(radio),"--radiofiles-track-candidates",str(rf_tracks),
