@@ -307,7 +307,7 @@ def main():
             venue=(source.get("venue") or "").strip()
             url=(source.get("source_url") or "").strip()
             if venue and url.startswith(("https://","http://")):
-                by_venue[venue].append(url)
+                by_venue[venue].insert(0,url)
     def crawl_venue(venue, urls):
         all_rows=[]
         audits=[]
