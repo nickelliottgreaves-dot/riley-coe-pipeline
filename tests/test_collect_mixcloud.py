@@ -62,7 +62,11 @@ class MixcloudInventoryTests(unittest.TestCase):
         self.assertFalse(any("yielded no dated" in error for error in errors))
 
     def test_search_fallback_tries_coe_query_variant_and_deduplicates(self):
+        requested_urls = []
         def fake_get_json(url):
+            requested_urls.append(url)
+            self.assertNotIn("since=", url)
+            self.assertNotIn("until=", url)
             if "q=Riley+Coe" in url:
                 return {"data": [{
                     "name": "Riley & Coe Tuesday 6 October 2026",
