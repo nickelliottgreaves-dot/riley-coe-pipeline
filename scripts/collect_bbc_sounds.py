@@ -184,7 +184,7 @@ def main():
     args=ap.parse_args(); start=date.fromisoformat(args.start); end=date.fromisoformat(args.end)
     if end<start: ap.error("--end must not precede --start")
     out=args.out_dir; snaps=out/"snapshots"; snaps.mkdir(parents=True,exist_ok=True)
-    episodes=[]; tracklists=[]; errors=[]; listing_pages=[]; visited=set(); listing_failed=False; fallback_pagination_used=False; listing_exhausted=False
+    episodes=[]; tracklists=[]; errors=[]; listing_pages=[]; visited=set(); listing_failed=False; fallback_pagination_used=False; listing_exhausted=False; empty_fallback_pages=0
     next_url=args.listing_url; pages=0
     while next_url and next_url not in visited and pages<12:
         visited.add(next_url); pages+=1
@@ -209,10 +209,17 @@ def main():
             explicit_next=next((u for u in page_links if u not in visited),"")
             if explicit_next:
                 next_url=explicit_next
-            elif new_count>0 and pages<12:
+            elif pages<12 and (new_count>0 or fallback_pagination_used):
                 listing_base=args.listing_url.split("?",1)[0]
                 fallback_url=f"{listing_base}?page={pages+1}"
-                if fallback_url not in visited:
+                if new_count>0:
+                    empty_fallback_pages=0
+                else:
+                    empty_fallback_pages+=1
+                # Some BBC listing pages can repeat or be sparse. Do not stop
+                # on the first page with no new IDs; probe one more page before
+                # declaring the sequential fallback exhausted.
+                if fallback_url not in visited and empty_fallback_pages<2:
                     next_url=fallback_url
                     fallback_pagination_used=True
                 else:
