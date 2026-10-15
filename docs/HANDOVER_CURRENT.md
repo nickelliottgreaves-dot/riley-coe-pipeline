@@ -196,6 +196,18 @@ Run [38738353461](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/a
 The overall workflow run was red only because an older unit test still expected the superseded audit-note wording. That test was updated in commit `8621174bc0`; latest test run [38738382257](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38738382257) passed **132 tests**. This means the failure-simulation acceptance needs one clean rerun with the updated test, which the next handover commit triggers.
 
 
+
+## Critical source-scope defect found in safety-net sweep; fix covered by tests
+
+The simulated safety-net run [38738653337](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38738653337) passed technical report validation but exposed a **research-quality defect**: Skiddle venue calendars link to global city feeds and other venues. The crawler followed those links while retaining the configured venue label, creating false candidates such as Cardiff Sŵn Festival events attributed to Lubber Fiend/Little Buildings and a Birmingham event attributed to Lubber Fiend. The report had 21 candidate matches and 103 out-of-scope event rows; do **not** treat those candidate matches as reliable.
+
+Fixes now committed:
+- `allowed_source_scoped_url()` restricts Skiddle venue-calendar crawling to the same city + venue path and nested event details beneath that venue path. It rejects Cardiff/Birmingham feeds and other Newcastle venues.
+- Added both a scope unit test and an integration test proving that a Cardiff event cannot be fetched/attributed to Lubber Fiend.
+- The venue-source notes for Lubber Fiend, Little Buildings, Utilita Arena and ZEROX are now properly CSV-quoted. The shared registry validator now rejects malformed rows with unquoted commas.
+- Latest test run [38739200928](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38739200928) passed **135 tests**. The next normal full sweep must demonstrate that the false Skiddle matches disappear.
+
+
 ## Key redesign decision
 
 Do not patch the legacy assembler/validator separately again. Build two independent processes around one contract:
