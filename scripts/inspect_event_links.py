@@ -366,8 +366,12 @@ def extract_visible_listing_events(visible_text, default_venue="", start_date=No
         "Glasshouse International Centre for Music","Sage Two","Sage One","Cumberland Arms","Cobalt Studios",
         "NX Newcastle","Think Tank","O2 City Hall","O2 City Hall Newcastle","Central Bar","Central Gateshead",
         "Gosforth Civic Theatre","Newcastle University","Newcastle University Students' Union","Students' Union",
-        "Lubber Fiend","The Globe","Little Buildings","Utilita Arena","Utilita Arena Newcastle","ZEROX","ZEROX Newcastle"
+        "Lubber Fiend","The Lubber Fiend","The Cumberland Arms","The Newgate Social","Head of Steam Newcastle",
+        "Riverside Newcastle","Newcastle Arts Centre","The Globe","Little Buildings","Utilita Arena","Utilita Arena Newcastle",
+        "ZEROX","ZEROX Newcastle"
     ]}
+    # Allow both article-bearing and article-free venue labels in cards.
+    known_venues |= {key[3:] for key in list(known_venues) if key.startswith("the")}
     # Citywide safety-net pages must retain the actual card venue and may
     # only contribute events at one of the configured reporting venues.
     reporting_venues={re.sub(r"[^a-z0-9]+","",name.casefold()) for name in [
@@ -439,6 +443,8 @@ def extract_visible_listing_events(visible_text, default_venue="", start_date=No
             title=re.sub(r"(?i)\s+@\s+(?:the\s+)?central bar\s*$","",title).strip()
             if dt and title:
                 title_parts=[part.strip() for part in re.split(r"\s+\+\s+",title) if part.strip()]
+                if title_parts:
+                    title_parts[0]=re.sub(r"(?i)^(?:generator\\s*&\\s*)?byker grave(?: presents?)?\\s*:\\s*","",title_parts[0]).strip()
                 price=""; availability="not_checked"
                 for extra in lines[i+1:min(len(lines),i+6)]:
                     if inline_date_title.match(extra) or date_pattern.search(extra): break
@@ -546,8 +552,21 @@ def extract_visible_listing_events(visible_text, default_venue="", start_date=No
         default_key=re.sub(r"[^a-z0-9]+","",str(default_venue or "").casefold())
         next_line=lines[i+1] if i+1<len(lines) else ""
         next_key=re.sub(r"[^a-z0-9]+","",next_line.casefold())
+        # Citywide guides commonly use date -> title -> actual venue -> source label.
+        # Detect that layout before the venue-specific date -> category -> title layout.
+        explicit_card_venue=""
+        if i+2<len(lines):
+            possible_venue=lines[i+2].strip()
+            possible_key=re.sub(r"[^a-z0-9]+","",possible_venue.casefold())
+            if possible_key in known_venues:
+                explicit_card_venue=possible_venue
+        date_title_venue=bool(next_line and explicit_card_venue)
         category_first=bool(default_key and next_line.casefold().rstrip(":") in categories and i+2<len(lines))
-        if category_first:
+        if date_title_venue:
+            title=next_line.strip(" -–—:")
+            venue_line=explicit_card_venue
+            j=i+3
+        elif category_first:
             title=lines[i+2].strip(" -–—:")
             venue_line=default_venue
             j=i+3
