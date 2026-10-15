@@ -19,7 +19,7 @@ REQUIRED_FILES = {
     "regression_artist_checks.csv": ["artist", "searched", "result", "evidence_url", "notes"],
 }
 TRACKLIST_STATES = {"complete", "incomplete", "unavailable", "not_yet_checked"}
-VENUE_STATES = {"checked_events_found", "checked_no_relevant_events", "inaccessible", "not_checked"}
+VENUE_STATES = {"checked_events_found", "checked_no_relevant_events", "inaccessible", "not_checked", "partial"}
 
 def read_csv(path: Path, required: list[str], errors: list[str]) -> list[dict[str, str]]:
     if not path.exists():
@@ -173,6 +173,8 @@ def main() -> int:
             errors.append(f"Venue {venue}: invalid status {state!r}")
         if state in {"inaccessible", "not_checked"}:
             warnings.append(f"Venue {venue} not fully checked (status={state})")
+        elif state == "partial":
+            warnings.append(f"Venue {venue} has bounded discovery evidence but calendar coverage is not certified")
         if not row.get("source_url", "").strip():
             errors.append(f"Venue {venue}: missing evidence/source URL")
 
