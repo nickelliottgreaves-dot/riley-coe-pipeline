@@ -16,7 +16,7 @@ from urllib.error import HTTPError,URLError
 from urllib.parse import urljoin,urlparse
 from urllib.request import Request,urlopen
 
-UA="riley-coe-pipeline/0.4 (event page evidence crawler)"
+UA="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
 EVENT_FIELDS=["venue","page_url","http_status","content_type","page_title","event_title","event_date","performer_names","price","currency","availability","event_jsonld_found","visible_text_snapshot","verified","status","notes"]
 AUDIT_FIELDS=["venue","seed_candidate_links","pages_fetched","pages_failed","same_host_links_added","crawl_cap_reached","status","notes"]
 
@@ -47,7 +47,7 @@ class Parser(HTMLParser):
             if self._anchor is not None and t: self._anchor["text"].append(t)
 
 def fetch(url):
-    req=Request(url,headers={"User-Agent":UA,"Accept":"text/html,application/xhtml+xml"})
+    req=Request(url,headers={"User-Agent":UA,"Accept":"text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8","Accept-Language":"en-GB,en;q=0.9"})
     with urlopen(req,timeout=12) as r:
         body=r.read(3_000_001)
         truncated=len(body)>3_000_000
@@ -70,6 +70,11 @@ def clean(v):
 
 def likely(href,text):
     return bool(re.search(r"event|gig|show|concert|ticket|whats-on|whatson|live-music|performance|listing|page=|next|older",href+" "+text,re.I))
+
+def is_calendar_navigation(href,text):
+    """Prioritize calendar pages and pagination over individual event details."""
+    blob=(href+" "+text).casefold()
+    return bool(re.search(r"(?:[?&](?:page|paged|month|year)=|/page/|/date/|/calendar/|/events?/|/gigs?/|next|older|previous|\b\d+\s*$)",blob))
 
 def main():
     ap=argparse.ArgumentParser()
@@ -146,7 +151,12 @@ def main():
                         # Avoid adding fragments and tracking-only URL variants.
                         target=target.split("#",1)[0]
                         if target not in visited and not any(x[0]==target for x in queue):
-                            queue.append((target,depth+1)); added+=1
+                            item=(target,depth+1)
+                            if is_calendar_navigation(href,txt):
+                                queue.appendleft(item)
+                            else:
+                                queue.append(item)
+                            added+=1
             except (HTTPError,URLError,TimeoutError,OSError,ValueError) as exc:
                 failed+=1
                 all_rows.append({"venue":venue,"page_url":url,"http_status":"","content_type":"","page_title":"","event_title":"","event_date":"","performer_names":"","price":"","currency":"","availability":"","event_jsonld_found":"false","visible_text_snapshot":"","verified":"false","status":"fetch_failed","notes":f"{type(exc).__name__}: {exc}"})
