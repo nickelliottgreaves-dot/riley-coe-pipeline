@@ -231,6 +231,7 @@ def main() -> int:
         "--start", start.isoformat(), "--end", end.isoformat(), "--out", str(matches_path),
     ], out_dir, stage_results)
     ensure_csv(matches_path, MATCH_FIELDS)
+    ensure_csv(out_dir / "out_of_scope_event_candidates.csv", ["event_date", "source_venue", "explicit_location", "event_title", "artist", "source_url", "notes"])
     coverage_path = out_dir / "artist_window_event_coverage.csv"
     ensure_csv(coverage_path, [
         "artist", "searched", "candidate_count", "result", "window_start", "window_end", "notes",
