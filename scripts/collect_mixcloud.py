@@ -142,64 +142,71 @@ def episode_date_from_text(value: str) -> date | None:
 
 
 def fetch_html_cloudcasts(username: str, since: date, until: date) -> tuple[list[dict], list[str]]:
-    """Best-effort fallback using links rendered on the public account page.
+    """Fallback to public profile and public search HTML for dated show links.
 
-    It only inventories episode candidates; it does not claim the profile's
-    rendered links are exhaustive or that visible tracklists have been checked.
+    Mixcloud's API account endpoint may return 404 even while individual public
+    show pages remain available. Profile pages can omit client-rendered cards, so
+    also inspect public site-search HTML. This is still a candidate inventory,
+    never proof of exhaustive coverage or complete tracklists.
     """
+    account = username.strip("/").casefold()
     profile_url = f"https://www.mixcloud.com/{username.strip('/')}/"
-    req = Request(profile_url, headers={"User-Agent": USER_AGENT, "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8", "Accept-Language": "en-GB,en;q=0.9"})
+    search_urls = [
+        f"https://www.mixcloud.com/search/?{urlencode({'q': term})}"
+        for term in ("Riley & Coe", "Riley Coe", "Riley")
+    ]
+    pages = [profile_url, *search_urls]
     errors: list[str] = []
-    try:
-        with urlopen(req, timeout=25) as response:
-            raw = response.read(4_000_001)
-    except (HTTPError, URLError, TimeoutError, OSError) as exc:
-        return [], [f"Mixcloud public profile HTML fallback failed for {profile_url}: {exc}"]
-    truncated = len(raw) > 4_000_000
-    parser = CloudcastLinkParser()
-    html_text = raw[:4_000_000].decode("utf-8", errors="replace")
-    parser.feed(html_text)
-    # Cloudcast cards may be embedded in hydration JSON rather than ordinary
-    # anchors. Scan the captured public HTML for same-account show paths too.
+    found: list[dict] = []
+    seen: set[str] = set()
     path_pattern = (
-        r"(?i)(?:https?://(?:www\.)?mixcloud\.com)?/?"
+        r"(?i)(?:https?://(?:www\\.)?mixcloud\\.com)?/?"
         + re.escape(username.strip("/"))
         + r"/riley[-_]coe[A-Za-z0-9/_-]*"
     )
-    # Hydration JSON often escapes forward slashes, so normalize those
-    # representations before scanning for same-account show paths.
-    scan_text = html_text.replace(r"\/", "/").replace(r"\u002F", "/").replace(r"\u002f", "/")
-    raw_paths = re.findall(path_pattern, scan_text)
-    link_candidates = list(parser.links)
-    link_candidates.extend((path, "") for path in raw_paths)
-    found: list[dict] = []
-    seen: set[str] = set()
-    account = username.strip("/").casefold()
-    for href, link_text in link_candidates:
-        public_url = urljoin(profile_url, href)
-        parsed = urlparse(public_url)
-        path = parsed.path.strip("/")
-        parts = path.split("/")
-        if parsed.netloc.casefold() not in {"www.mixcloud.com", "mixcloud.com"} or len(parts) < 2:
+    for page_url in pages:
+        req = Request(page_url, headers={"User-Agent": USER_AGENT, "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8", "Accept-Language": "en-GB,en;q=0.9"})
+        try:
+            with urlopen(req, timeout=25) as response:
+                raw = response.read(4_000_001)
+        except (HTTPError, URLError, TimeoutError, OSError) as exc:
+            errors.append(f"Mixcloud HTML fallback failed for {page_url}: {exc}")
             continue
-        if parts[0].casefold() != account or "riley-coe" not in parts[1].casefold():
+        truncated = len(raw) > 4_000_000
+        html_text = raw[:4_000_000].decode("utf-8", errors="replace")
+        parser = CloudcastLinkParser()
+        parser.feed(html_text)
+        scan_text = html_text.replace(r"\\/", "/").replace(r"\\u002F", "/").replace(r"\\u002f", "/")
+        link_candidates = list(parser.links)
+        link_candidates.extend((path, "") for path in re.findall(path_pattern, scan_text))
+        for href, link_text in link_candidates:
+            public_url = urljoin(page_url, href)
+            parsed = urlparse(public_url)
+            path = parsed.path.strip("/")
+            parts = path.split("/")
+            if parsed.netloc.casefold() not in {"www.mixcloud.com", "mixcloud.com"} or len(parts) < 2:
+                continue
+            if parts[0].casefold() != account or "riley-coe" not in parts[1].casefold():
+                continue
+            if public_url in seen:
+                continue
+            episode_date = episode_date_from_text(link_text + " " + path.replace("/", " "))
+            if not episode_date or not (since <= episode_date <= until):
+                continue
+            seen.add(public_url)
+            found.append({
+                "name": link_text or parts[1].replace("-", " "),
+                "url": public_url,
+                "key": "/" + path.strip("/") + "/",
+                "created_time": episode_date.isoformat() + "T12:00:00Z",
+            })
+        if truncated:
+            errors.append(f"Mixcloud HTML page was truncated at 4 MB: {page_url}; candidate inventory may be incomplete.")
+        if found:
+            # Keep going through search variants to deduplicate and improve recall.
             continue
-        if public_url in seen:
-            continue
-        seen.add(public_url)
-        episode_date = episode_date_from_text(link_text + " " + path.replace("/", " "))
-        if not episode_date or not (since <= episode_date <= until):
-            continue
-        found.append({
-            "name": link_text or parts[1].replace("-", " "),
-            "url": public_url,
-            "key": "/" + path.strip("/") + "/",
-            "created_time": episode_date.isoformat() + "T12:00:00Z",
-        })
-    if truncated:
-        errors.append("Mixcloud profile HTML was truncated at 4 MB; candidate inventory may be incomplete.")
     if not found:
-        errors.append("Mixcloud profile HTML yielded no dated Riley & Coe links in the requested window; links may be client-rendered or not exposed.")
+        errors.append("Mixcloud profile and public search HTML yielded no dated Riley & Coe links in the requested window; links may be client-rendered or not exposed.")
     return found, errors
 
 
