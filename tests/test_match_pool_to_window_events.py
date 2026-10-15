@@ -47,6 +47,37 @@ class PoolWindowEventMatchTests(unittest.TestCase):
             self.assertEqual(rows[0]["verified"],"false")
             self.assertIn("actual billing",rows[0]["notes"])
 
+    def test_biography_only_pool_mentions_do_not_become_gig_candidates(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            d=Path(tmp)
+            pool=d/"pool.csv"
+            with pool.open("w",newline="",encoding="utf-8") as f:
+                w=csv.DictWriter(f,fieldnames=["artist"]);w.writeheader();w.writerow({"artist":"Al Green"})
+            events=d/"events.csv"
+            with events.open("w",newline="",encoding="utf-8") as f:
+                w=csv.DictWriter(f,fieldnames=["event_date","venue","event_title","artist","source_url"]);w.writeheader()
+            url="https://venue.example/events/hue-and-cry"
+            inspected=d/"inspected.csv"
+            with inspected.open("w",newline="",encoding="utf-8") as f:
+                w=csv.DictWriter(f,fieldnames=["event_date","venue","event_title","performer_names","page_url","status"]);w.writeheader()
+                w.writerow({"event_date":"2026-10-20","venue":"Venue A","event_title":"Hue and Cry","performer_names":"",
+                    "page_url":url,"status":"visible_event_candidate_needs_review"})
+            page_hits=d/"page_hits.csv"
+            with page_hits.open("w",newline="",encoding="utf-8") as f:
+                w=csv.DictWriter(f,fieldnames=["artist","searched","result","evidence_url","notes"]);w.writeheader()
+                w.writerow({"artist":"Al Green","searched":"true","result":"found_in_collected_pages","evidence_url":url,
+                    "notes":"Matching text: Hue and Cry have appeared alongside Al Green in a biography."})
+            out=d/"matches.csv"
+            with patch("sys.argv",["match_pool_to_window_events.py","--pool",str(pool),"--events",str(events),
+                "--inspected",str(inspected),"--pool-page-matches",str(page_hits),"--start","2026-10-15",
+                "--end","2026-10-28","--out",str(out)]):
+                self.assertEqual(main(),0)
+            with out.open(newline="",encoding="utf-8") as f: rows=list(csv.DictReader(f))
+            self.assertEqual(rows,[])
+            with out.with_name("artist_window_event_coverage.csv").open(newline="",encoding="utf-8") as f:
+                coverage=list(csv.DictReader(f))
+            self.assertEqual(coverage[0]["result"],"no_exact_dated_candidate_match")
+
     def test_matches_only_exact_performer_names_inside_date_window(self):
         with tempfile.TemporaryDirectory() as tmp:
             d=Path(tmp)
