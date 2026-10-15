@@ -14,7 +14,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urljoin, urlparse
 from urllib.request import Request, urlopen
 
-AGENT = "riley-coe-pipeline/0.2 (event candidate discovery)"
+AGENT = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
 EVENT_FIELDS = ["event_date","venue","event_title","artist","artist_role","source_url","verified","price","ticket_status","discovery_method","notes"]
 LINK_FIELDS = ["venue","link_text","candidate_url","source_page_url","candidate_reason","verified","notes"]
 AUDIT_FIELDS = ["venue","source_url","http_status","content_type","structured_events_found","candidate_links_found","status","notes"]
@@ -93,7 +93,7 @@ def main():
         if not url.startswith(("https://","http://")):
             item.update(status="failed",notes="Missing configured HTTP(S) source URL"); errors.append(venue+": missing URL"); audit.append(item); continue
         try:
-            req=Request(url,headers={"User-Agent":AGENT,"Accept":"text/html,application/xhtml+xml"})
+            req=Request(url,headers={"User-Agent":AGENT,"Accept":"text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8","Accept-Language":"en-GB,en;q=0.9"})
             with urlopen(req,timeout=25) as response:
                 item["http_status"]=str(response.status); item["content_type"]=response.headers.get("Content-Type","")
                 raw=response.read(3_000_001)
