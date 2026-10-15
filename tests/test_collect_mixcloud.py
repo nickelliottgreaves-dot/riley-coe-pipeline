@@ -108,6 +108,24 @@ class MixcloudInventoryTests(unittest.TestCase):
         self.assertEqual(items, [])
         self.assertTrue(any("candidate page is inaccessible" in error and "404" in error for error in errors))
 
+    def test_duckduckgo_fallback_rejects_generic_http_200_not_found_shell(self):
+        class FakeResponse:
+            status = 200
+            def __init__(self, body): self.body = body
+            def __enter__(self): return self
+            def __exit__(self, *args): return False
+            def read(self, limit): return self.body
+
+        def fake_urlopen(req, timeout=25):
+            if "html.duckduckgo.com" in req.full_url:
+                return FakeResponse(b'<a href="https://www.mixcloud.com/SixMusicAlternative/riley-coe-tuesday-6th-october-2026/">Riley &amp; Coe Tuesday 6th October 2026</a>')
+            return FakeResponse(b'<html><title>Page not found - Mixcloud</title><body>Page not found</body></html>')
+
+        with patch("scripts.collect_mixcloud.urlopen", side_effect=fake_urlopen):
+            items, errors = fetch_duckduckgo_cloudcasts("SixMusicAlternative", date(2026, 10, 1), date(2026, 10, 21))
+        self.assertEqual(items, [])
+        self.assertTrue(any("unavailable-page shell" in error for error in errors))
+
     def test_bing_rss_fallback_extracts_dated_mixcloud_show_candidates(self):
         class FakeResponse:
             def __enter__(self): return self
