@@ -4,10 +4,54 @@ from pathlib import Path
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
-from inspect_event_links import main, extract_visible_listing_events
+from inspect_event_links import main, extract_visible_listing_events, venue_scope_matches
 
 
 class StructuredDataFallbackTests(unittest.TestCase):
+    def test_venue_scope_matching_rejects_other_city_events(self):
+        self.assertTrue(venue_scope_matches("Boiler Shop, Newcastle Upon Tyne", "Boiler Shop"))
+        self.assertFalse(venue_scope_matches("Edinburgh Corn Exchange, Edinburgh, UK", "Boiler Shop"))
+        self.assertFalse(venue_scope_matches("Leeds Beckett University Students Union", "Boiler Shop"))
+
+    def test_off_venue_jsonld_detail_page_is_not_relabelled_as_configured_venue(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            links = root / "links.csv"
+            sources = root / "sources.csv"
+            out = root / "out"
+            source_url = "https://songkick.com/venues/2716778-boiler-shop"
+            detail_url = "https://songkick.com/concerts/43180862-heaven-17-at-edinburgh-corn-exchange"
+            with links.open("w", encoding="utf-8", newline="") as f:
+                w = csv.DictWriter(f, fieldnames=["venue", "candidate_url", "link_text", "source_page_url"])
+                w.writeheader()
+                w.writerow({"venue": "Boiler Shop", "candidate_url": detail_url,
+                            "link_text": "Heaven 17 Edinburgh", "source_page_url": source_url})
+            with sources.open("w", encoding="utf-8", newline="") as f:
+                w = csv.DictWriter(f, fieldnames=["venue", "source_url"])
+                w.writeheader()
+                w.writerow({"venue": "Boiler Shop", "source_url": source_url})
+
+            calendar_html = "<html><title>Boiler Shop Newcastle Upon Tyne</title><body>Events</body></html>"
+            detail_html = """<html><head><title>Heaven 17 Edinburgh Tickets, Edinburgh Corn Exchange, 16 Oct 2026 – Songkick</title>
+            <script type="application/ld+json">{"@type":"MusicEvent","name":"Heaven 17","startDate":"2026-10-16T19:00:00+00:00","location":{"@type":"Place","name":"Edinburgh Corn Exchange","address":{"addressLocality":"Edinburgh","addressCountry":"UK"}},"performer":{"@type":"MusicGroup","name":"Heaven 17"}}</script>
+            </head><body>Friday 16 October 2026 Heaven 17 Edinburgh Corn Exchange Edinburgh UK</body></html>"""
+            def fake_fetch(url):
+                html = calendar_html if url.rstrip("/") == source_url.rstrip("/") else detail_html
+                return 200, "text/html; charset=utf-8", html, False
+
+            with patch("inspect_event_links.fetch", side_effect=fake_fetch):
+                with patch("sys.argv", ["inspect_event_links.py", "--links", str(links),
+                                       "--sources", str(sources), "--out-dir", str(out),
+                                       "--start", "2026-10-15", "--end", "2026-10-28",
+                                       "--max-pages-per-venue", "5", "--delay", "0"]):
+                    self.assertEqual(main(), 0)
+
+            with (out / "event_page_inspection.csv").open(encoding="utf-8", newline="") as f:
+                rows = list(csv.DictReader(f))
+            false_matches = [r for r in rows if r.get("event_date") == "2026-10-16"
+                             and "heaven 17" in (r.get("event_title", "") + " " + r.get("performer_names", "")).casefold()]
+            self.assertEqual(false_matches, [])
+
     def test_incomplete_jsonld_does_not_suppress_same_host_event_link_fallback(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
