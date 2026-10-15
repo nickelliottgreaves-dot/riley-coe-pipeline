@@ -312,6 +312,29 @@ def is_calendar_navigation(href,text,current_url=None):
         return target_number == current_number + 1
     return path.rstrip("/") in {"/events","/event","/gigs","/gig","/whats-on","/whatson","/shows","/concerts"}
 
+def calendar_target_in_window(url,start_date,end_date):
+    """Reject date-filter/archive links that cannot contain in-window events."""
+    parsed=urlparse(url)
+    match=re.search(r"/(?:gigs|events?)/date/(20\d{2})/(\d{1,2})(?:/|$)",parsed.path.casefold())
+    if match:
+        year,month=int(match.group(1)),int(match.group(2))
+        if not 1<=month<=12: return False
+        month_start=date(year,month,1)
+        month_end=date(year+1,1,1)-timedelta(days=1) if month==12 else date(year,month+1,1)-timedelta(days=1)
+        return month_start<=end_date and month_end>=start_date
+    for raw in parse_qs(parsed.query).get("date",[]):
+        value=raw.strip().casefold()
+        if re.fullmatch(r"\d{1,2}-\d{1,2}-20\d{2}",value):
+            try: day=datetime.strptime(value,"%d-%m-%Y").date()
+            except ValueError: return False
+            return start_date<=day<=end_date
+        if value=="today": return start_date<=date.today()<=end_date
+        if value=="tomorrow":
+            day=date.today()+timedelta(days=1)
+            return start_date<=day<=end_date
+    return True
+
+
 def is_event_object(obj):
     """Only treat schema.org Event subtypes as event records, not breadcrumbs or organisations."""
     if not isinstance(obj,dict):
@@ -478,6 +501,8 @@ def main():
                         for href,txt in p.links:
                             target=urljoin(url,href); parsed=urlparse(target)
                             if parsed.scheme not in {"https","http"} or parsed.netloc not in source_hosts:
+                                continue
+                            if not calendar_target_in_window(target,args.start_date,args.end_date):
                                 continue
                             navigation=is_calendar_navigation(href,txt,url)
                             if listing_events:
