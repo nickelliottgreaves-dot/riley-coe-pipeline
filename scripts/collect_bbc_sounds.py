@@ -176,7 +176,7 @@ def main():
     args=ap.parse_args(); start=date.fromisoformat(args.start); end=date.fromisoformat(args.end)
     if end<start: ap.error("--end must not precede --start")
     out=args.out_dir; snaps=out/"snapshots"; snaps.mkdir(parents=True,exist_ok=True)
-    episodes=[]; tracklists=[]; errors=[]; listing_pages=[]; visited=set(); listing_failed=False
+    episodes=[]; tracklists=[]; errors=[]; listing_pages=[]; visited=set(); listing_failed=False; fallback_pagination_used=False; listing_exhausted=False
     next_url=args.listing_url; pages=0
     while next_url and next_url not in visited and pages<12:
         visited.add(next_url); pages+=1
@@ -185,17 +185,40 @@ def main():
             if status!=200 or "html" not in ctype.lower(): raise ValueError(f"Unexpected listing response: {status} {ctype}")
             listing_pages.append(next_url)
             parser=TextParser(); parser.feed(html)
+            before_count=len(episodes)
             candidates=find_episodes(html,next_url)
+            known_ids={episode_id(x["url"]) for x in episodes}
             for candidate in candidates:
                 eid=episode_id(candidate["url"])
-                if eid and eid not in {episode_id(x["url"]) for x in episodes}:
+                if eid and eid not in known_ids:
                     episodes.append({"episode_id":eid,**candidate,"listing_source_url":next_url})
-            # Follow explicit pagination links only.
+                    known_ids.add(eid)
+            new_count=len(episodes)-before_count
+            # Prefer explicit pagination. If the BBC listing omits a usable
+            # next link, probe the conventional ?page=N sequence until a page
+            # yields no new episode IDs; this remains a discovery heuristic.
             page_links=[urljoin(next_url,h) for h,t in parser.links if re.search(r"next|older|page=\d+",h+" "+t,re.I) and "/episodes" in urljoin(next_url,h)]
-            next_url=next((u for u in page_links if u not in visited),"")
+            explicit_next=next((u for u in page_links if u not in visited),"")
+            if explicit_next:
+                next_url=explicit_next
+            elif new_count>0 and pages<12:
+                listing_base=args.listing_url.split("?",1)[0]
+                fallback_url=f"{listing_base}?page={pages+1}"
+                if fallback_url not in visited:
+                    next_url=fallback_url
+                    fallback_pagination_used=True
+                else:
+                    next_url=""
+                    listing_exhausted=True
+            else:
+                next_url=""
+                listing_exhausted=True
         except (HTTPError,URLError,TimeoutError,OSError,ValueError) as exc:
             errors.append(f"Listing {next_url}: {type(exc).__name__}: {exc}"); listing_failed=True; break
-    pagination_status="listing_fetch_failed" if listing_failed else ("page_cap_reached" if next_url and pages>=12 else "next_link_not_exposed_or_listing_exhausted")
+    pagination_status=("listing_fetch_failed" if listing_failed else
+        ("page_cap_reached" if next_url and pages>=12 else
+         ("sequential_page_fallback_exhausted" if fallback_pagination_used and listing_exhausted else
+          ("sequential_page_fallback_incomplete" if fallback_pagination_used else "next_link_not_exposed_or_listing_exhausted"))))
     rows=[]; linkrows=[]; trackrows=[]
     for ep in episodes:
         url=ep["url"]
