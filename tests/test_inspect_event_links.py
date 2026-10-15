@@ -3,6 +3,7 @@ from unittest.mock import patch
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/"scripts"))
+import inspect_event_links as crawler
 from inspect_event_links import canonicalize_url, event_link_matches, event_performer_candidate, extract_visible_event, extract_visible_listing_events, is_calendar_navigation, is_event_object, likely, main
 
 class EventPageCrawlerTests(unittest.TestCase):
@@ -219,6 +220,29 @@ Tickets"""
                 audit=list(csv.DictReader(f))[0]
             self.assertEqual(audit["external_seed_links_skipped"],"1")
             self.assertIn("External ticketing hosts are not crawled",audit["notes"])
+
+    def test_partial_page_failures_keep_successful_crawl_outputs(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp); links=root/"links.csv"; sources=root/"sources.csv"
+            with links.open("w",newline="",encoding="utf-8") as f:
+                w=csv.DictWriter(f,fieldnames=["venue","candidate_url"]); w.writeheader()
+                w.writerow({"venue":"Test Venue","candidate_url":"https://venue.example/events/good"})
+                w.writerow({"venue":"Test Venue","candidate_url":"https://venue.example/events/broken"})
+            with sources.open("w",newline="",encoding="utf-8") as f:
+                w=csv.DictWriter(f,fieldnames=["venue","source_url"]); w.writeheader()
+                w.writerow({"venue":"Test Venue","source_url":"https://venue.example/whats-on"})
+            def fake_fetch(url, *args, **kwargs):
+                if "broken" in url:
+                    raise RuntimeError("simulated single-page failure")
+                return 200,"text/html","<html><head><title>Test Venue gigs</title></head><body>Nothing else listed</body></html>",False
+            with patch.object(crawler,"fetch",side_effect=fake_fetch):
+                with patch("sys.argv",["inspect_event_links.py","--links",str(links),"--sources",str(sources),
+                    "--out-dir",str(root/"out"),"--start","2026-10-15","--end","2026-10-28","--delay","0"]):
+                    self.assertEqual(main(),0)
+            summary=json.loads((root/"out"/"event_page_crawl_summary.json").read_text())
+            self.assertEqual(summary["status"],"PARTIAL")
+            self.assertGreater(summary["pages_failed"],0)
+            self.assertGreater(summary["pages_inspected"]-summary["pages_failed"],0)
 
     def test_crawler_preserves_unverified_status_and_audit(self):
         with tempfile.TemporaryDirectory() as tmp:
