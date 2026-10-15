@@ -392,3 +392,20 @@ Observed:
 ## Immediate next action (updated)
 
 Run a fresh live full sweep at the latest commit after the Skiddle source-scoping fix. Inspect every candidate match and assert that no out-of-city Skiddle feed is assigned to a local venue. Confirm report structure, 20 source outcomes, one page-search and event-comparison row per current pool artist (847), and ensure PARTIAL remains the honest status. Then address false candidate pollution and distinguish source-partial exits from code crashes. Keep the pool, backups and prior artifacts unchanged.
+
+
+## Latest completed live candidate run (2026-10-15)
+
+Run [38741114377](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38741114377), commit `8a1f474f270cf8171fc0d6fab0ee5e9a72ffc47a`, completed successfully:
+- Candidate report status: `PARTIAL`, 28-day window 2026-10-15 through 2026-11-11.
+- All 20 configured sources produced coverage rows; 14 were checked within captured scope and six remained partial; zero sources have verified calendar completeness.
+- Current pool count: 847; 847 page-comparison rows and 847 date-window comparison rows were produced.
+- Candidate matching processed 809 dated event candidate rows and emitted 7 candidate matches, zero marked verified, and zero out-of-scope event rows.
+- 20 sources fetched; zero discovery fetch failures. Event inspection: 394 pages inspected, 24 failed, 11 allowlisted external event-detail pages inspected, zero crawl caps.
+- The previous cross-city leak (Cardiff/Birmingham Skiddle listings being assigned to Lubber Fiend/Little Buildings) was absent in this artifact. The later regression test run [38739200928](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38739200928) passed, explicitly testing that Skiddle venue calendars cannot leak other-city events.
+- Seven candidates in this run: Barbican Estate at The Cluny (9 Nov); Cabaret Voltaire at Boiler Shop (17 Oct); Fat White Family at Utilita Arena Newcastle (25 Oct); Pys Melyn / support data associated with Louis O'Hara at The Globe (27 Oct); Radhika as a candidate support match on The Wedding Present at Boiler Shop (23 Oct); Teenage Fanclub at Boiler Shop (10 Nov); The Wedding Present at Boiler Shop (23 Oct). These are candidates only, not independently verified; the Boiler Shop listings reported SoldOut in captured text.
+- Run [38741608464](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38741608464), triggered on the newest commit after the scope regression test, was still queued as of 13:19 UTC. Check whether it eventually starts/completes before initiating another live sweep.
+
+### Next action
+
+Inspect run 38741608464 when available. Confirm it uses commit `b55e197ed1dac477472dd1d56604febe2229f802`, produces the new artifact, and repeats the zero-cross-city-leak assertion. If it remains stuck queued, report that blocker plainly and use the latest completed run's artifact only as provisional evidence. Then review the seven candidates against source pages and improve per-source coverage rather than adding generic crawler complexity.
