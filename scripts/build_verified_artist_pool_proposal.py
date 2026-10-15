@@ -27,6 +27,9 @@ def write_rows(path: Path, fields: list[str], rows: list[dict]) -> None:
         writer=csv.DictWriter(handle,fieldnames=fields,extrasaction="ignore")
         writer.writeheader(); writer.writerows(rows)
 
+FUZZY_AMBIGUITY_THRESHOLD = 0.95
+
+
 def main() -> int:
     ap=argparse.ArgumentParser()
     ap.add_argument("--pool",type=Path,required=True)
@@ -65,12 +68,12 @@ def main() -> int:
             score=float(row.get("best_similarity_score") or 0)
         except ValueError:
             score=0
-        if row.get("reconciliation_status")=="UNMATCHED_REVIEW_ONLY" and score>=0.72 and row.get("closest_pool_candidates"):
+        if row.get("reconciliation_status")=="UNMATCHED_REVIEW_ONLY" and score>=FUZZY_AMBIGUITY_THRESHOLD and row.get("closest_pool_candidates"):
             ambiguous_by_key[norm(row.get("artist_candidate",""))]={
                 "artist_candidate":row.get("artist_candidate",""),"best_similarity_score":str(score),
                 "closest_pool_candidates":row.get("closest_pool_candidates",""),"episode_dates":row.get("episode_dates",""),
                 "track_examples":row.get("track_examples",""),"source_urls":row.get("source_urls",""),
-                "reason":"Fuzzy pool candidate at or above 0.72; held for manual identity/alias review."
+                "reason":f"Near-identical pool candidate at or above {FUZZY_AMBIGUITY_THRESHOLD:.2f}; held for manual identity/alias review."
             }
     ambiguous_rows=[]
     additions=[]
@@ -111,7 +114,8 @@ def main() -> int:
         "input_pool_unchanged":True,
         "authoritative_pool_modified":False,
         "backup_written":True,
-        "promotion_gate":"Only candidates from episodes labelled EXACT_FULL_TRACKLIST_MATCH are considered. The proposal must be independently checked before replacing the authoritative pool.",
+        "promotion_gate":"Only candidates from episodes labelled EXACT_FULL_TRACKLIST_MATCH are considered. Strong fuzzy collisions (>= 0.95 similarity) are held for manual identity/alias review; lower similarity suggestions do not block a source-backed distinct artist. The proposal must be independently checked before replacing the authoritative pool.",
+        "fuzzy_ambiguity_threshold": FUZZY_AMBIGUITY_THRESHOLD,
         "status":"PROPOSAL_READY" if additions else "NO_VERIFIED_NEW_ARTISTS",
     }
     (out/f"artist_pool_proposal_audit_{today}.json").write_text(json.dumps(audit,indent=2,ensure_ascii=False)+"\n",encoding="utf-8")
