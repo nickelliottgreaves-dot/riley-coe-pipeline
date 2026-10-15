@@ -23,7 +23,7 @@ permissions:
 
 concurrency:
   group: weekly-hybrid-riley-coe-gig-search
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   hybrid-search:
@@ -90,7 +90,7 @@ jobs:
             --out-dir "$OUT/inspection" \
             --start "${{ steps.window.outputs.start }}" \
             --end "${{ steps.window.outputs.end }}" \
-            --max-pages-per-venue 120 --max-depth 3
+            --max-pages-per-venue 35 --max-depth 2
           CODE=$?
           echo "Event inspection exit code: $CODE"
 
