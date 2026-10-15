@@ -211,6 +211,59 @@ def fetch_html_cloudcasts(username: str, since: date, until: date) -> tuple[list
 
 
 
+def fetch_duckduckgo_cloudcasts(username: str, since: date, until: date) -> tuple[list[dict], list[str]]:
+    """Discover public Mixcloud show URLs from DuckDuckGo's HTML results."""
+    from html import unescape
+    from urllib.parse import parse_qs
+    account = username.strip("/").casefold()
+    queries = [
+        f'site:mixcloud.com/{username.strip("/")}/riley-coe',
+        f'site:mixcloud.com/{username.strip("/")}/ "Riley & Coe" 2026',
+    ]
+    found: list[dict] = []
+    errors: list[str] = []
+    seen: set[str] = set()
+    for term in queries:
+        search_url = "https://html.duckduckgo.com/html/?" + urlencode({"q": term})
+        req = Request(search_url, headers={"User-Agent": USER_AGENT, "Accept": "text/html,application/xhtml+xml,*/*", "Accept-Language": "en-GB,en;q=0.9"})
+        try:
+            with urlopen(req, timeout=25) as response:
+                html_text = response.read(2_000_001).decode("utf-8", errors="replace")
+        except (HTTPError, URLError, TimeoutError, OSError) as exc:
+            errors.append(f"DuckDuckGo HTML search failed for query {term!r}: {exc}")
+            continue
+        if len(html_text) > 2_000_000:
+            errors.append(f"DuckDuckGo HTML search truncated for query {term!r}.")
+        parser = CloudcastLinkParser()
+        parser.feed(html_text)
+        for href, link_text in parser.links:
+            parsed = urlparse(unescape(href))
+            target = unescape(href)
+            if parsed.netloc.casefold().endswith("duckduckgo.com"):
+                target = parse_qs(parsed.query).get("uddg", [target])[0]
+            target = unescape(target)
+            if target.startswith("//"):
+                target = "https:" + target
+            parsed_target = urlparse(target)
+            path = parsed_target.path.strip("/")
+            parts = path.split("/")
+            if parsed_target.netloc.casefold() not in {"www.mixcloud.com", "mixcloud.com"} or len(parts) < 2:
+                continue
+            if parts[0].casefold() != account or "riley-coe" not in parts[1].casefold():
+                continue
+            published = episode_date_from_text(link_text + " " + path.replace("/", " "))
+            if not published or not (since <= published <= until) or target in seen:
+                continue
+            seen.add(target)
+            found.append({
+                "name": link_text or parts[1].replace("-", " "),
+                "url": target,
+                "key": "/" + path.strip("/") + "/",
+                "created_time": published.isoformat() + "T12:00:00Z",
+            })
+    return found, errors
+
+
 def fetch_bing_rss_cloudcasts(username: str, since: date, until: date) -> tuple[list[dict], list[str]]:
     """Last-resort discovery through Bing's public RSS search results.
 
@@ -337,9 +390,20 @@ def fetch_cloudcasts(username: str, since: date, until: date) -> tuple[list[dict
                         "Search-index coverage is not exhaustive; inspect each visible show page."
                     )
                 else:
-                    errors.extend(fallback_errors)
-                    errors.extend(html_errors)
-                    errors.extend(bing_errors)
+                    ddg_found, ddg_errors = fetch_duckduckgo_cloudcasts(username, since, until)
+                    if ddg_found:
+                        found = ddg_found
+                        errors = []
+                        warnings.append(
+                            f"Mixcloud API, own-site search/profile HTML and Bing RSS did not expose dated shows; "
+                            f"DuckDuckGo HTML recovered {len(found)} dated candidate(s). "
+                            "Search-index coverage is not exhaustive; inspect each visible show page."
+                        )
+                    else:
+                        errors.extend(fallback_errors)
+                        errors.extend(html_errors)
+                        errors.extend(bing_errors)
+                        errors.extend(ddg_errors)
     return found, errors, warnings
 
 def fetch_search_cloudcasts(username: str, since: date, until: date) -> tuple[list[dict], list[str]]:
