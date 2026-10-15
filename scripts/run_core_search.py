@@ -42,6 +42,21 @@ def write_csv(path: Path, fields: list[str], rows: list[dict[str, str]]) -> None
         writer.writerows(rows)
 
 
+def is_noise_event_title(title: str) -> bool:
+    """Reject page furniture and price/location labels misread as event titles."""
+    value = " ".join((title or "").casefold().split())
+    if not value:
+        return True
+    if value in {"location", "venue", "venue space", "tickets", "details", "event details",
+                 "buy tickets", "book now", "limited availability", "sold out"}:
+        return True
+    if re.fullmatch(r"(?:from:\\s*)?£?\\s*\\d+(?:\\.\\d{1,2})?(?:\\s*[-–]\\s*£?\\s*\\d+(?:\\.\\d{1,2})?)?", value):
+        return True
+    if re.fullmatch(r"\\d{1,2}(?::\\d{2})?\\s*(?:am|pm)", value):
+        return True
+    return False
+
+
 def inspection_to_candidates(rows: list[dict[str, str]]) -> list[dict[str, str]]:
     """Convert second-stage page inspection into one review-only row per billed act."""
     candidates = []
@@ -50,7 +65,7 @@ def inspection_to_candidates(rows: list[dict[str, str]]) -> list[dict[str, str]]
         title = (row.get("event_title") or "").strip()
         venue = (row.get("venue") or "").strip()
         source_url = (row.get("page_url") or "").strip()
-        if not event_date or not title or not venue:
+        if not event_date or not title or not venue or is_noise_event_title(title):
             continue
         performers = [name.strip() for name in (row.get("performer_names") or "").split(";") if name.strip()]
         for artist in dict.fromkeys(performers):
