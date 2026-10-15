@@ -2,9 +2,19 @@ import csv, json, subprocess, sys, tempfile, unittest
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/"scripts"))
-from inspect_event_links import extract_visible_event, extract_visible_listing_events, is_calendar_navigation
+from inspect_event_links import canonicalize_url, extract_visible_event, extract_visible_listing_events, is_calendar_navigation
 
 class EventPageCrawlerTests(unittest.TestCase):
+    def test_canonical_url_removes_tracking_but_preserves_pagination(self):
+        self.assertEqual(
+            canonicalize_url("https://thecluny.com/gigs/page/2/?utm_source=mail&ref=abc"),
+            "https://thecluny.com/gigs/page/2/"
+        )
+        self.assertEqual(
+            canonicalize_url("https://example.com/events/?page=3&utm_campaign=x"),
+            "https://example.com/events/?page=3"
+        )
+
     def test_calendar_pagination_is_prioritized_over_detail_pages(self):
         self.assertTrue(is_calendar_navigation("/gigs/page/2/", "Next"))
         self.assertTrue(is_calendar_navigation("/events/?page=3", "3", "https://example.com/events/?page=2"))
@@ -58,7 +68,10 @@ Fri 16 Oct 2026
 /
 The Cluny
 Info
-Tickets"""
+Tickets
+Audition for the Newcastle University Symphony Orchestra!
+Sat 17 Oct 2026
+Audition for the Newcastle University Symphony Orchestra!"""
         rows = extract_visible_listing_events(visible)
         self.assertEqual(len(rows), 3)
         self.assertEqual(rows[0]["event_title"], "Skating Polly")
