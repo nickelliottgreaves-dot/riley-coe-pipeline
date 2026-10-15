@@ -518,22 +518,8 @@ def extract_visible_listing_events(visible_text, default_venue="", start_date=No
         default_key=re.sub(r"[^a-z0-9]+","",str(default_venue or "").casefold())
         next_line=lines[i+1] if i+1<len(lines) else ""
         next_key=re.sub(r"[^a-z0-9]+","",next_line.casefold())
-        # Citywide guides commonly use date -> title -> actual venue -> source label.
-        # Detect that layout before the venue-specific date -> category -> title layout.
-        explicit_card_venue=""
-        if i+2<len(lines):
-            possible_venue=lines[i+2].strip()
-            possible_key=re.sub(r"[^a-z0-9]+","",possible_venue.casefold())
-            if possible_key in known_venues:
-                explicit_card_venue=possible_venue
-        next_key=next_line.casefold().rstrip(":").strip()
-        date_title_venue=bool(next_line and next_key not in categories and next_key not in generic and not is_page_furniture(next_line) and explicit_card_venue)
         category_first=bool(default_key and next_line.casefold().rstrip(":") in categories and i+2<len(lines))
-        if date_title_venue:
-            title=next_line.strip(" -–—:")
-            venue_line=explicit_card_venue
-            j=i+3
-        elif category_first:
+        if category_first:
             title=lines[i+2].strip(" -–—:")
             venue_line=default_venue
             j=i+3
