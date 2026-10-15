@@ -21,27 +21,44 @@ class EvidencePackageTests(unittest.TestCase):
                 w=csv.DictWriter(f,fieldnames=["episode_date","episode_title","episode_url","artist","track_title","track_position","source","verification_status"])
                 w.writeheader()
                 w.writerow({"episode_date":"2026-10-14","episode_title":"Mixcloud Example","episode_url":"https://www.mixcloud.com/example/show","artist":"Mix Artist","track_title":"Mix Song","track_position":"1","source":"Mixcloud API","verification_status":"candidate"})
+            radiofiles=tmp_path/"radiofiles_episodes.csv"
+            with radiofiles.open("w",newline="",encoding="utf-8") as f:
+                w=csv.DictWriter(f,fieldnames=["episode_date","episode_title","episode_pid","source_url","has_tracklist","tracklist_status","track_count_reported","track_count_returned","count_match","notes"])
+                w.writeheader()
+                w.writerow({"episode_date":"2026-10-13","episode_title":"RadioFiles Example","episode_pid":"m0031tk4","source_url":"https://radiofiles.io/programmes/m0031tk4","has_tracklist":"true","tracklist_status":"candidate","track_count_reported":"1","track_count_returned":"1","count_match":"true","notes":"RadioFiles episode"})
+            radiofiles_tracks=tmp_path/"radiofiles_tracks.csv"
+            with radiofiles_tracks.open("w",newline="",encoding="utf-8") as f:
+                w=csv.DictWriter(f,fieldnames=["episode_date","episode_title","episode_pid","track_position","track_title","artist_candidate","source_url","tracklist_api_url","source","verification_status","notes"])
+                w.writeheader()
+                w.writerow({"episode_date":"2026-10-13","episode_title":"RadioFiles Example","episode_pid":"m0031tk4","track_position":"1","track_title":"Radio Song","artist_candidate":"Radio Artist","source_url":"https://radiofiles.io/programmes/m0031tk4","tracklist_api_url":"https://radiofiles.io/api/tracklist/m0031tk4","source":"RadioFiles","verification_status":"candidate","notes":"review"})
             out=tmp_path/"run"
             subprocess.run([sys.executable,str(ROOT/"scripts/assemble_run_package.py"),
                 "--start","2026-10-13","--end","2026-10-26","--bbc-episodes",str(bbc),
-                "--bbc-track-candidates",str(candidates),"--mixcloud-track-candidates",str(mixcloud),"--out-dir",str(out)],check=True,capture_output=True,text=True)
+                "--bbc-track-candidates",str(candidates),"--mixcloud-track-candidates",str(mixcloud),
+                "--radiofiles-episodes",str(radiofiles),"--radiofiles-track-candidates",str(radiofiles_tracks),
+                "--out-dir",str(out)],check=True,capture_output=True,text=True)
             with (out/"episodes.csv").open(newline="",encoding="utf-8") as f:
                 episodes=list(csv.DictReader(f))
             self.assertEqual(episodes[0]["tracklist_status"],"not_yet_checked")
             self.assertIn("visible_tracklist_heading_detected_needs_review",episodes[0]["notes"])
+            self.assertEqual(len(episodes),2)
+            self.assertEqual(episodes[1]["source"],"RadioFiles public tracklist")
+            self.assertEqual(episodes[1]["tracks_extracted"],"1")
+            self.assertIn("count_match=true",episodes[1]["notes"])
             with (out/"bbc_track_candidates.csv").open(newline="",encoding="utf-8") as f:
                 rows=list(csv.DictReader(f))
             self.assertEqual(rows[0]["artist_candidate"],"Example Artist")
             with (out/"tracklist_candidate_review.csv").open(newline="",encoding="utf-8") as f:
                 review=list(csv.DictReader(f))
-            self.assertEqual(len(review),2)
-            self.assertEqual({row["artist_candidate"] for row in review},{"Example Artist","Mix Artist"})
+            self.assertEqual(len(review),3)
+            self.assertEqual({row["artist_candidate"] for row in review},{"Example Artist","Mix Artist","Radio Artist"})
             self.assertTrue(all(row["review_status"]=="needs_manual_review" for row in review))
             self.assertTrue((out/"mixcloud_api_track_candidates.csv").exists())
             self.assertTrue(any(name.startswith("Riley_Coe_tracklist_candidate_review_") for name in json.loads((out/"run_manifest.json").read_text())["dated_exports"]))
             with (out/"input_file_audit.csv").open(newline="",encoding="utf-8") as f:
                 audit=list(csv.DictReader(f))
             self.assertTrue(any(r["input_name"]=="bbc_track_candidates" and r["status"]=="present" for r in audit))
+            self.assertTrue(any(r["input_name"]=="radiofiles_episode_candidates" and r["status"]=="present" for r in audit))
 
     def test_merges_inspected_event_jsonld_as_unverified_candidates(self):
         with tempfile.TemporaryDirectory() as tmp:
