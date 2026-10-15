@@ -202,10 +202,40 @@ def extract_visible_event(page_title, visible_text, default_venue=""):
         availability="SoldOut"
     else:
         availability="not_checked"
-    # Event titles may include tour/series subtitles. Match the lead billed act
-    # separately while retaining the full event title for display/review.
-    primary=title.split(":",1)[0].strip() if ":" in title else title
-    performers=list(dict.fromkeys([primary]+supports))
+    # Event titles may include tour/series subtitles or descriptions such as
+    # "Sheku Kanneh-Mason plays Saint-Saëns". Keep the full display title but
+    # extract the actual lead act for exact pool matching.
+    lead_match=re.match(r"(?i)^(.+?)\s+(?:plays|performs)\s+",title)
+    primary=lead_match.group(1).strip() if lead_match else (title.split(":",1)[0].strip() if ":" in title else title)
+    # Classical/ensemble detail pages often list credits in a "Who's playing it"
+    # section with a role on the line after each name. Keep the names, not the
+    # role labels or prose paragraphs, so these acts can be compared to the pool.
+    credit_names=[]
+    section_start=None
+    stop_sections={"what's happening in the music","what is happening in the music","what you'll hear",
+                   "what they are playing","what they're playing","need to know","more from",
+                   "your visit","tickets","stay connected"}
+    role_labels={"conductor","cello","violin","piano","vocals","guitar","drums","composer","leader",
+                 "viola","orchestra","bass","percussion","director","tenor","soprano","mezzo soprano",
+                 "baritone","flute","oboe","clarinet","harp","trumpet","trombone","saxophone","organ"}
+    for idx,line in enumerate(lines):
+        heading=" ".join(re.sub(r"[^a-z0-9]+"," ",line.casefold()).split())
+        if heading in {"who's playing it","who is playing it","who s playing it"}:
+            section_start=idx+1
+            break
+    if section_start is not None:
+        for line in lines[section_start:section_start+18]:
+            heading=" ".join(re.sub(r"[^a-z0-9]+"," ",line.casefold()).split())
+            if heading in stop_sections:
+                break
+            candidate=line.strip(" -–—:")
+            candidate_key=" ".join(re.sub(r"[^a-z0-9]+"," ",candidate.casefold()).split())
+            if (not candidate or candidate_key in role_labels or candidate_key in stop_sections
+                    or candidate.casefold()==title.casefold() or len(candidate)>90
+                    or re.search(r"[.!?]$",candidate)):
+                continue
+            credit_names.append(candidate)
+    performers=list(dict.fromkeys([primary]+supports+credit_names))
     return {
         "event_title":title,
         "event_date":event_date,
