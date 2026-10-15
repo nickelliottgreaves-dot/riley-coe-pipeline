@@ -18,7 +18,10 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
 
-try:\n    from .workflow_contract import ROOT, build_manifest, load_contract, normalize_key, reporting_window, validate_registries\nexcept ImportError:  # Support direct execution as `python scripts/run_gig_finder.py`.\n    from workflow_contract import ROOT, build_manifest, load_contract, normalize_key, reporting_window, validate_registries
+try:
+    from .workflow_contract import ROOT, build_manifest, load_contract, normalize_key, reporting_window, validate_registries
+except ImportError:  # Support direct execution as `python scripts/run_gig_finder.py`.
+    from workflow_contract import ROOT, build_manifest, load_contract, normalize_key, reporting_window, validate_registries
 
 SOURCE_FIELDS = ["venue", "source_url", "source_status", "notes"]
 DISCOVERY_EVENT_FIELDS = ["event_date", "venue", "event_title", "artist", "artist_role", "source_url", "verified", "price", "ticket_status", "discovery_method", "notes"]
