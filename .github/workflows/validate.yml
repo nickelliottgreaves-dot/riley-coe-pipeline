@@ -1,6 +1,6 @@
 name: Riley & Coe evidence validation
 
-# A commit message containing [full-sweep] runs a diagnostic end-to-end collection (including sequential pagination, URL canonicalization and visible-card extraction).
+# A commit message containing [full-sweep] runs a diagnostic end-to-end collection (including sequential pagination, URL canonicalization, venue scoping and visible-card extraction).
 
 on:
   push:
