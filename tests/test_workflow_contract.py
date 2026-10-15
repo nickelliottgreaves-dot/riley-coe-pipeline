@@ -52,7 +52,7 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertTrue(result["valid"], result["errors"])
         self.assertEqual(result["configured_source_count"], 20)
         self.assertEqual(result["required_venue_count"], 20)
-        self.assertEqual(result["artist_count"], 833)
+        self.assertEqual(result["artist_count"], 847)
 
 
 if __name__ == "__main__":
