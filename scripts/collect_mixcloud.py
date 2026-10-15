@@ -168,7 +168,7 @@ def fetch_html_cloudcasts(username: str, since: date, until: date) -> tuple[list
     )
     # Hydration JSON often escapes forward slashes, so normalize those
     # representations before scanning for same-account show paths.
-    scan_text = html_text.replace(r"\\/", "/").replace(r"\\u002F", "/").replace(r"\\u002f", "/")
+    scan_text = html_text.replace(r"\/", "/").replace(r"\u002F", "/").replace(r"\u002f", "/")
     raw_paths = re.findall(path_pattern, scan_text)
     link_candidates = list(parser.links)
     link_candidates.extend((path, "") for path in raw_paths)
