@@ -715,6 +715,7 @@ def main():
     ap=argparse.ArgumentParser()
     ap.add_argument("--links",type=Path,required=True)
     ap.add_argument("--sources",type=Path,default=Path("config/venue_sources.csv"),help="Venue registry so zero-link venues still receive audit rows")
+    ap.add_argument("--extra-seeds",type=Path,default=None,help="Optional explicit event-page seeds, e.g. regression fixtures")
     ap.add_argument("--out-dir",type=Path,required=True)
     ap.add_argument("--max-pages-per-venue",type=int,default=30)
     ap.add_argument("--max-depth",type=int,default=2)
@@ -732,6 +733,14 @@ def main():
     args.out_dir.mkdir(parents=True,exist_ok=True); snapdir=args.out_dir/"snapshots"; snapdir.mkdir(exist_ok=True)
     with args.links.open(encoding="utf-8-sig",newline="") as f: seeds=list(csv.DictReader(f))
     by_venue=defaultdict(list)
+    extra_by_venue=defaultdict(list)
+    if args.extra_seeds and args.extra_seeds.exists():
+        with args.extra_seeds.open(encoding="utf-8-sig",newline="") as f:
+            for row in csv.DictReader(f):
+                venue=(row.get("venue") or "").strip()
+                url=(row.get("source_url") or row.get("candidate_url") or "").strip()
+                if venue and url.startswith(("https://","http://")):
+                    extra_by_venue[venue].append(url)
     # Initialise every configured venue, not just venues for which discovery
     # happened to find a link. Zero candidates is an auditable outcome, not
     # proof of an empty calendar.
@@ -751,7 +760,7 @@ def main():
             url=(source.get("source_url") or "").strip()
             if venue and url.startswith(("https://","http://")):
                 by_venue[venue].insert(0,url)
-    def crawl_venue(venue, urls):
+    def crawl_venue(venue, urls, extra_urls):
         all_rows=[]
         audits=[]
         queue=deque(); queued=set(); visited=set(); failed=0; added=0; cap=False
@@ -769,6 +778,14 @@ def main():
         external_seed_links_skipped=max(0,len(canonical_urls[1:])-sum(urlparse(u).netloc == official_host for u in canonical_urls[1:]))
         non_event_seed_links_skipped=sum(urlparse(u).netloc == official_host and not is_plausible_event_page_url(u,canonical_urls[0]) for u in canonical_urls[1:])
         non_event_links_skipped=0
+        explicit_seed_urls=[]
+        for seed_url in extra_urls:
+            canonical=canonicalize_url(seed_url)
+            if canonical not in explicit_seed_urls and official_host and urlparse(canonical).netloc==official_host and is_plausible_event_page_url(canonical,canonical_urls[0]):
+                explicit_seed_urls.append(canonical)
+        for seed_url in explicit_seed_urls:
+            if seed_url not in queued and seed_url not in visited:
+                queue.append((seed_url,1)); queued.add(seed_url)
         # Follow links only on the official venue host. Third-party ticket links are
         # retained in discovery inputs but must not explode the crawl into global ticketing pages.
         source_hosts={official_host} if official_host else set()
@@ -933,7 +950,10 @@ def main():
                 failed+=1
                 all_rows.append({"venue":venue,"page_url":url,"http_status":"","content_type":"","page_title":"","event_title":"","event_date":"","performer_names":"","price":"","currency":"","availability":"","event_jsonld_found":"false","visible_text_snapshot":"","verified":"false","status":"fetch_failed","notes":f"{type(exc).__name__}: {exc}"})
             time.sleep(max(0,args.delay))
-        audits.append({"venue":venue,"seed_candidate_links":len(set(urls)),"external_seed_links_skipped":external_seed_links_skipped,"non_event_seed_links_skipped":non_event_seed_links_skipped,"non_event_links_skipped":non_event_links_skipped,"pages_fetched":len(visited)-failed,"pages_failed":failed,"same_host_links_added":added,"crawl_cap_reached":str(cap).lower(),"status":"PARTIAL" if urls else "NO_SEED_LINKS","notes":("Bounded crawl only; cap, JavaScript content, pagination and event/support completeness require review. External ticketing hosts are not crawled in this pass." if urls else "No candidate links supplied for this configured venue. This is a discovery gap, not evidence that the calendar is empty.")})
+        for row in all_rows:
+            if row.get("page_url") in explicit_seed_urls:
+                row["notes"]="Explicit regression seed page; parser coverage only, not proof of natural discovery. "+(row.get("notes") or "")
+        audits.append({"venue":venue,"seed_candidate_links":len(set(urls)),"explicit_regression_seed_pages":len(explicit_seed_urls),"external_seed_links_skipped":external_seed_links_skipped,"non_event_seed_links_skipped":non_event_seed_links_skipped,"non_event_links_skipped":non_event_links_skipped,"pages_fetched":len(visited)-failed,"pages_failed":failed,"same_host_links_added":added,"crawl_cap_reached":str(cap).lower(),"status":"PARTIAL" if urls else "NO_SEED_LINKS","notes":("Bounded crawl only; cap, JavaScript content, pagination and event/support completeness require review. External ticketing hosts are not crawled in this pass." if urls else "No candidate links supplied for this configured venue. This is a discovery gap, not evidence that the calendar is empty.")})
         return all_rows, audits
 
     # Crawl independent venues concurrently so a slow or blocked site cannot
@@ -941,7 +961,7 @@ def main():
     all_rows=[]; audits=[]
     venue_items=list(by_venue.items())
     with ThreadPoolExecutor(max_workers=8) as executor:
-        futures=[executor.submit(crawl_venue, venue, urls) for venue, urls in venue_items]
+        futures=[executor.submit(crawl_venue, venue, urls, extra_by_venue.get(venue,[])) for venue, urls in venue_items]
         for future in futures:
             venue_rows, venue_audits = future.result()
             all_rows.extend(venue_rows)
@@ -971,7 +991,10 @@ def main():
         w=csv.DictWriter(f,fieldnames=EVENT_FIELDS);w.writeheader();w.writerows(all_rows)
     with (args.out_dir/"event_page_crawl_audit.csv").open("w",encoding="utf-8",newline="") as f:
         w=csv.DictWriter(f,fieldnames=AUDIT_FIELDS);w.writeheader();w.writerows(audits)
-    summary={"venues_configured":sum(1 for _ in audits),"venues_with_seed_links":sum(r["seed_candidate_links"]>0 for r in audits),"venues_without_seed_links":sum(r["seed_candidate_links"]==0 for r in audits),"pages_inspected":sum(r["pages_fetched"]+r["pages_failed"] for r in audits),"pages_failed":sum(r["pages_failed"] for r in audits),"external_seed_links_skipped":sum(r["external_seed_links_skipped"] for r in audits),"event_jsonld_rows":sum(r["event_jsonld_found"]=="true" for r in all_rows),"crawl_caps_reached":sum(r["crawl_cap_reached"]=="true" for r in audits),"status":"PARTIAL","limitations":["No event row is marked verified.","Only same-host links are followed after seed discovery.","JavaScript-only calendars, hidden pagination, third-party ticket pages and support acts can be missed.","Manual event-by-event verification and venue coverage records remain required."]}
+    summary={"venues_configured":sum(1 for _ in audits),"venues_with_seed_links":sum(r["seed_candidate_links"]>0 for r in audits),"venues_without_seed_links":sum(r["seed_candidate_links"]==0 for r in audits),"pages_inspected":sum(r["pages_fetched"]+r["pages_failed"] for r in audits),"pages_failed":sum(r["pages_failed"] for r in audits),"external_seed_links_skipped":sum(r["external_seed_links_skipped"] for r in audits),
+        "explicit_regression_seed_pages":sum(r.get("explicit_regression_seed_pages",0) for r in audits),
+        "non_event_seed_links_skipped":sum(r.get("non_event_seed_links_skipped",0) for r in audits),
+        "non_event_links_skipped":sum(r.get("non_event_links_skipped",0) for r in audits),"event_jsonld_rows":sum(r["event_jsonld_found"]=="true" for r in all_rows),"crawl_caps_reached":sum(r["crawl_cap_reached"]=="true" for r in audits),"status":"PARTIAL","limitations":["No event row is marked verified.","Only same-host links are followed after seed discovery.","JavaScript-only calendars, hidden pagination, third-party ticket pages and support acts can be missed.","Manual event-by-event verification and venue coverage records remain required."]}
     (args.out_dir/"event_page_crawl_summary.json").write_text(json.dumps(summary,indent=2)+"\n",encoding="utf-8")
     print(json.dumps(summary,indent=2))
     # Partial page failures are recorded in the audit and must not discard
