@@ -5,7 +5,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
-from run_core_search import build_coverage, inspection_to_candidates, match_candidates, normalize
+from run_core_search import build_coverage, inspection_to_candidates, is_noise_event_title, match_candidates, normalize
 
 
 class CoreSearchTests(unittest.TestCase):
@@ -46,6 +46,24 @@ class CoreSearchTests(unittest.TestCase):
         self.assertEqual([row["artist"] for row in candidates], ["Gallus", "A Certain Ratio"])
         matches = match_candidates(candidates, [{"artist": "Gallus"}, {"artist": "A Certain Ratio"}], [])
         self.assertEqual({row["matched_pool_artist"] for row in matches}, {"Gallus", "A Certain Ratio"})
+
+    def test_page_furniture_and_price_labels_are_not_event_titles(self):
+        for title in ["Location", "Venue Space", "£75.10", "From: £35.80 - £52.60", "7:00pm"]:
+            with self.subTest(title=title):
+                self.assertTrue(is_noise_event_title(title))
+        self.assertFalse(is_noise_event_title("The Wedding Present"))
+
+    def test_inspection_drops_price_and_location_rows(self):
+        rows = [
+            {"event_date": "2026-10-20", "venue": "Sage Two", "event_title": "£75.10",
+             "performer_names": "£75.10", "page_url": "https://example.test/price"},
+            {"event_date": "2026-10-20", "venue": "Cobalt Studios", "event_title": "Location",
+             "performer_names": "Location; Venue Space", "page_url": "https://example.test/location"},
+            {"event_date": "2026-10-20", "venue": "Boiler Shop", "event_title": "The Wedding Present",
+             "performer_names": "The Wedding Present", "page_url": "https://example.test/gig"},
+        ]
+        candidates = inspection_to_candidates(rows)
+        self.assertEqual([row["artist"] for row in candidates], ["The Wedding Present"])
 
     def test_inspection_without_named_performer_is_not_a_pool_match(self):
         rows = [{
