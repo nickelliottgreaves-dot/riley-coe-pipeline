@@ -8,6 +8,7 @@ unverified. It records caps and errors so an incomplete crawl cannot look comple
 """
 from __future__ import annotations
 import argparse,csv,json,re,time,hashlib
+from datetime import datetime
 from collections import deque,defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from html.parser import HTMLParser
@@ -67,6 +68,71 @@ def clean(v):
     if isinstance(v,dict): return str(v.get("name") or v.get("url") or "")
     if isinstance(v,list): return "; ".join(x for x in (clean(i) for i in v) if x)
     return str(v or "").strip()
+
+def extract_visible_event(page_title, visible_text):
+    """Extract review-only event candidates from common visible event-detail layouts."""
+    lines=[line.strip() for line in visible_text.splitlines() if line.strip()]
+    def next_value(label):
+        for i,line in enumerate(lines):
+            if line.casefold().rstrip(":") == label.casefold().rstrip(":") and i+1 < len(lines):
+                return lines[i+1]
+            match=re.match(r"(?i)^"+re.escape(label.rstrip(":"))+r":\\s*(.+)$",line)
+            if match:
+                return match.group(1).strip()
+        return ""
+    date_text=next_value("Date")
+    event_date=""
+    for fmt in ("%a %d %b %Y","%A %d %B %Y","%a %d %B %Y","%d %B %Y","%d %b %Y"):
+        try:
+            event_date=datetime.strptime(date_text,fmt).date().isoformat()
+            break
+        except ValueError:
+            pass
+    if not event_date:
+        match=re.search(r"(?i)\\b(20\\d{2}-\\d{2}-\\d{2})\\b",visible_text)
+        if match: event_date=match.group(1)
+    venue=next_value("Venue")
+    if not event_date or not venue:
+        return None
+    title=(page_title or "").strip()
+    # Common official event-page titles end with the venue after a separator.
+    if re.search(r"\\s[-|–—]\\s",title):
+        title=re.split(r"\\s[-|–—]\\s",title)[0].strip()
+    if not title or title.casefold() in {"gigs","events","what's on","whats on","home"}:
+        return None
+    supports=[]
+    support_mode=False
+    for line in lines:
+        low=line.casefold()
+        if low in {"with support from","supports","support"}:
+            support_mode=True
+            continue
+        if support_mode and low in {"details","date","venue","advance tickets","tickets","doors","age restrictions"}:
+            support_mode=False
+        elif support_mode and len(line)<120 and line.casefold()!=title.casefold():
+            supports.append(line)
+    supports=list(dict.fromkeys(supports))
+    price_text=next_value("Advance tickets") or next_value("Price") or next_value("Tickets")
+    price_match=re.search(r"£\\s?\\d+(?:\\.\\d{1,2})?",price_text)
+    price=price_match.group(0).replace(" ","") if price_match else ""
+    ticket_text=" ".join(lines).casefold()
+    if "sold out" in ticket_text:
+        availability="SoldOut"
+    elif "buy tickets" in ticket_text or "tickets" in ticket_text:
+        availability="not_checked"
+    else:
+        availability="not_checked"
+    performers=[title]+supports
+    return {
+        "event_title":title,
+        "event_date":event_date,
+        "venue":venue,
+        "performer_names":"; ".join(performers),
+        "price":price,
+        "currency":"GBP" if price else "",
+        "availability":availability,
+        "notes":"Candidate extracted from visible event-page text; independently verify title, artist billing/support, date, room, price and ticket status."
+    }
 
 def likely(href,text):
     return bool(re.search(r"event|gig|show|concert|ticket|whats-on|whatson|live-music|performance|listing|page=|next|older",href+" "+text,re.I))
@@ -150,7 +216,11 @@ def main():
                             if o.get("availability"): avail.append(clean(o["availability"]).split("/")[-1])
                         all_rows.append({"venue":venue,"page_url":url,"http_status":status,"content_type":ctype,"page_title":page_title,"event_title":name,"event_date":start[:10],"performer_names":perf,"price":"; ".join(sorted(set(prices))),"currency":"; ".join(sorted(set(currencies))),"availability":"; ".join(sorted(set(avail))),"event_jsonld_found":"true","visible_text_snapshot":f"snapshots/{snap_name}","verified":"false","status":"structured_candidate_needs_review","notes":"Structured data is candidate evidence only; independently verify event, exact date, room, billing/support, price and ticket status."+( " HTML truncated." if truncated else "")})
                 if not found:
-                    all_rows.append({"venue":venue,"page_url":url,"http_status":status,"content_type":ctype,"page_title":page_title,"event_title":"","event_date":"","performer_names":"","price":"","currency":"","availability":"","event_jsonld_found":"false","visible_text_snapshot":f"snapshots/{snap_name}","verified":"false","status":"page_text_needs_review","notes":"No Event JSON-LD found; inspect saved visible text for title, date, headliner, supports, price and ticket status."+( " HTML truncated." if truncated else "")})
+                    visible_event=extract_visible_event(page_title,visible)
+                    if visible_event:
+                        all_rows.append({"venue":visible_event["venue"] or venue,"page_url":url,"http_status":status,"content_type":ctype,"page_title":page_title,"event_title":visible_event["event_title"],"event_date":visible_event["event_date"],"performer_names":visible_event["performer_names"],"price":visible_event["price"],"currency":visible_event["currency"],"availability":visible_event["availability"],"event_jsonld_found":"false","visible_text_snapshot":f"snapshots/{snap_name}","verified":"false","status":"visible_event_candidate_needs_review","notes":visible_event["notes"]+( " HTML truncated." if truncated else "")})
+                    else:
+                        all_rows.append({"venue":venue,"page_url":url,"http_status":status,"content_type":ctype,"page_title":page_title,"event_title":"","event_date":"","performer_names":"","price":"","currency":"","availability":"","event_jsonld_found":"false","visible_text_snapshot":f"snapshots/{snap_name}","verified":"false","status":"page_text_needs_review","notes":"No Event JSON-LD or reliable visible Date/Venue fields found; inspect saved visible text manually."+( " HTML truncated." if truncated else "")})
                 if depth<args.max_depth:
                     for href,txt in p.links:
                         target=urljoin(url,href); parsed=urlparse(target)
