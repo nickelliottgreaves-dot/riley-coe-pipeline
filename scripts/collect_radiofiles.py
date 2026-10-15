@@ -122,11 +122,12 @@ def main() -> int:
         all_episodes = []
         errors.append(f"Episode-list request failed: {type(exc).__name__}: {exc}")
 
+    radiofiles_episodes = list(all_episodes)
     # RadioFiles' recent-episode listing can lag behind the BBC. Supplement it
     # with episode IDs discovered by the official BBC collector so new episodes
     # are fetched directly even when absent from the third-party listing.
     by_pid = {}
-    for item in all_episodes:
+    for item in radiofiles_episodes:
         if isinstance(item, dict) and str(item.get("pid") or "").strip():
             by_pid[str(item["pid"]).strip()] = item
     bbc_inventory_rows = 0
@@ -166,8 +167,8 @@ def main() -> int:
         seen.add(pid)
         dated_list.append((dt, item))
     dated_list.sort(key=lambda pair: (pair[0], str(pair[1].get("pid"))))
-    earliest_returned = min((parse_episode_date(str(i.get("date") or "")) for i in all_episodes if isinstance(i, dict) and parse_episode_date(str(i.get("date") or ""))), default=None)
-    latest_returned = max((parse_episode_date(str(i.get("date") or "")) for i in all_episodes if isinstance(i, dict) and parse_episode_date(str(i.get("date") or ""))), default=None)
+    earliest_returned = min((parse_episode_date(str(i.get("date") or "")) for i in radiofiles_episodes if isinstance(i, dict) and parse_episode_date(str(i.get("date") or ""))), default=None)
+    latest_returned = max((parse_episode_date(str(i.get("date") or "")) for i in radiofiles_episodes if isinstance(i, dict) and parse_episode_date(str(i.get("date") or ""))), default=None)
     episode_list_covers_start = bool(earliest_returned and earliest_returned <= since)
     for episode_date, item in dated_list:
         pid = str(item["pid"])
@@ -215,13 +216,27 @@ def main() -> int:
     write_csv(out / "radiofiles_episode_inventory.csv", EPISODE_FIELDS, episodes)
     write_csv(out / "radiofiles_track_candidates.csv", TRACK_FIELDS, tracks)
     verified_counts = sum(r["tracklist_status"] == "count_and_metadata_verified_needs_crosscheck" for r in episodes)
+    target_pids = {"m0032d2m", "m0032d4c"}
+    target_episode_details = {}
+    for pid in sorted(target_pids):
+        episode_row = next((r for r in episodes if r["episode_pid"] == pid), None)
+        target_tracks = [t for t in tracks if t["episode_pid"] == pid]
+        target_episode_details[pid] = {
+            "episode_date": episode_row["episode_date"] if episode_row else "",
+            "episode_title": episode_row["episode_title"] if episode_row else "",
+            "tracklist_status": episode_row["tracklist_status"] if episode_row else "not_found_in_collection",
+            "reported_track_count": episode_row["track_count_reported"] if episode_row else "",
+            "returned_track_count": len(target_tracks),
+            "tracks": [{"position": t["track_position"], "title": t["track_title"], "artist": t["artist_candidate"]} for t in target_tracks],
+        }
     audit = {
+        "target_episode_details": target_episode_details,
         "collector": "RadioFiles public JSON fallback",
         "show_id": args.show_id,
         "window_start": since.isoformat(),
         "window_end": until.isoformat(),
         "episode_list_endpoint": list_url,
-        "episodes_returned_by_source": len(all_episodes),
+        "episodes_returned_by_source": len(radiofiles_episodes),
         "bbc_inventory_rows_considered": bbc_inventory_rows,
         "episode_discovery_sources": ["RadioFiles public episode listing"] + (["official BBC episode inventory"] if args.bbc_inventory else []),
         "earliest_episode_returned": earliest_returned.isoformat() if earliest_returned else "",
