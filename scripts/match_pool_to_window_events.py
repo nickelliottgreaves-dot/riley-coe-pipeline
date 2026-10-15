@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse,csv,json,re,unicodedata
 from datetime import date
 from pathlib import Path
+from urllib.parse import parse_qs,urlparse
 
 def norm(value: str) -> str:
     value=unicodedata.normalize("NFKD",str(value or "")).casefold()
@@ -24,6 +25,23 @@ def in_window(value: str, start: date, end: date) -> bool:
     try: d=date.fromisoformat((value or "").strip()[:10])
     except ValueError: return False
     return start <= d <= end
+
+def is_event_detail_url(value: str) -> bool:
+    """Avoid joining a page-wide mention to every event card on a listing page."""
+    parsed=urlparse(value)
+    path=parsed.path.casefold().rstrip("/")
+    if not path or parse_qs(parsed.query).get("date"):
+        return False
+    if path in {"/events","/event","/gigs","/gig","/whats-on","/whatson","/shows",
+                "/live-events","/concerts","/club-events","/calendar"}:
+        return False
+    if re.search(r"/(?:gigs|events)/date/20\d{2}/\d{1,2}$",path):
+        return False
+    if re.search(r"/(?:gigs|events|whats-on|whatson|live-events|shows|concerts|club-events)/page/\d+$",path):
+        return False
+    segments=[segment for segment in path.split("/") if segment]
+    return len(segments)>=2 and segments[-1] not in {"events","gigs","whats-on","whatson","page","calendar"}
+
 
 def main() -> int:
     ap=argparse.ArgumentParser()
@@ -79,6 +97,8 @@ def main() -> int:
             if not artist_key: continue
             urls=[u.strip() for u in (hit.get("evidence_url") or "").split(";") if u.strip()]
             for page_url in urls:
+                if not is_event_detail_url(page_url):
+                    continue
                 for row in source_rows.get("event_page_inspection",[]):
                     row_url=(row.get("page_url") or row.get("source_url") or "").strip()
                     if row_url!=page_url or not in_window(row.get("event_date",""),args.start,args.end):
