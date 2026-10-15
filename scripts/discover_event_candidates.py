@@ -3,7 +3,7 @@
 
 Structured Event data is extracted when available. Other likely event links are
 recorded as candidates only; this script never treats a homepage fetch as a
-complete calendar sweep or marks events verified.\n\n[full-sweep] Validate shared-source response reuse and the bounded official-host crawl.
+complete calendar sweep or marks events verified.\n\n[full-sweep] Validate shared-source response reuse and the bounded official-host crawl.\nThe complete sweep also checks the 747-row baseline and fail-closed evidence assembly.
 """
 from __future__ import annotations
 import argparse, csv, json, re, time
