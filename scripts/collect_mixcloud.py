@@ -210,6 +210,62 @@ def fetch_html_cloudcasts(username: str, since: date, until: date) -> tuple[list
     return found, errors
 
 
+
+def fetch_bing_rss_cloudcasts(username: str, since: date, until: date) -> tuple[list[dict], list[str]]:
+    """Last-resort discovery through Bing's public RSS search results.
+
+    Mixcloud pages can be indexed by public search engines even when Mixcloud's
+    own API and client-rendered search HTML expose no cards to a non-browser.
+    Search results only discover URLs; dates and tracklists still need verification.
+    """
+    from html import unescape
+    account = username.strip("/").casefold()
+    queries = [
+        f'site:mixcloud.com/{username.strip("/")}/riley-coe',
+        f'site:mixcloud.com/{username.strip("/")}/ "Riley & Coe" 2026',
+    ]
+    found: list[dict] = []
+    errors: list[str] = []
+    seen: set[str] = set()
+    for term in queries:
+        search_url = "https://www.bing.com/search?" + urlencode({"format": "rss", "q": term})
+        req = Request(search_url, headers={"User-Agent": USER_AGENT, "Accept": "application/rss+xml,application/xml,text/xml,*/*", "Accept-Language": "en-GB,en;q=0.9"})
+        try:
+            with urlopen(req, timeout=25) as response:
+                xml = response.read(2_000_001).decode("utf-8", errors="replace")
+        except (HTTPError, URLError, TimeoutError, OSError) as exc:
+            errors.append(f"Public search-engine RSS failed for query {term!r}: {exc}")
+            continue
+        if len(xml) > 2_000_000:
+            errors.append(f"Public search-engine RSS truncated for query {term!r}.")
+        items = re.findall(r"<item\\b[^>]*>(.*?)</item>", xml, flags=re.I | re.S)
+        for item_xml in items:
+            title_match = re.search(r"<title[^>]*>(.*?)</title>", item_xml, flags=re.I | re.S)
+            link_match = re.search(r"<link[^>]*>(.*?)</link>", item_xml, flags=re.I | re.S)
+            if not link_match:
+                continue
+            title = unescape(re.sub(r"<[^>]+>", "", title_match.group(1))).strip() if title_match else ""
+            public_url = unescape(re.sub(r"<[^>]+>", "", link_match.group(1))).strip()
+            parsed = urlparse(public_url)
+            path = parsed.path.strip("/")
+            parts = path.split("/")
+            if parsed.netloc.casefold() not in {"www.mixcloud.com", "mixcloud.com"} or len(parts) < 2:
+                continue
+            if parts[0].casefold() != account or "riley-coe" not in parts[1].casefold():
+                continue
+            published = episode_date_from_text(title + " " + path.replace("/", " "))
+            if not published or not (since <= published <= until) or public_url in seen:
+                continue
+            seen.add(public_url)
+            found.append({
+                "name": title or parts[1].replace("-", " "),
+                "url": public_url,
+                "key": "/" + path.strip("/") + "/",
+                "created_time": published.isoformat() + "T12:00:00Z",
+            })
+    return found, errors
+
+
 def fetch_cloudcasts(username: str, since: date, until: date) -> tuple[list[dict], list[str], list[str]]:
     endpoint = resolve_cloudcasts_endpoint(username)
     url = f"{endpoint.rstrip('/')}/?{urlencode({'limit': 100, 'offset': 0})}"
@@ -271,8 +327,19 @@ def fetch_cloudcasts(username: str, since: date, until: date) -> tuple[list[dict
                     "Profile links may be incomplete; visible tracklists still require verification."
                 )
             else:
-                errors.extend(fallback_errors)
-                errors.extend(html_errors)
+                bing_found, bing_errors = fetch_bing_rss_cloudcasts(username, since, until)
+                if bing_found:
+                    found = bing_found
+                    errors = []
+                    warnings.append(
+                        f"Mixcloud API, own-site search and profile HTML did not expose dated shows; "
+                        f"public search-engine RSS recovered {len(found)} dated candidate(s). "
+                        "Search-index coverage is not exhaustive; inspect each visible show page."
+                    )
+                else:
+                    errors.extend(fallback_errors)
+                    errors.extend(html_errors)
+                    errors.extend(bing_errors)
     return found, errors, warnings
 
 def fetch_search_cloudcasts(username: str, since: date, until: date) -> tuple[list[dict], list[str]]:
