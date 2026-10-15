@@ -264,6 +264,7 @@ jobs:
             --pool data/artist_pool.csv \
             --events "artifacts/riley-coe-event-candidates-${{ github.run_id }}/event_candidates.csv" \
             --inspected "artifacts/riley-coe-event-page-inspection-${{ github.run_id }}/event_page_inspection.csv" \
+            --pool-page-matches "artifacts/artist_pool_venue_page_matches.csv" \
             --start "$START" --end "$END" \
             --out artifacts/artist_window_event_matches.csv
       - name: Assemble dated PARTIAL evidence package
