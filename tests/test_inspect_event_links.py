@@ -272,8 +272,8 @@ Saint-Saëns' packs energy into his concerto."""
         Conductor
         With support from
         Support Act
+        8.30pm -9pm
         Timings are approximate and subject to change
-        8.30pm - 9pm
         Interval
         Age: Under 14s must be accompanied by an adult.
         What they say
