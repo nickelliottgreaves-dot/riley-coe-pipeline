@@ -31,10 +31,14 @@ def main() -> int:
     ap=argparse.ArgumentParser()
     ap.add_argument("--pool",type=Path,required=True)
     ap.add_argument("--verified-candidates",type=Path,required=True)
+    ap.add_argument("--reconciliation",type=Path)
     ap.add_argument("--out-dir",type=Path,required=True)
     args=ap.parse_args()
     pool_fields,pool=read_rows(args.pool)
     candidate_fields,candidates=read_rows(args.verified_candidates)
+    reconciliation_rows=[]
+    if args.reconciliation:
+        _,reconciliation_rows=read_rows(args.reconciliation)
     required={"artist_candidate","radiofiles_artist_candidate","episode_date","episode_pid","bbc_episode_url","radiofiles_episode_url","crosscheck_status","track_title"}
     if not required.issubset(candidate_fields):
         raise ValueError(f"Verified candidate file missing columns: {sorted(required-set(candidate_fields))}")
@@ -55,9 +59,26 @@ def main() -> int:
             evidence_row["bbc_full_credit"]=str(row.get("artist_candidate") or "").strip()
             evidence_row["artist_candidate"]=artist
             by_artist[norm(artist)].append(evidence_row)
+    ambiguous_by_key={}
+    for row in reconciliation_rows:
+        try:
+            score=float(row.get("best_similarity_score") or 0)
+        except ValueError:
+            score=0
+        if row.get("reconciliation_status")=="UNMATCHED_REVIEW_ONLY" and score>=0.72 and row.get("closest_pool_candidates"):
+            ambiguous_by_key[norm(row.get("artist_candidate",""))]={
+                "artist_candidate":row.get("artist_candidate",""),"best_similarity_score":str(score),
+                "closest_pool_candidates":row.get("closest_pool_candidates",""),"episode_dates":row.get("episode_dates",""),
+                "track_examples":row.get("track_examples",""),"source_urls":row.get("source_urls",""),
+                "reason":"Fuzzy pool candidate at or above 0.72; held for manual identity/alias review."
+            }
+    ambiguous_rows=[]
     additions=[]
     proposed=[dict(r) for r in pool]
     for key, appearances in sorted(by_artist.items(),key=lambda pair:pair[0]):
+        if key in ambiguous_by_key:
+            ambiguous_rows.append(ambiguous_by_key[key])
+            continue
         if key in current:
             continue
         display=sorted({str(r["artist_candidate"]).strip() for r in appearances},key=str.casefold)[0]
@@ -77,12 +98,15 @@ def main() -> int:
     write_rows(out/f"artist_pool_backup_{today}.csv",pool_fields,pool)
     write_rows(out/f"artist_pool_additions_{today}.csv",
         ["artist","status","source_basis","track_examples","appearance_count","episode_dates","evidence_urls"],additions)
+    write_rows(out/f"artist_pool_ambiguous_review_{today}.csv",
+        ["artist_candidate","best_similarity_score","closest_pool_candidates","episode_dates","track_examples","source_urls","reason"],ambiguous_rows)
     audit={
         "generated_on":date.today().isoformat(),
         "input_pool_rows":len(pool),
         "verified_candidate_rows":len(candidates),
         "unique_verified_artists":len(by_artist),
         "new_artist_additions_proposed":len(additions),
+        "ambiguous_candidates_held_for_manual_review":len(ambiguous_rows),
         "proposed_pool_rows":len(proposed),
         "input_pool_unchanged":True,
         "authoritative_pool_modified":False,
