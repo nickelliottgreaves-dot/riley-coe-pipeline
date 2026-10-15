@@ -125,7 +125,7 @@ def main():
             event_rows.append({**base,"artist":"","artist_role":"unknown",
                 "notes":("Unresolved inspected-page JSON-LD candidate" if structured else "Unresolved visible event-text candidate")+"; performer not exposed. "+(item.get("notes") or "")})
     # Preserve only event rows inside the requested window; every candidate remains unverified.
-    events=[]; unresolved=[]; seen_event_keys=set()
+    events=[]; unresolved=[]; seen_event_keys={}
     for r in event_rows:
         raw_date=(r.get("event_date") or "").strip()
         dt=raw_date[:10] if len(raw_date)>=10 else ""
@@ -149,13 +149,29 @@ def main():
             continue
         key=(dt,"".join(ch.casefold() for ch in (r.get("venue") or "") if ch.isalnum()),
              " ".join((r.get("event_title") or "").casefold().split()),
-             " ".join((r.get("artist") or "").casefold().split()),
-             (r.get("source_url") or "").strip())
+             " ".join((r.get("artist") or "").casefold().split()))
+        incoming={**{k:r.get(k,"") for k in EVENT_FIELDS},"event_date":dt,"verified":"false",
+                  "notes":((r.get("notes") or "")+" Candidate imported; independently verify the event detail page and support bill.").strip()}
         if key in seen_event_keys:
+            existing=events[seen_event_keys[key]]
+            better_detail=bool(incoming.get("price") or incoming.get("ticket_status") not in {"","not_checked"})
+            if not existing.get("price") and incoming.get("price"):
+                existing["price"]=incoming["price"]
+            if existing.get("ticket_status") in {"","not_checked"} and incoming.get("ticket_status") not in {"","not_checked"}:
+                existing["ticket_status"]=incoming["ticket_status"]
+            if incoming.get("discovery_method") == "inspected_page_jsonld" or better_detail:
+                existing["source_url"]=incoming.get("source_url") or existing.get("source_url","")
+                if incoming.get("discovery_method"):
+                    existing["discovery_method"]=incoming["discovery_method"]
+            elif not existing.get("source_url") and incoming.get("source_url"):
+                existing["source_url"]=incoming["source_url"]
+            old_notes=existing.get("notes","")
+            new_notes=incoming.get("notes","")
+            if new_notes and new_notes not in old_notes:
+                existing["notes"]=(old_notes+" "+new_notes).strip()
             continue
-        seen_event_keys.add(key)
-        events.append({**{k:r.get(k,"") for k in EVENT_FIELDS},"event_date":dt,"verified":"false",
-                       "notes":((r.get("notes") or "")+" Candidate imported; independently verify the event detail page and support bill.").strip()})
+        seen_event_keys[key]=len(events)
+        events.append(incoming)
     venue_audit=read_csv(args.venue_audit,["venue","source_url","status","notes"]) if args.venue_audit else []
     detail_audit=read_csv(args.event_page_audit,["venue","seed_candidate_links","pages_fetched","pages_failed","same_host_links_added","crawl_cap_reached","status","notes"]) if args.event_page_audit else []
     audit_by_venue={''.join(c.casefold() for c in r.get("venue","") if c.isalnum()):r for r in venue_audit}
