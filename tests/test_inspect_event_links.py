@@ -460,6 +460,35 @@ Tickets"""
             self.assertIn("allowlisted external ticketing event-detail pages",audit["notes"])
             self.assertIn("not recursively crawled",audit["notes"])
 
+    def test_static_media_links_are_skipped_not_counted_as_failed_pages(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp); links=root/"links.csv"; sources=root/"sources.csv"
+            with links.open("w",encoding="utf-8",newline="") as f:
+                w=csv.DictWriter(f,fieldnames=["venue","candidate_url","link_text"]);w.writeheader()
+                w.writerow({"venue":"Test Venue","candidate_url":"https://venue.example/wp-content/uploads/photo.jpg","link_text":"Venue photo"})
+                w.writerow({"venue":"Test Venue","candidate_url":"https://venue.example/events/act","link_text":"Act"})
+            with sources.open("w",encoding="utf-8",newline="") as f:
+                w=csv.DictWriter(f,fieldnames=["venue","source_url"]);w.writeheader()
+                w.writerow({"venue":"Test Venue","source_url":"https://venue.example/whats-on"})
+            fetched=[]
+            calendar='<title>Test Venue What's On</title><a href="/wp-content/uploads/photo.jpg">Venue photo</a><a href="/events/act">Act</a>'
+            detail='<title>Act - Test Venue</title><p>Date:</p><p>Thu 15 Oct 2026</p><p>Venue:</p><p>Test Venue</p>'
+            def fake_fetch(url, *args, **kwargs):
+                fetched.append(url)
+                if url=="https://venue.example/whats-on": return 200,"text/html",calendar,False
+                if url=="https://venue.example/events/act": return 200,"text/html",detail,False
+                raise AssertionError("Static media must not be fetched: "+url)
+            with patch.object(crawler,"fetch",side_effect=fake_fetch):
+                with patch("sys.argv",["inspect_event_links.py","--links",str(links),"--sources",str(sources),
+                    "--out-dir",str(root/"out"),"--start","2026-10-15","--end","2026-10-28","--delay","0"]):
+                    self.assertEqual(main(),0)
+            self.assertNotIn("https://venue.example/wp-content/uploads/photo.jpg",fetched)
+            summary=json.loads((root/"out"/"event_page_crawl_summary.json").read_text())
+            self.assertEqual(summary["pages_failed"],0)
+            with (root/"out"/"event_page_fetch_failures.csv").open(newline="",encoding="utf-8") as f:
+                failures=list(csv.DictReader(f))
+            self.assertEqual(failures,[])
+
     def test_partial_page_failures_keep_successful_crawl_outputs(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp); links=root/"links.csv"; sources=root/"sources.csv"
