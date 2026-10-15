@@ -368,6 +368,19 @@ def extract_visible_listing_events(visible_text, default_venue="", start_date=No
         "Gosforth Civic Theatre","Newcastle University","Newcastle University Students' Union","Students' Union",
         "Lubber Fiend","The Globe","Little Buildings","Utilita Arena","Utilita Arena Newcastle","ZEROX","ZEROX Newcastle"
     ]}
+    # Citywide safety-net pages must retain the actual card venue and may
+    # only contribute events at one of the configured reporting venues.
+    reporting_venues={re.sub(r"[^a-z0-9]+","",name.casefold()) for name in [
+        "The Cluny","Cluny 2","Boiler Shop","Wylam Brewery","The Grove",
+        "Glasshouse International Centre for Music","Sage One","Sage Two",
+        "Cumberland Arms","Cobalt Studios","The Lubber Fiend","Think Tank? NCL",
+        "Newcastle University Students' Union","Little Buildings","O2 City Hall Newcastle",
+        "Riverside Newcastle","ZEROX Newcastle","The Newgate Social","Head of Steam Newcastle"
+    ]}
+    reporting_venues.update(re.sub(r"[^a-z0-9]+","",name.casefold()) for name in [
+        "The Glasshouse","Glasshouse","Sage Gateshead","Sage 1","Sage 2","O2 City Hall",
+        "Think Tank","Think Tank?","Newcastle University S.U.","NUSU","ZEROX"
+    ])
     def parsed_date(value):
         value=re.sub(r"(?i)(\d{1,2})(st|nd|rd|th)\b",r"\1",value.strip())
         value=re.sub(r"(?<!\d)['’](\d{2})\b",r"20\1",value)
@@ -469,8 +482,27 @@ def extract_visible_listing_events(visible_text, default_venue="", start_date=No
             forward_index=j
             break
         if forward_title and forward_index is not None:
+            # Listing guides put the actual venue immediately after the
+            # billed title. Do not attribute every card to the source row's
+            # configured venue merely because it was crawled for that venue.
+            card_venue=""
+            for extra in lines[forward_index+1:min(len(lines),forward_index+5)]:
+                if date_pattern.search(extra) or inline_date_title.match(extra):
+                    break
+                candidate_key=re.sub(r"[^a-z0-9]+","",extra.casefold())
+                if candidate_key in known_venues:
+                    card_venue=extra.strip()
+                    break
+                if is_page_furniture(extra) or extra.casefold().strip() in generic:
+                    continue
+            venue_line=card_venue or default_venue
+            if card_venue:
+                venue_key=re.sub(r"[^a-z0-9]+","",card_venue.casefold())
+                if venue_key not in reporting_venues:
+                    continue
             artist_text=re.split(r"(?i)\bpresents:\s*",forward_title,maxsplit=1)[-1]
             artist_text=artist_text.split("//",1)[-1].strip()
+            artist_text=re.sub(r"(?i)^byker grave\s*:\s*","",artist_text)
             artist_text=re.sub(r"(?i)^(?:mercury prize fringe|fresh thursday)\s*:\s*","",artist_text)
             title_parts=[part.strip(" -–—:") for part in re.split(r"\s+\+\s+",artist_text) if part.strip(" -–—:")]
             performers=list(title_parts or [forward_title])
@@ -494,7 +526,7 @@ def extract_visible_listing_events(visible_text, default_venue="", start_date=No
                 if pm and not price: price=pm.group(0).replace(" ","")
                 if "sold out" in extra.casefold(): availability="SoldOut"
             found.append({
-                "event_title":forward_title,"event_date":dt,"venue":default_venue,
+                "event_title":forward_title,"event_date":dt,"venue":venue_line,
                 "performer_names":"; ".join(dict.fromkeys(performers)),"price":price,
                 "currency":"GBP" if price else "","availability":availability,
                 "notes":"Candidate extracted from date-first venue listing; independently verify title, billing/support, room, price and ticket status."
