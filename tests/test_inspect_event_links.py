@@ -80,14 +80,21 @@ L.A.D's presents: Marion Hawkes + Sami J
 Club Night
 Some Like It Early Presents: Colleen 'Cosmo' Murphy
 7pm
-£10-15"""
+£10-15
+16 Oct 2026
+Live Music
+Mercury Prize Fringe: Ancient Infinity Orchestra + Weston (DJ)
+7pm
+£0-12"""
         rows = extract_visible_listing_events(visible, "Cobalt Studios")
-        self.assertEqual(len(rows), 2)
+        self.assertEqual(len(rows), 3)
         self.assertEqual(rows[0]["event_date"], "2026-10-17")
         self.assertEqual(rows[0]["venue"], "Cobalt Studios")
         self.assertEqual(rows[0]["price"], "£9-14")
         self.assertEqual(rows[0]["performer_names"], "Marion Hawkes; Sami J")
         self.assertEqual(rows[1]["performer_names"], "Colleen 'Cosmo' Murphy")
+        self.assertEqual(rows[2]["performer_names"], "Ancient Infinity Orchestra; Weston (DJ)")
+        self.assertEqual(rows[2]["price"], "£0-12")
 
     def test_detail_page_with_generic_page_title_is_not_promoted_as_an_event(self):
         visible = """Jack Savoretti
