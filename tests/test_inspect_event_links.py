@@ -184,7 +184,7 @@ Royal Northern Sinfonia"""
         self.assertIsNotNone(row)
         self.assertEqual(row["event_date"],"2026-10-16")
         self.assertEqual(row["venue"],"Sage One")
-        self.assertEqual(row["price"],"£5.00")
+        self.assertEqual(row["price"],"£5.00 to £53.00")
 
     def test_glasshouse_detail_page_at_external_touring_venue_is_excluded(self):
         visible = """Thursday 15 October 2026 |
