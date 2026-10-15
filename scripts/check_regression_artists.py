@@ -40,7 +40,9 @@ def main() -> int:
                 try: text=path.read_text(encoding="utf-8",errors="replace")
                 except OSError: continue
                 source=source_from_snapshot(path,text)
-                pages.append({"path":str(path),"source_url":source,"text":text,"normalized":norm(text)})
+                searchable_text="\n".join(line for line in text.splitlines()
+                    if not re.match(r"(?i)^\\s*(?:source|source url):",line))
+                pages.append({"path":str(path),"source_url":source,"text":text,"normalized":norm(searchable_text)})
     fallback_urls=[]
     if args.venues.exists():
         with args.venues.open(encoding="utf-8-sig",newline="") as f:
