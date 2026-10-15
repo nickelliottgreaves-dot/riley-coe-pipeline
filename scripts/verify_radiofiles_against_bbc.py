@@ -126,6 +126,7 @@ def main() -> int:
     write("bbc_radiofiles_track_crosscheck.csv", track_fields, track_results)
     write("verified_episode_artist_candidates.csv", candidate_fields, verified_candidates)
     exact = sum(r["crosscheck_status"] == "EXACT_FULL_TRACKLIST_MATCH" for r in episode_results)
+    eligible_artists = {norm(r[field]) for r in verified_candidates for field in ("artist_candidate","radiofiles_artist_candidate") if norm(r.get(field,""))}
     audit = {
         "generated_on": date.today().isoformat(),
         "bbc_embedded_track_rows": len(bbc_rows),
@@ -133,7 +134,7 @@ def main() -> int:
         "episodes_compared": len(episode_results),
         "episodes_with_exact_full_tracklist_match": exact,
         "episodes_with_mismatches_or_missing_rows": len(episode_results) - exact,
-        "artists_eligible_for_pool_reconciliation": len({norm(r["artist_candidate"]) for r in verified_candidates}),
+        "unique_bbc_and_radiofiles_artist_credits_eligible_for_pool_reconciliation": len(eligible_artists),
         "pool_modified": False,
         "promotion_policy": "Cross-check only; this script never modifies the authoritative artist pool.",
         "status": "PARTIAL" if exact != len(episode_results) or not episode_results else "CROSSCHECKED",
