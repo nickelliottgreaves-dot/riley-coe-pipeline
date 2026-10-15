@@ -4,9 +4,18 @@ from unittest.mock import patch
 
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/"scripts"))
-from match_pool_to_window_events import main
+from match_pool_to_window_events import is_event_detail_url, main
 
 class PoolWindowEventMatchTests(unittest.TestCase):
+    def test_only_individual_event_detail_urls_are_used_for_page_text_joins(self):
+        self.assertTrue(is_event_detail_url("https://www.boilershop.net/events/the-wedding-present-23-10-26"))
+        self.assertTrue(is_event_detail_url("https://www.utilitaarena.co.uk/events/detail/2026-mercury-prize"))
+        self.assertFalse(is_event_detail_url("https://www.boilershop.net/"))
+        self.assertFalse(is_event_detail_url("https://www.boilershop.net/events"))
+        self.assertFalse(is_event_detail_url("https://thecluny.com/gigs/"))
+        self.assertFalse(is_event_detail_url("https://cobaltstudios.co.uk/whats-on/?date=19-10-2026"))
+        self.assertFalse(is_event_detail_url("https://theglasshouseicm.org/whats-on/page/2/"))
+
     def test_joins_pool_page_text_hit_to_same_dated_event_page(self):
         with tempfile.TemporaryDirectory() as tmp:
             d=Path(tmp)
