@@ -271,8 +271,8 @@ class EvidencePackageTests(unittest.TestCase):
             self.assertEqual(len(discovery),len(list(csv.DictReader((ROOT/"config/venue_sources.csv").open(encoding="utf-8-sig",newline="")))))
             self.assertTrue(all(row["calendar_coverage_verified"]=="false" for row in discovery))
             self.assertTrue(all(row["homepage_fetch_status"]=="not_run" for row in discovery))
-            self.assertIn("The Globe",{row["venue"] for row in discovery})
-            self.assertIn("Utilita Arena Newcastle",{row["venue"] for row in discovery})
+            self.assertIn("The Cluny",{row["venue"] for row in discovery})
+            self.assertIn("The Newgate Social",{row["venue"] for row in discovery})
             self.assertTrue(any(name.startswith("Riley_Coe_venue_discovery_coverage_") for name in manifest["dated_exports"]))
             with (out/"regression_artist_checks.csv").open(newline="") as f:
                 regression=list(csv.DictReader(f))
