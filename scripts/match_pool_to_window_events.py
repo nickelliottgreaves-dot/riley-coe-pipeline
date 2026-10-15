@@ -113,7 +113,15 @@ def main() -> int:
                     parsed_performers=[norm(x) for x in re.split(r"\s*;\s*",(row.get("performer_names") or "").strip()) if norm(x)]
                     title_key=norm(event_title)
                     phrase=f" {artist_key} "
-                    if phrase not in f" {title_key} " and artist_key not in parsed_performers:
+                    if len(artist_key)<=3:
+                        # Very short names such as "Can" collide with country
+                        # labels and ordinary prose. Accept only an exact title
+                        # or a title-leading billing phrase, unless the parser
+                        # explicitly identifies the artist as a performer.
+                        title_billing=(title_key==artist_key or title_key.startswith(artist_key+" "))
+                    else:
+                        title_billing=phrase in f" {title_key} "
+                    if not title_billing and artist_key not in parsed_performers:
                         continue
                     candidates.append({
                         "event_date":(row.get("event_date") or "").strip()[:10],
