@@ -18,7 +18,7 @@ class GigFinderCoverageTests(unittest.TestCase):
 
     def test_partial_page_failure_is_not_mistaken_for_complete_coverage(self):
         sources = [{"venue": "Venue A", "source_url": "https://example.test/a", "notes": ""}]
-        page = [{"venue": "Venue A", "status": "fetched", "http_status": "200", "notes": ""}]
+        page = [{"venue": "Venue A", "status": "fetched", "http_status": "200", "text_file": "page_text/venue-a.txt", "notes": ""}]
         discovery = [{"venue": "Venue A", "status": "ok", "structured_events_found": "1", "candidate_links_found": "2", "notes": ""}]
         crawl = [{"venue": "Venue A", "pages_fetched": "3", "pages_failed": "1", "crawl_cap_reached": "false", "status": "PARTIAL", "notes": "One detail page failed."}]
         row = combine_venue_coverage(sources, page, discovery, crawl)[0]
