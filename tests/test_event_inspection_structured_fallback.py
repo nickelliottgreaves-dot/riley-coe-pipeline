@@ -630,5 +630,52 @@ Book Tickets
             self.assertTrue(any(row["event_title"] == "Example Act" and row["venue"] == "Lubber Fiend" for row in rows))
             self.assertFalse(any(row["page_url"] in unrelated for row in rows))
 
+
+    def test_structured_single_event_uses_visible_price_and_ticket_listing_when_jsonld_omits_offers(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            links = root / "links.csv"
+            sources = root / "sources.csv"
+            out = root / "out"
+            event_url = "https://www.dice.fm/event/example-act-at-the-globe"
+            with links.open("w", encoding="utf-8", newline="") as f:
+                w = csv.DictWriter(f, fieldnames=["venue", "candidate_url", "link_text"])
+                w.writeheader()
+                w.writerow({"venue": "The Globe", "candidate_url": event_url, "link_text": "Example Act tickets"})
+            with sources.open("w", encoding="utf-8", newline="") as f:
+                w = csv.DictWriter(f, fieldnames=["venue", "source_url"])
+                w.writeheader()
+                w.writerow({"venue": "The Globe", "source_url": event_url})
+            html = (
+                "<title>Example Act at The Globe</title>"
+                "<h1>Example Act</h1><p>Date</p><p>Tue 27 October 2026</p>"
+                "<p>Venue</p><p>The Globe Newcastle</p>"
+                "<p>Tickets from £6.00</p><a href='/checkout'>Get tickets</a>"
+                '<script type="application/ld+json">'
+                '{"@type":"MusicEvent","name":"Example Act","startDate":"2026-10-27T19:00:00+01:00",'
+                '"performer":{"@type":"MusicGroup","name":"Example Act"}}'
+                "</script>"
+            )
+            def fake_fetch(url):
+                if url == event_url:
+                    return 200, "text/html", html, False
+                raise AssertionError("Unexpected URL fetched: " + url)
+
+            with patch("inspect_event_links.fetch", side_effect=fake_fetch):
+                with patch("sys.argv", [
+                    "inspect_event_links.py", "--links", str(links),
+                    "--sources", str(sources), "--out-dir", str(out),
+                    "--start", "2026-10-15", "--end", "2026-11-11", "--delay", "0",
+                ]):
+                    self.assertEqual(main(), 0)
+
+            with (out / "event_page_inspection.csv").open(encoding="utf-8", newline="") as f:
+                rows = list(csv.DictReader(f))
+            row = next(row for row in rows if row["event_title"] == "Example Act")
+            self.assertEqual(row["price"], "6.00")
+            self.assertEqual(row["currency"], "GBP")
+            self.assertEqual(row["availability"], "listed_for_purchase")
+            self.assertIn("Visible text supplied price/status", row["notes"])
+
 if __name__ == "__main__":
     unittest.main()
