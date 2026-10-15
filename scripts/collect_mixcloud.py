@@ -142,7 +142,7 @@ def episode_date_from_text(value: str) -> date | None:
 
 
 def fetch_html_cloudcasts(username: str, since: date, until: date) -> tuple[list[dict], list[str]]:
-    """Fallback to public profile and public search HTML for dated show links.
+    """Fallback to public profile/search HTML and public search-engine RSS for dated show links.
 
     Mixcloud's API account endpoint may return 404 even while individual public
     show pages remain available. Profile pages can omit client-rendered cards, so
