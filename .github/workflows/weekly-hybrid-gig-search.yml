@@ -98,6 +98,7 @@ jobs:
             python scripts/inspect_event_links.py \
               --links "$LINKS" \
               --sources "$SOURCES" \
+              --extra-seeds tests/fixtures/known_gig_regressions.csv \
               --out-dir "$OUT/$PASS-inspection" \
               --extra-seeds tests/fixtures/known_gig_regressions.csv \
               --start "${{ steps.window.outputs.start }}" \
