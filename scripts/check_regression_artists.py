@@ -16,11 +16,12 @@ def norm(value: str) -> str:
     return " ".join(re.sub(r"[^a-z0-9]+"," ",value).split())
 
 def source_from_snapshot(path: Path, text: str) -> str:
-    first=text.splitlines()[0] if text.splitlines() else ""
-    match=re.match(r"SOURCE:\s*(https?://\S+)",first)
-    if match: return match.group(1)
-    match=re.match(r"Source URL:\s*(https?://\S+)",first)
-    return match.group(1) if match else ""
+    for line in text.splitlines()[:6]:
+        match=re.match(r"SOURCE:\s*(https?://\S+)",line)
+        if match: return match.group(1)
+        match=re.match(r"Source URL:\s*(https?://\S+)",line)
+        if match: return match.group(1)
+    return ""
 
 def main() -> int:
     ap=argparse.ArgumentParser()
