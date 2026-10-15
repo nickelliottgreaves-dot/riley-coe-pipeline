@@ -417,6 +417,7 @@ def extract_visible_listing_events(visible_text, default_venue="", start_date=No
             title=inline_match.group("title").strip(" -–—:")
             title=re.sub(r"(?i)\s+@\s+"+re.escape(str(default_venue or ""))+r"\s*$","",title).strip()
             title=re.sub(r"(?i)\s+at\s+"+re.escape(str(default_venue or ""))+r"\s*$","",title).strip()
+            title=re.sub(r"(?i)\s+@\s+(?:the\s+)?central bar\s*$","",title).strip()
             if dt and title:
                 title_parts=[part.strip() for part in re.split(r"\s+\+\s+",title) if part.strip()]
                 price=""; availability="not_checked"
