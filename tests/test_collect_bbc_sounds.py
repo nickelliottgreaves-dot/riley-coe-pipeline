@@ -14,6 +14,8 @@ class BBCCollectorTests(unittest.TestCase):
                 if url == listing + "?page=2":
                     return 200, "text/html", '<a href="/programmes/m0031tk5">Episode Two</a>'
                 if url == listing + "?page=3":
+                    return 200, "text/html", '<p>No more episodes yet</p>'
+                if url == listing + "?page=4":
                     return 200, "text/html", '<p>No more episodes</p>'
                 if url.endswith("m0031tk4"):
                     return 200, "text/html", '<p>24 Sep 2026</p><h2>Tracklist</h2><p>Song One - Artist One</p>'
@@ -25,7 +27,7 @@ class BBCCollectorTests(unittest.TestCase):
                  patch("sys.argv", ["collect_bbc_sounds.py", "--start", "2026-09-24", "--end", "2026-10-15", "--out-dir", tmp]):
                 self.assertEqual(main(), 0)
             summary=json.loads((Path(tmp)/"bbc_collection_audit.json").read_text())
-            self.assertEqual(summary["listing_pages_fetched"], 3)
+            self.assertEqual(summary["listing_pages_fetched"], 4)
             self.assertEqual(summary["episodes_discovered"], 2)
             self.assertEqual(summary["listing_pagination_status"], "sequential_page_fallback_exhausted")
 
