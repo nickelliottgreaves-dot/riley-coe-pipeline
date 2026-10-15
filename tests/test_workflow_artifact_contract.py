@@ -21,13 +21,13 @@ class WorkflowArtifactContractTests(unittest.TestCase):
             self.assertIn(filename, WORKFLOW)
 
     def test_artifact_names_and_input_audit_are_present(self):
-        for artifact in ("riley-coe-mixcloud-inventory-", "riley-coe-bbc-sounds-inventory-", "riley-coe-event-candidates-"):
+        for artifact in ("riley-coe-bbc-sounds-inventory-", "riley-coe-radiofiles-inventory-", "riley-coe-event-candidates-"):
             self.assertIn(artifact, WORKFLOW)
         self.assertIn("input_file_audit.csv", ASSEMBLER)
         self.assertIn("missing_or_unsupplied_inputs", ASSEMBLER)
         self.assertIn("bbc_track_candidates.csv", WORKFLOW)
-        self.assertIn("--mixcloud-track-candidates", WORKFLOW)
-        self.assertIn("mixcloud_api_track_candidates.csv", ASSEMBLER)
+        self.assertNotIn("mixcloud", WORKFLOW.casefold())
+        self.assertNotIn("mixcloud", ASSEMBLER.casefold())
         self.assertIn("tracklist_candidate_review.csv", ASSEMBLER)
         self.assertIn("Riley_Coe_tracklist_candidate_review_", ASSEMBLER)
         self.assertIn("event_jsonld_found", ASSEMBLER)
@@ -47,7 +47,7 @@ class WorkflowArtifactContractTests(unittest.TestCase):
         self.assertIn("artifacts/evidence-package", WORKFLOW)
         self.assertIn("--sources config/venue_sources.csv", WORKFLOW)
         self.assertIn("NO_SEED_LINKS", INSPECTOR)
-        for venue in ("The Globe","Little Buildings","Utilita Arena Newcastle","ZEROX Newcastle"):
+        for venue in ("The Cluny","Little Buildings","The Newgate Social","ZEROX Newcastle"):
             self.assertIn(venue, (ROOT / "config/venue_sources.csv").read_text(encoding="utf-8"))
 
 if __name__ == "__main__": unittest.main()

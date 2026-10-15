@@ -1,12 +1,97 @@
-import sys,unittest
+import sys,unittest, json, tempfile
 from pathlib import Path
+from unittest.mock import patch, MagicMock
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/"scripts"))
-from collect_bbc_sounds import episode_id,find_episodes,parse_date,TextParser,extract_tracklist_candidates
+from collect_bbc_sounds import episode_id,extract_embedded_tracklist,find_episodes,parse_date,TextParser,extract_tracklist_candidates,main,radiofiles_app_url,discover_radiofiles_episode_candidates
 
 class BBCCollectorTests(unittest.TestCase):
+    def test_sequential_page_fallback_finds_more_bbc_episodes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            listing = "https://www.bbc.co.uk/programmes/m001mf2c/episodes"
+            def fake_fetch(url):
+                if url == listing:
+                    return 200, "text/html", '<a href="/programmes/m0031tk4">Episode One</a>'
+                if url == listing + "?page=2":
+                    return 200, "text/html", '<a href="/programmes/m0031tk5">Episode Two</a>'
+                if url == listing + "?page=3":
+                    return 200, "text/html", '<p>No more episodes yet</p>'
+                if url == listing + "?page=4":
+                    return 200, "text/html", '<p>No more episodes</p>'
+                if url.endswith("m0031tk4"):
+                    return 200, "text/html", '<p>24 Sep 2026</p><h2>Tracklist</h2><p>Song One - Artist One</p>'
+                if url.endswith("m0031tk5"):
+                    return 200, "text/html", '<p>25 Sep 2026</p><h2>Tracklist</h2><p>Song Two - Artist Two</p>'
+                raise AssertionError("Unexpected URL: " + url)
+            with patch("collect_bbc_sounds.fetch", side_effect=fake_fetch), \
+                 patch("collect_bbc_sounds.time.sleep"), \
+                 patch("sys.argv", ["collect_bbc_sounds.py", "--start", "2026-09-24", "--end", "2026-10-15", "--out-dir", tmp]):
+                self.assertEqual(main(), 0)
+            summary=json.loads((Path(tmp)/"bbc_collection_audit.json").read_text())
+            self.assertEqual(summary["listing_pages_fetched"], 4)
+            self.assertEqual(summary["episodes_discovered"], 2)
+            self.assertEqual(summary["listing_pagination_status"], "sequential_page_fallback_exhausted")
+
+    def test_radiofiles_discovery_supplements_only_pids_in_date_window(self):
+        response = MagicMock()
+        response.status = 200
+        response.headers.get.return_value = "application/json"
+        response.read.return_value = json.dumps({"episodes": [
+            {"pid": "m0031td3", "date": "28 Sep 2026", "label": "Riley & Coe – 28 Sep 2026"},
+            {"pid": "m0032cm3", "date": "15 Oct 2026", "label": "Riley & Coe – 15 Oct 2026"},
+            {"pid": "m0000001", "date": "01 Sep 2026", "label": "Outside window"},
+            {"pid": "not-an-id", "date": "30 Sep 2026", "label": "Bad PID"}
+        ]}).encode()
+        manager = MagicMock()
+        manager.__enter__.return_value = response
+        manager.__exit__.return_value = False
+        with patch("collect_bbc_sounds.urlopen", return_value=manager):
+            found = discover_radiofiles_episode_candidates(
+                __import__("datetime").date(2026, 9, 24),
+                __import__("datetime").date(2026, 10, 15))
+        self.assertEqual([x["episode_id"] for x in found], ["m0031td3", "m0032cm3"])
+        self.assertEqual(found[0]["url"], "https://www.bbc.co.uk/programmes/m0031td3")
+        self.assertEqual(found[0]["discovery_source"], "RadioFiles PID fallback")
+
+    def test_radiofiles_deep_link_uses_series_and_episode_ids(self):
+        self.assertEqual(
+            radiofiles_app_url("https://www.bbc.co.uk/programmes/m0032d4c"),
+            "https://radiofiles.io/app?show=m001mf2c&pid=m0032d4c"
+        )
+        self.assertEqual(
+            radiofiles_app_url("https://www.bbc.co.uk/sounds/play/m0032d2m"),
+            "https://radiofiles.io/app?show=m001mf2c&pid=m0032d2m"
+        )
+        self.assertEqual(radiofiles_app_url("https://example.com/no-bbc-id"), "")
+
     def test_episode_id(self):
         self.assertEqual(episode_id("https://www.bbc.co.uk/programmes/m0031tk4"),"m0031tk4")
         self.assertEqual(episode_id("https://www.bbc.co.uk/sounds/play/m0031tk4"),"m0031tk4")
+
+    def test_extracts_full_embedded_bbc_tracklist_from_page_state(self):
+        payload={"props":{"pageProps":{"dehydratedState":{"queries":[
+            {"state":{"data":{"data":[
+                {"type":"inline_display_module","id":"aod_tracks","title":"Tracklist","state":"ok","total":None,
+                 "data":[
+                    {"type":"segment_item","id":"p0000001","urn":"urn:bbc:radio:segment:music:abc",
+                     "titles":{"primary":"Artist One","secondary":"Song One"}},
+                    {"type":"segment_item","id":"p0000002","urn":"urn:bbc:radio:segment:music:def",
+                     "titles":{"primary":"Artist Two","secondary":"Song Two"}}
+                 ]}
+            ]}}}
+        ]}}}}
+        html='<script id="__NEXT_DATA__" type="application/json">'+json.dumps(payload)+'</script>'
+        result=extract_embedded_tracklist(html)
+        self.assertEqual(result["status"],"official_bbc_embedded_tracklist_rows_retrieved_needs_review")
+        self.assertEqual(len(result["rows"]),2)
+        self.assertEqual(result["rows"][0]["artist_candidate"],"Artist One")
+        self.assertEqual(result["rows"][1]["track_title"],"Song Two")
+        self.assertEqual(result["module_state"],"ok")
+
+    def test_embedded_bbc_tracklist_fails_closed_when_module_missing(self):
+        result=extract_embedded_tracklist('<script id="__NEXT_DATA__" type="application/json">{}</script>')
+        self.assertEqual(result["status"],"aod_tracks_module_not_found")
+        self.assertEqual(result["rows"],[])
+
     def test_finds_episode_links(self):
         html='<a href="/programmes/m0031tk4">Gideon reigns supreme</a><a href="/about">About</a>'
         self.assertEqual(find_episodes(html,"https://www.bbc.co.uk/programmes/m001mf2c/episodes")[0]["title"],"Gideon reigns supreme")

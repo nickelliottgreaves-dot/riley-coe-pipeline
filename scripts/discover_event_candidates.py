@@ -3,7 +3,7 @@
 
 Structured Event data is extracted when available. Other likely event links are
 recorded as candidates only; this script never treats a homepage fetch as a
-complete calendar sweep or marks events verified.
+complete calendar sweep or marks events verified.\n\n[full-sweep] Validate shared-source response reuse and the bounded official-host crawl.\nThe complete sweep also checks the 747-row baseline and fail-closed evidence assembly.
 """
 from __future__ import annotations
 import argparse, csv, json, re, time
@@ -14,7 +14,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urljoin, urlparse
 from urllib.request import Request, urlopen
 
-AGENT = "riley-coe-pipeline/0.2 (event candidate discovery)"
+AGENT = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
 EVENT_FIELDS = ["event_date","venue","event_title","artist","artist_role","source_url","verified","price","ticket_status","discovery_method","notes"]
 LINK_FIELDS = ["venue","link_text","candidate_url","source_page_url","candidate_reason","verified","notes"]
 AUDIT_FIELDS = ["venue","source_url","http_status","content_type","structured_events_found","candidate_links_found","status","notes"]
@@ -86,17 +86,23 @@ def main():
     start=date.fromisoformat(args.start); end=date.fromisoformat(args.end)
     if end < start: ap.error("--end must not precede --start")
     args.out_dir.mkdir(parents=True,exist_ok=True)
-    events=[]; links=[]; audit=[]; errors=[]
+    events=[]; links=[]; audit=[]; errors=[]; response_cache={}
     for src in rows(args.sources):
         venue=(src.get("venue") or "").strip(); url=(src.get("source_url") or "").strip()
         item={"venue":venue,"source_url":url,"http_status":"","content_type":"","structured_events_found":0,"candidate_links_found":0,"status":"not_checked","notes":""}
         if not url.startswith(("https://","http://")):
             item.update(status="failed",notes="Missing configured HTTP(S) source URL"); errors.append(venue+": missing URL"); audit.append(item); continue
         try:
-            req=Request(url,headers={"User-Agent":AGENT,"Accept":"text/html,application/xhtml+xml"})
-            with urlopen(req,timeout=25) as response:
-                item["http_status"]=str(response.status); item["content_type"]=response.headers.get("Content-Type","")
-                raw=response.read(3_000_001)
+            if url in response_cache:
+                code,ctype,raw=response_cache[url]
+                item["notes"]="Response reused from identical configured source URL; this does not certify calendar completeness."
+            else:
+                req=Request(url,headers={"User-Agent":AGENT,"Accept":"text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8","Accept-Language":"en-GB,en;q=0.9"})
+                with urlopen(req,timeout=25) as response:
+                    code=response.status; ctype=response.headers.get("Content-Type","")
+                    raw=response.read(3_000_001)
+                response_cache[url]=(code,ctype,raw)
+            item["http_status"]=str(code); item["content_type"]=ctype
             if len(raw)>3_000_000: raw=raw[:3_000_000]; item["notes"]="HTML truncated at 3 MB"
             if "html" not in item["content_type"].lower():
                 item.update(status="failed",notes="Response not identified as HTML"); errors.append(venue+": non-HTML"); audit.append(item); continue

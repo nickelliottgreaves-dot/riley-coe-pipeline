@@ -1,132 +1,54 @@
-# Riley & Coe pipeline
+# Riley & Coe weekly gig finder
 
-Private repository for building an auditable, fail-closed weekly Riley & Coe artist/gig research workflow.
+This repository contains a repeatable weekly Riley & Coe artist-to-gig candidate finder. The deployable workflow is `.github/workflows/validate.yml`; the active gig-finder entry point is `scripts/run_gig_finder.py`.
 
-## Current milestone
+## Operating contract
 
-This repository contains the 747-row artist-pool seed, a mandatory venue registry, a fail-closed evidence validator, regression tests, and scheduled/manual collectors for Mixcloud episode inventory, BBC Sounds episode inventory and provisional track candidates, official venue page discovery, and bounded event-page inspection. The assembler creates a dated `PARTIAL` evidence package and exports the requested CSV families.
-
-**Important limitation:** this is still not a complete weekly gig-research service. The collectors do not prove full tracklist or venue-calendar coverage, do not reliably extract all support acts, and do not complete independent safety-net searches. No run may be described as complete until the evidence is reviewed and the validator passes.
-
-## What counts as a valid run
-
-A dated folder under `data/runs/` must contain:
-- `run_manifest.json`
-- `episodes.csv`
-- `venue_coverage.csv`
-- `events.csv`
-- `pool_matches.csv`
-- `regression_artist_checks.csv`
-
-Every mandatory venue must have a row with a source URL and a checked status. Episode coverage must explicitly be complete, the venue sweep must be complete, the artist pool must have been compared, and event sources must be verified. Inaccessible pages, incomplete tracklists, missing sources, or missing evidence prevent `COMPLETE`.
+- **Schedule:** Mondays at 08:00 UTC (`0 8 * * 1`) on the default branch, `main`.
+- **Reporting window:** 14 inclusive calendar dates, today through today + 13 days.
+- **Artist pool:** `data/artist_pool.csv`, expected to contain 833 unique records. The deployment must preserve the approved pool unchanged; updates are review-only and never applied automatically.
+- **Venue sources:** 18 configured source rows. The Cluny and Cluny 2 remain distinct source records but should be consolidated into one user-facing venue label where reports list venues.
+- **Output:** a dated candidate report with source/venue coverage, artist comparisons, event candidates, stage logs and a manifest. Candidates are not independently verified gigs.
+- **Status:** reports must remain `PARTIAL` whenever source coverage or event verification is incomplete. A source that failed or was not checked must not be described as an empty calendar.
 
 ## Run locally
 
+Use a fresh output directory for every run:
+
 ```bash
 python -m unittest discover -s tests -v
-python scripts/validate_run.py --run-dir data/runs/current --pool data/artist_pool.csv
+python scripts/run_gig_finder.py --run-id local-review --out-dir artifacts/gig-finder-local
+python scripts/validate_gig_finder_report.py --run-dir artifacts/gig-finder-local --pool data/artist_pool.csv --sources config/venue_sources.csv
+
+python scripts/run_artist_pool_updater.py --run-id local-review --out-dir artifacts/artist-pool-updater-local
+python scripts/validate_artist_pool_update.py --run-dir artifacts/artist-pool-updater-local --pool data/artist_pool.csv
 ```
 
-The second command is expected to fail until a genuine evidence package exists. In scheduled/manual Actions runs, the gate now validates that same run's downloaded `artifacts/evidence-package` after assembly, rather than relying on a stale checked-in `data/runs/current` folder.
+The gig finder and artist-pool updater are separate jobs. A failure in episode collection must not prevent the gig finder from producing its own report. The updater may propose evidence-backed additions, but never changes the authoritative pool itself.
 
-## Safety against false completion
+## Workflow triggers
 
-The validator checks submitted evidence; it cannot prove that the internet was searched exhaustively. Research coverage must therefore include source URLs and explicit per-venue/per-episode outcomes. The collector phase will need to record collection failures and use independent source coverage, not merely set booleans to true.
+- Weekly scheduled run: Monday 08:00 UTC.
+- Manual run: GitHub Actions `workflow_dispatch`.
+- Diagnostic live sweep: push a commit whose message contains `[full-sweep]`.
 
-## First collector milestone: Mixcloud inventory
+The weekly schedule is only active when this workflow is present on the default branch. After deployment, verify an actual run and inspect the uploaded `riley-coe-independent-gig-finder-<run-id>` artifact.
 
-The scheduled/manual workflow now runs `scripts/collect_mixcloud.py` against the public Mixcloud API account `SixMusicAlternative` for the preceding seven days and stores a downloadable Actions artifact containing:
-- `mixcloud_episode_inventory.csv`
-- `mixcloud_api_track_candidates.csv`
-- `mixcloud_collection_audit.json`
+## Evidence and limitations
 
-This is deliberately a discovery inventory, not a claim that tracklists are complete. API sections are labelled as candidates requiring visible-page verification; absent sections are marked unavailable. BBC Sounds inventory is handled separately by `scripts/collect_bbc_sounds.py`. Venue research is also handled by separate candidate-discovery and event-page inspection stages. The full-run validator remains a separate fail-closed gate.
+The workflow performs venue-first discovery and compares collected, dated event evidence against the full artist pool. It preserves stage logs and coverage records. A successful collection is not proof that every page, pagination path, JavaScript-only calendar, support act, price or ticket status was captured. External source failures and bounded crawl limits must remain visible in the report.
 
-After a scheduled run, open the repository's **Actions** tab, open the latest **Riley & Coe evidence validation** run, and download the artifact named `riley-coe-mixcloud-inventory-...`. GitHub scheduled workflows run on the default branch and may be delayed, so the Actions history is the source of truth for whether a run actually happened.
+Do not mark candidates as verified without independent evidence for the event date, venue/room and artist billing. Do not claim complete venue coverage merely because Actions is green. The legacy `scripts/validate_run.py` and `scripts/assemble_run_package.py` paths are retained for reference; the active redesigned report contract is `scripts/run_gig_finder.py` plus `scripts/validate_gig_finder_report.py`.
 
-## Venue source inventory and matching
+### Interpreting the live report
 
-The scheduled/manual workflow also fetches configured official venue pages and preserves visible text plus `venue_page_access_audit.csv` as an Actions artifact. This proves only that a page was reachable and its text was captured. It does **not** prove that every date, pagination page, event detail, or support act in the 14-day window was checked. The collector therefore reports zero completed calendar checks by design.
+A passing report validator certifies the report's structure and consistency, not that venue calendars were exhaustively checked. During deployment acceptance, inspect `venue_coverage.csv` and `venue_pages/venue_page_collection_audit.json` in the uploaded artifact. If `venue_calendar_checks_completed` is zero, or any source is partial/not checked, retain `PARTIAL` status and do not describe the search as exhaustive. Inspect candidate matches individually; the candidate finder must not mark events verified automatically.
 
-The matching engine is `scripts/match_event_artists.py`. Given an event CSV and the full artist pool, it emits one row per distinct event artist:
-- `exact`: normalized exact pool match;
-- `alias`: only an alias explicitly marked `approved` in `config/artist_aliases.csv`;
-- `fuzzy_candidate`: similarity suggestion for manual review, not a confirmed hit;
-- `unmatched`: no accepted match.
+## Deployment acceptance
 
-Do not approve an alias without a source/reason. Fuzzy candidates never become positive matches automatically.
-
-## What is still missing before a genuinely complete run
-
-- BBC Sounds coverage and a reliable saved last-successful-run cursor.
-- Visible-page verification of each Mixcloud tracklist, with artist extraction only after completeness is established.
-- Calendar-aware event extraction, pagination/detail-page traversal, 14-day filtering, support-act extraction, prices/ticket status, and a regional safety-net search.
-- End-to-end creation of the dated run package and proof that all required outputs can be read back.
-
-Until these stages exist and pass the evidence gate, the scheduled validator is expected to fail. That is safer than reporting a partial collection as complete.
-
-## Event-candidate discovery milestone
-
-`scripts/discover_event_candidates.py` now visits each configured official venue source and produces:
-- `event_candidates.csv`: structured Event JSON-LD records with dates in the requested window, performers where exposed, price/availability fields when exposed, and an explicit `verified=false` marker;
-- `event_link_candidates.csv`: likely event/calendar/ticket links from each source page;
-- `event_discovery_audit.csv` and `event_discovery_summary.json`: source-level results and limitations.
-
-The scheduled/manual Actions workflow runs this for today through the following 13 days and uploads `riley-coe-event-candidates-...`. These are **candidates, not a finished gig report**. Many venue sites use JavaScript, paginated listings or ticketing systems, and the collector does not yet render those pages, traverse pagination, open every candidate event page, or reliably extract supports. It deliberately sets `verified=false` and records zero completed calendar checks. Human/event-page verification and a venue-by-venue coverage record remain required before the run can pass.
-
-## Dated evidence-package assembler
-
-`scripts/assemble_run_package.py` assembles a dated review package from collector CSVs. It creates all validator-required files, imports candidate events only within the requested window, runs the full-pool matcher, creates a mandatory-venue checklist marked `not_checked`, and sets `claimed_status=PARTIAL`. It refuses to overwrite a non-empty output directory, so earlier evidence is preserved. This is a scaffold for review, not a substitute for episode/venue verification; empty input files and unsearched checks remain explicit gaps.
-
-Example after downloading the collector artifacts:
-
-```bash
-python scripts/assemble_run_package.py --start 2026-10-13 --end 2026-10-26 --episodes artifacts/mixcloud/mixcloud_episode_inventory.csv --events artifacts/event-candidates/event_candidates.csv --venue-audit artifacts/event-candidates/event_discovery_audit.csv --out-dir data/runs/2026-10-13_to_2026-10-26
-python scripts/validate_run.py --run-dir data/runs/2026-10-13_to_2026-10-26 --pool data/artist_pool.csv
-```
-
-The validator is expected to reject this scaffold until tracklists and venues are actually verified and regression checks completed. Never edit the manifest to `COMPLETE` just to make the gate pass.
-
-## BBC Sounds episode inventory
-
-`scripts/collect_bbc_sounds.py` discovers episode links from the official Riley & Coe programme episode listing, fetches episode pages, preserves text snapshots, and records whether a Music Played/Tracklist heading appears. It does **not** infer tracklist completeness or automatically certify artist rows. It now emits `bbc_track_candidates.csv` with provisional artist/title candidates from explicit MusicRecording JSON-LD and simple visible-text patterns, and passes this file into the evidence scaffold for manual review. Candidate order can be ambiguous and pattern extraction can miss tracks, so every row remains `needs_manual_review`; these candidates are not a substitute for checking the entire visible tracklist. Episodes with undetected dates or uncertain listing pagination remain visible in the audit; the collection summary now records pagination termination status, whether the 12-page cap was reached, undated pages and inaccessible episode pages. The weekly workflow stores this as `riley-coe-bbc-sounds-inventory-...` and merges its episode records into the dated partial package.
-
-Official BBC guidance says episode tracklists are shown on eligible on-demand episode pages, but also notes that some episodes may not have a tracklist. Therefore heading detection alone is not enough: a reviewer must check the complete visible list and extract every artist before episode coverage can be marked complete.
-
-## Second-stage event-page inspection
-
-`scripts/inspect_event_links.py` now follows discovered event links and a bounded number of same-host event/calendar links per venue. It stores visible-text snapshots, captures structured Event JSON-LD fields where available (event title/date, performers, prices and availability), and records crawl caps and failures. All records remain unverified. The scheduled workflow runs this stage after link discovery and includes the inspection CSV and crawl audit in the dated evidence scaffold.
-
-The crawler is deliberately bounded (30 pages per venue, depth 2 by default) and is not proof of complete calendar coverage. Third-party ticket pages, JavaScript-only event lists, pagination patterns not discoverable from links, and support acts may still be missed. Manual verification remains mandatory.
-
-
-### Evidence-input provenance
-
-Every assembled scaffold now includes `input_file_audit.csv`, which records each expected collector/configuration input as `present`, `missing`, or `not_supplied`, including file size where available. The manifest and assembly summary list missing or unsupplied inputs explicitly. An absent input is never evidence that no episodes or events existed. This audit does not certify that a present file is complete.
-
-
-## Regression artist checklist
-
-`config/regression_artists.csv` seeds a fixed list of artists previously missed in earlier searches (including Gallus, Long Ryders, A Certain Ratio, Bill Callahan, Robyn Hitchcock, Juni Habel, Horse, Delines and Hanging Stars). Every scaffold writes these into `regression_artist_checks.csv` as `searched=false` / `not_checked`. This makes the required follow-up visible but does not count as a completed check; each must be searched across the venue-first sweep and supported by evidence before a run can be complete.
-
-
-The assembler also emits dated copies for downstream use: `Riley_Coe_events_<start>_to_<end>.csv`, `Riley_Coe_deduplicated_event_artists_<run-date>.csv`, `Riley_Coe_pool_matches_<run-date>.csv`, `Riley_Coe_venue_coverage_<run-date>.csv`, and `Riley_Coe_regression_artist_checks_<run-date>.csv`. The exact filenames are recorded in `run_manifest.json`; these are still partial candidate outputs until the evidence gates pass.
-
-
-### Unified track-candidate review queue
-
-The assembler preserves the original `mixcloud_api_track_candidates.csv` and `bbc_track_candidates.csv` inputs and emits both `tracklist_candidate_review.csv` and `Riley_Coe_tracklist_candidate_review_<run-date>.csv`, normalising candidate artist, title, episode URL/date, extraction method and review status. Every Mixcloud API candidate and every BBC pattern/JSON-LD candidate is labelled `needs_manual_review`. This queue helps review the whole candidate pool but is not a complete tracklist and must not be used as evidence that an episode has been fully audited.
-
-The assembler also imports Event JSON-LD rows found by the bounded event-page inspector into `events.csv` when the structured date falls within the requested window. Performers remain `performer_role_unverified`; rows without performer metadata are retained in `unresolved_event_candidates.csv`. Duplicate event/artist/source rows are deduplicated, and none of these imports is marked verified.
-
-
-### Per-venue discovery coverage audit
-
-Every assembled run now emits `venue_discovery_coverage.csv` plus `Riley_Coe_venue_discovery_coverage_<run-date>.csv`, with one row for each of the 16 mandatory venues. It joins the configured official source, homepage fetch status, structured-event and candidate-link counts, and bounded detail-page crawl counts/failures/cap status when those inputs exist. `calendar_coverage_verified` intentionally remains `false`: these are discovery metrics, not proof that all calendar pages, date filters, JavaScript listings, external ticket pages or support bills were exhaustively checked. The validator now requires a row for every mandatory venue in this audit and rejects a `COMPLETE` claim if any venue lacks the verified flag, a crawl cap was reached, or recorded detail-page fetches failed. The separate `venue_coverage.csv` remains `not_checked` until explicit calendar verification evidence is supplied.
-
-
-### Safety-net venue sweep and zero-link audits
-
-The configured venue discovery registry now includes four optional safety-net venues in addition to the 16 mandatory rooms/sites: The Globe, Little Buildings, Utilita Arena Newcastle and ZEROX Newcastle. These are searched in the same venue-first candidate-discovery flow, so their billed acts can be compared against the full artist pool without reverting to artist-by-artist venue searches.
-
-The event-page inspector receives the full venue registry and writes one crawl-audit row per configured venue, including venues for which discovery found zero candidate links. Such rows use `NO_SEED_LINKS` and explicitly mean "discovery gap"—never "no relevant gigs". The dated discovery coverage export includes mandatory and optional venues, while only the 16 required venues block the mandatory venue-completion gate.
+Deployment is successful only when:
+1. the changes are merged to `main`;
+2. the weekly schedule is configured on `main`;
+3. the authoritative 833-record pool and 14-day/18-source contract pass validation;
+4. the real gig finder completes and uploads inspectable reports/logs;
+5. source failures and incomplete coverage are represented honestly rather than hidden.

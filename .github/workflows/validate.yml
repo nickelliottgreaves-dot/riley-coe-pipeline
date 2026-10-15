@@ -1,11 +1,19 @@
 name: Riley & Coe evidence validation
 
+# A commit message containing [full-sweep] runs a diagnostic end-to-end collection (including sequential pagination, venue scoping, date-window-aware detail crawling, performer-title fallback and RadioFiles review integration). The episode sources are BBC Sounds and RadioFiles; the collection is fail-closed when tracklist completeness is uncertain.
+
 on:
   push:
   pull_request:
   workflow_dispatch:
   schedule:
     - cron: "0 8 * * 1"
+
+# Prevent multiple manual/push test runs from repeatedly crawling the same
+# public calendars in parallel; keep the newest run for each ref.
+concurrency:
+  group: riley-coe-validation-${{ github.ref }}
+  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -25,43 +33,37 @@ jobs:
           python - <<'PY'
           import csv
           from pathlib import Path
+
+          def load(path):
+              with path.open(encoding="utf-8-sig", newline="") as f:
+                  return list(csv.DictReader(f))
+
           p = Path("data/artist_pool.csv")
-          with p.open(encoding="utf-8-sig", newline="") as f:
-              rows = list(csv.DictReader(f))
+          rows = load(p)
           names = [row["artist"].strip().casefold() for row in rows]
-          assert len(rows) == 747, f"Expected 747 seed rows, found {len(rows)}"
+          assert len(rows) == 833, f"Expected exactly 833 authoritative artist records, found {len(rows)}"
           assert len(names) == len(set(names)), "Duplicate normalized artist names in seed pool"
           assert all(row["artist"].strip() and row["status"].strip() for row in rows), "Blank artist/status"
-          print(f"Artist pool seed OK: {len(rows)} rows")
+
+          backup = Path("data/artist_pool_backup_20261015.csv")
+          if backup.exists():
+              baseline = load(backup)
+              baseline_names = {row["artist"].strip().casefold() for row in baseline}
+              assert len(baseline) == 747, f"Expected 747-row preserved legacy baseline, found {len(baseline)}"
+              assert baseline_names.issubset(set(names)), "Authoritative pool dropped an artist from the preserved 747-row baseline"
+
+          pre_review_backup = Path("data/artist_pool_backup_20261015_pre_fuzzy_review.csv")
+          assert pre_review_backup.exists(), "Missing immediate pre-review artist-pool backup"
+          immediate_baseline = load(pre_review_backup)
+          immediate_names = [row["artist"].strip().casefold() for row in immediate_baseline]
+          assert len(immediate_baseline) == 833, f"Expected 833-row immediate backup, found {len(immediate_baseline)}"
+          assert set(immediate_names) == set(names), "Authoritative 833-row pool differs from its preserved immediate pre-review backup"
+
+          print(f"Artist pool OK: exactly {len(rows)} records; 747-row baseline retained; exact 833-row backup preserved")
           PY
 
-  mixcloud-inventory:
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - name: Inventory recent Mixcloud episodes
-        id: collect
-        run: |
-          mkdir -p artifacts/mixcloud
-          SINCE=$(python -c "from datetime import date,timedelta; print((date.today()-timedelta(days=7)).isoformat())")
-          UNTIL=$(python -c "from datetime import date; print(date.today().isoformat())")
-          echo "Window: $SINCE through $UNTIL"
-          python scripts/collect_mixcloud.py --since "$SINCE" --until "$UNTIL" --out-dir artifacts/mixcloud
-      - name: Preserve episode inventory and audit even when collection fails
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: riley-coe-mixcloud-inventory-${{ github.run_id }}
-          path: artifacts/mixcloud/
-          if-no-files-found: warn
-          retention-days: 30
-
   bbc-sounds-inventory:
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    if: github.ref_name == 'rebuild/core-gig-finder' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[full-sweep]')))
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -71,9 +73,9 @@ jobs:
       - name: Inventory official BBC Riley & Coe episode pages
         run: |
           mkdir -p artifacts/bbc-sounds
-          START=$(python -c "from datetime import date,timedelta; print((date.today()-timedelta(days=7)).isoformat())")
+          START=$(python -c "from datetime import date,timedelta; print((date.today()-timedelta(days=21)).isoformat())")
           END=$(python -c "from datetime import date; print(date.today().isoformat())")
-          python scripts/collect_bbc_sounds.py --start "$START" --end "$END" --out-dir artifacts/bbc-sounds
+          python scripts/collect_bbc_sounds.py --start "$START" --end "$END" --out-dir artifacts/bbc-sounds --radiofiles-discovery
       - name: Preserve BBC episode inventory, snapshots and audit
         if: always()
         uses: actions/upload-artifact@v4
@@ -83,8 +85,70 @@ jobs:
           if-no-files-found: warn
           retention-days: 30
 
+  radiofiles-inventory:
+    if: always() && github.ref_name == 'rebuild/core-gig-finder' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[full-sweep]')))
+    needs: [bbc-sounds-inventory]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Download official BBC episode inventory
+        uses: actions/download-artifact@v4
+        with:
+          name: riley-coe-bbc-sounds-inventory-${{ github.run_id }}
+          path: artifacts/bbc-sounds-inventory
+      - name: Collect public RadioFiles episode tracklists
+        run: |
+          mkdir -p artifacts/radiofiles
+          SINCE=$(python -c "from datetime import date,timedelta; print((date.today()-timedelta(days=21)).isoformat())")
+          UNTIL=$(python -c "from datetime import date; print(date.today().isoformat())")
+          python scripts/collect_radiofiles.py --since "$SINCE" --until "$UNTIL" --out-dir artifacts/radiofiles --bbc-inventory artifacts/bbc-sounds-inventory/bbc_episode_inventory.csv
+      - name: Reconcile RadioFiles artists against the preserved pool (review only)
+        if: always()
+        run: |
+          if [ -f artifacts/radiofiles/radiofiles_episode_inventory.csv ] && [ -f artifacts/radiofiles/radiofiles_track_candidates.csv ]; then
+            python scripts/reconcile_radiofiles_artists.py --pool data/artist_pool.csv --aliases config/artist_aliases.csv --episodes artifacts/radiofiles/radiofiles_episode_inventory.csv --tracks artifacts/radiofiles/radiofiles_track_candidates.csv --out-dir artifacts/radiofiles/reconciliation
+          else
+            echo "RadioFiles episode/track files unavailable; reconciliation skipped and the collection audit remains the evidence of failure."
+          fi
+      - name: Cross-check full RadioFiles tracklists against official BBC embedded lists
+        if: always()
+        run: |
+          if [ -f artifacts/bbc-sounds-inventory/bbc_embedded_track_candidates.csv ] && [ -f artifacts/bbc-sounds-inventory/bbc_episode_inventory.csv ] && [ -f artifacts/radiofiles/radiofiles_episode_inventory.csv ] && [ -f artifacts/radiofiles/radiofiles_track_candidates.csv ]; then
+            python scripts/verify_radiofiles_against_bbc.py \
+              --bbc-tracks artifacts/bbc-sounds-inventory/bbc_embedded_track_candidates.csv \
+              --bbc-episodes artifacts/bbc-sounds-inventory/bbc_episode_inventory.csv \
+              --radiofiles-tracks artifacts/radiofiles/radiofiles_track_candidates.csv \
+              --radiofiles-episodes artifacts/radiofiles/radiofiles_episode_inventory.csv \
+              --out-dir artifacts/radiofiles/bbc-crosscheck
+          else
+            echo "BBC embedded tracklists or RadioFiles rows unavailable; cross-check skipped. Do not promote any artist."
+          fi
+      - name: Build a dated proposal from exact BBC and RadioFiles matches
+        if: always()
+        run: |
+          if [ -f artifacts/radiofiles/bbc-crosscheck/verified_episode_artist_candidates.csv ]; then
+            python scripts/build_verified_artist_pool_proposal.py \
+              --pool data/artist_pool.csv \
+              --verified-candidates artifacts/radiofiles/bbc-crosscheck/verified_episode_artist_candidates.csv \
+              --reconciliation artifacts/radiofiles/reconciliation/radiofiles_artist_reconciliation.csv \
+              --out-dir artifacts/radiofiles/pool-proposal
+          else
+            echo "No verified BBC/RadioFiles cross-check file; no pool proposal generated."
+          fi
+      - name: Preserve RadioFiles tracklists, raw JSON, reconciliation and audit even when collection fails
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: riley-coe-radiofiles-inventory-${{ github.run_id }}
+          path: artifacts/radiofiles/
+          if-no-files-found: warn
+          retention-days: 30
+
   venue-page-inventory:
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    if: github.ref_name == 'rebuild/core-gig-finder' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[full-sweep]')))
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -102,8 +166,68 @@ jobs:
           if-no-files-found: warn
           retention-days: 30
 
+  independent-gig-finder:
+    if: (github.ref_name == 'redesign/workflow-contract' || github.ref_name == 'deploy/weekly-gig-finder-clean' || github.ref_name == 'main') && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[full-sweep]')))
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Run independent gig finder (normal sweep)
+        if: github.event_name != 'push' || !contains(github.event.head_commit.message, '[simulate-source-failure]')
+        run: python scripts/run_gig_finder.py --run-id "$GITHUB_RUN_ID" --out-dir artifacts/gig-finder-run
+      - name: Run independent gig finder (simulated source failure)
+        if: github.event_name == 'push' && contains(github.event.head_commit.message, '[simulate-source-failure]')
+        run: python scripts/run_gig_finder.py --run-id "$GITHUB_RUN_ID" --out-dir artifacts/gig-finder-run --simulate-source-failure "Cobalt Studios"
+      - name: Validate candidate report structure and explicit coverage
+        if: always()
+        run: |
+          if [ -d artifacts/gig-finder-run ]; then
+            python scripts/validate_gig_finder_report.py --run-dir artifacts/gig-finder-run --pool data/artist_pool.csv --sources config/venue_sources.csv
+          else
+            echo "Gig-finder report directory was not created."
+            exit 1
+          fi
+      - name: Preserve independent gig-finder report and logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: riley-coe-independent-gig-finder-${{ github.run_id }}
+          path: artifacts/gig-finder-run/
+          if-no-files-found: warn
+          retention-days: 30
+
+  independent-artist-pool-updater:
+    if: (github.ref_name == 'redesign/workflow-contract' || github.ref_name == 'deploy/weekly-gig-finder-clean' || github.ref_name == 'main') && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[full-sweep]')))
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Run independent review-only BBC/RadioFiles updater
+        run: python scripts/run_artist_pool_updater.py --run-id "$GITHUB_RUN_ID" --out-dir artifacts/artist-pool-updater
+      - name: Validate proposal integrity and confirm authoritative pool was unchanged
+        if: always()
+        run: |
+          if [ -d artifacts/artist-pool-updater ]; then
+            python scripts/validate_artist_pool_update.py --run-dir artifacts/artist-pool-updater --pool data/artist_pool.csv
+          else
+            echo "Artist-pool updater report directory was not created."
+            exit 1
+          fi
+      - name: Preserve review-only artist-pool proposal and raw evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: riley-coe-artist-pool-updater-${{ github.run_id }}
+          path: artifacts/artist-pool-updater/
+          if-no-files-found: warn
+          retention-days: 30
+
   scheduled-evidence-gate:
-    if: always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+    if: always() && github.ref_name == 'rebuild/core-gig-finder' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[full-sweep]')))
     needs: [assemble-evidence-scaffold]
     runs-on: ubuntu-latest
     steps:
@@ -120,7 +244,7 @@ jobs:
         run: python scripts/validate_run.py --run-dir artifacts/evidence-package --pool data/artist_pool.csv
 
   event-candidate-discovery:
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    if: github.ref_name == 'rebuild/core-gig-finder' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[full-sweep]')))
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -131,7 +255,7 @@ jobs:
         run: |
           mkdir -p artifacts/event-candidates
           START=$(python -c "from datetime import date; print(date.today().isoformat())")
-          END=$(python -c "from datetime import date,timedelta; print((date.today()+timedelta(days=13)).isoformat())")
+          END=$(python -c "from datetime import date,timedelta; print((date.today()+timedelta(days=27)).isoformat())")
           echo "Window: $START through $END"
           python scripts/discover_event_candidates.py --sources config/venue_sources.csv --start "$START" --end "$END" --out-dir artifacts/event-candidates
       - name: Preserve event candidates and audit even when discovery fails
@@ -144,7 +268,7 @@ jobs:
           retention-days: 30
 
   event-page-inspection:
-    if: always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+    if: always() && github.ref_name == 'rebuild/core-gig-finder' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[full-sweep]')))
     needs: [event-candidate-discovery]
     runs-on: ubuntu-latest
     steps:
@@ -159,7 +283,9 @@ jobs:
           path: artifacts/event-candidates
       - name: Inspect event detail pages and bounded same-host links
         run: |
-          python scripts/inspect_event_links.py --links artifacts/event-candidates/event_link_candidates.csv --sources config/venue_sources.csv --out-dir artifacts/event-page-inspection --max-pages-per-venue 30 --max-depth 2
+          START=$(python -c "from datetime import date; print(date.today().isoformat())")
+          END=$(python -c "from datetime import date,timedelta; print((date.today()+timedelta(days=27)).isoformat())")
+          python scripts/inspect_event_links.py --links artifacts/event-candidates/event_link_candidates.csv --sources config/venue_sources.csv --out-dir artifacts/event-page-inspection --start "$START" --end "$END" --max-pages-per-venue 120 --max-depth 3
       - name: Preserve event-page snapshots and crawl audit
         if: always()
         uses: actions/upload-artifact@v4
@@ -170,8 +296,8 @@ jobs:
           retention-days: 30
 
   assemble-evidence-scaffold:
-    if: always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
-    needs: [mixcloud-inventory, bbc-sounds-inventory, venue-page-inventory, event-candidate-discovery, event-page-inspection]
+    if: always() && github.ref_name == 'rebuild/core-gig-finder' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[full-sweep]')))
+    needs: [bbc-sounds-inventory, radiofiles-inventory, venue-page-inventory, event-candidate-discovery, event-page-inspection]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -184,21 +310,64 @@ jobs:
           pattern: riley-coe-*-${{ github.run_id }}
           path: artifacts
           merge-multiple: false
+      - name: Search collected pages for required regression artists
+        if: always()
+        run: |
+          python scripts/check_regression_artists.py \
+            --seeds config/regression_artists.csv \
+            --venue-snapshots "artifacts/riley-coe-venue-page-inventory-${{ github.run_id }}/page_text" \
+            --event-snapshots "artifacts/riley-coe-event-page-inspection-${{ github.run_id }}/snapshots" \
+            --venues config/venue_sources.csv \
+            --out artifacts/regression_artist_checks.csv
+      - name: Search the full artist pool against captured venue pages
+        if: always()
+        run: |
+          python scripts/check_regression_artists.py \
+            --seeds data/artist_pool.csv \
+            --venue-snapshots "artifacts/riley-coe-venue-page-inventory-${{ github.run_id }}/page_text" \
+            --event-snapshots "artifacts/riley-coe-event-page-inspection-${{ github.run_id }}/snapshots" \
+            --venues config/venue_sources.csv \
+            --out artifacts/artist_pool_venue_page_matches.csv
+      - name: Match the full artist pool to dated event candidates
+        if: always()
+        run: |
+          START=$(python -c "from datetime import date; print(date.today().isoformat())")
+          END=$(python -c "from datetime import date,timedelta; print((date.today()+timedelta(days=27)).isoformat())")
+          python scripts/match_pool_to_window_events.py \
+            --pool data/artist_pool.csv \
+            --events "artifacts/riley-coe-event-candidates-${{ github.run_id }}/event_candidates.csv" \
+            --inspected "artifacts/riley-coe-event-page-inspection-${{ github.run_id }}/event_page_inspection.csv" \
+            --pool-page-matches "artifacts/artist_pool_venue_page_matches.csv" \
+            --start "$START" --end "$END" \
+            --out artifacts/artist_window_event_matches.csv
       - name: Assemble dated PARTIAL evidence package
         run: |
           START=$(python -c "from datetime import date; print(date.today().isoformat())")
-          END=$(python -c "from datetime import date,timedelta; print((date.today()+timedelta(days=13)).isoformat())")
+          END=$(python -c "from datetime import date,timedelta; print((date.today()+timedelta(days=27)).isoformat())")
           python scripts/assemble_run_package.py \
             --start "$START" --end "$END" \
-            --episodes "artifacts/riley-coe-mixcloud-inventory-${{ github.run_id }}/mixcloud_episode_inventory.csv" \
             --bbc-episodes "artifacts/riley-coe-bbc-sounds-inventory-${{ github.run_id }}/bbc_episode_inventory.csv" \
             --bbc-track-candidates "artifacts/riley-coe-bbc-sounds-inventory-${{ github.run_id }}/bbc_track_candidates.csv" \
-            --mixcloud-track-candidates "artifacts/riley-coe-mixcloud-inventory-${{ github.run_id }}/mixcloud_api_track_candidates.csv" \
+            --bbc-embedded-track-candidates "artifacts/riley-coe-bbc-sounds-inventory-${{ github.run_id }}/bbc_embedded_track_candidates.csv" \
+            --bbc-embedded-tracklist-audit "artifacts/riley-coe-bbc-sounds-inventory-${{ github.run_id }}/bbc_embedded_tracklist_audit.csv" \
+            --bbc-radiofiles-episode-crosscheck "artifacts/riley-coe-radiofiles-inventory-${{ github.run_id }}/bbc-crosscheck/bbc_radiofiles_episode_crosscheck.csv" \
+            --bbc-radiofiles-verified-candidates "artifacts/riley-coe-radiofiles-inventory-${{ github.run_id }}/bbc-crosscheck/verified_episode_artist_candidates.csv" \
+            --radiofiles-episodes "artifacts/riley-coe-radiofiles-inventory-${{ github.run_id }}/radiofiles_episode_inventory.csv" \
+            --radiofiles-track-candidates "artifacts/riley-coe-radiofiles-inventory-${{ github.run_id }}/radiofiles_track_candidates.csv" \
             --events "artifacts/riley-coe-event-candidates-${{ github.run_id }}/event_candidates.csv" \
             --venue-audit "artifacts/riley-coe-event-candidates-${{ github.run_id }}/event_discovery_audit.csv" \
             --event-page-inspection "artifacts/riley-coe-event-page-inspection-${{ github.run_id }}/event_page_inspection.csv" \
             --event-page-audit "artifacts/riley-coe-event-page-inspection-${{ github.run_id }}/event_page_crawl_audit.csv" \
+            --regression-artist-checks "artifacts/regression_artist_checks.csv" \
+            --pool-venue-page-matches "artifacts/artist_pool_venue_page_matches.csv" \
             --out-dir artifacts/evidence-package
+      - name: Attach date-window artist match tables to evidence package
+        if: always()
+        run: |
+          mkdir -p artifacts/evidence-package
+          for f in artifacts/artist_window_event_matches.csv artifacts/artist_window_event_matches.summary.json artifacts/artist_window_event_coverage.csv; do
+            if [ -f "$f" ]; then cp "$f" artifacts/evidence-package/; fi
+          done
       - name: Preserve dated evidence scaffold for review
         if: always()
         uses: actions/upload-artifact@v4

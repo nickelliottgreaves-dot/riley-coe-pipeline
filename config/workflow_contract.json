@@ -1,0 +1,17 @@
+{
+  "contract_version": 1,
+  "reporting_window_days": 14,
+  "minimum_reporting_window_days": 14,
+  "artist_pool_path": "data/artist_pool.csv",
+  "venue_sources_path": "config/venue_sources.csv",
+  "required_venues_path": "config/required_venues.csv",
+  "run_output_root": "artifacts/runs",
+  "status_semantics": {
+    "VERIFIED": "Claim independently checked against adequate source evidence.",
+    "CANDIDATE": "Potential match found; still needs verification.",
+    "INCOMPLETE": "Required research step could not be completed.",
+    "FAILED": "Required operation failed.",
+    "PARTIAL": "Usable candidate report exists, but source or verification coverage is incomplete.",
+    "COMPLETE": "All explicitly defined research-completeness criteria have been met."
+  }
+}
