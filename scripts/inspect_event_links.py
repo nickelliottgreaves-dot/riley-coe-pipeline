@@ -665,6 +665,48 @@ def event_performer_candidate(event):
     return title,bool(title)
 
 
+def event_matches_configured_venue(event, configured_venue):
+    """Reject embedded tour dates that belong to another venue, not this calendar."""
+    def identity(value):
+        value=clean(value)
+        parsed=urlparse(value)
+        if parsed.scheme in {"http","https"} and parsed.netloc:
+            value=parsed.path.rstrip("/").split("/")[-1]
+            value=re.sub(r"^\d+-","",value)
+        value=" ".join(re.sub(r"[^a-z0-9]+"," ",value.casefold()).split())
+        value=re.sub(r"^(?:the|a|an)\s+","",value)
+        value=re.sub(r"\s+(?:newcastle upon tyne|newcastle|gateshead)$","",value)
+        return value
+
+    expected=identity(configured_venue)
+    # A broad Glasshouse calendar can legitimately contain room-level listings.
+    glasshouse_aliases={"glasshouse","sage gateshead","sage one","sage two","sage 1","sage 2"}
+    if expected in {"glasshouse international centre for music","glasshouse"}:
+        allowed=glasshouse_aliases | {expected}
+    elif expected in {"cluny","cluny 2"}:
+        allowed={expected}
+    elif expected in {"o2 city hall","o2 city hall newcastle","city hall newcastle"}:
+        allowed={"o2 city hall","o2 city hall newcastle","city hall newcastle"}
+    else:
+        allowed={expected}
+
+    location=event.get("location")
+    location_name=identity(location)
+    if location_name:
+        # URL-like location fields may reduce to an ID-prefixed venue slug.
+        if location_name in allowed or any(alias and alias in location_name.split() for alias in allowed):
+            return True
+        # If location metadata explicitly identifies a different place, do not
+        # silently attribute the event to the venue whose calendar embeds it.
+        return False
+
+    title=clean(event.get("name"))
+    if " @ " in title:
+        billed_location=identity(title.rsplit(" @ ",1)[1])
+        return billed_location in allowed
+    return True
+
+
 def event_link_matches(candidate,href,text):
     key=lambda value: re.sub(r"[^a-z0-9]+","",str(value or "").casefold())
     title=key(candidate.get("event_title",""))
@@ -826,6 +868,8 @@ def main():
                         if not is_event_object(ev):
                             continue
                         name=clean(ev.get("name")); start=clean(ev.get("startDate"))
+                        if not event_matches_configured_venue(ev, venue):
+                            continue
                         # Structured calendars frequently embed events from
                         # many months or years on every page. Keep dated rows
                         # only when they fall inside this run's requested
