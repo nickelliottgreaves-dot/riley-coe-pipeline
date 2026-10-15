@@ -62,15 +62,38 @@ def main() -> int:
                     hits.append(page)
         urls=list(dict.fromkeys(p["source_url"] for p in hits if p["source_url"]))
         searched_urls=list(dict.fromkeys(p["source_url"] for p in pages if p["source_url"]))
+        # Preserve short matching text so reviewers can distinguish an event
+        # mention from common-word collisions such as "Can", "Low" or "Sorry".
+        context=[]
+        for page in hits[:8]:
+            line_hits=[]
+            for line in page["text"].splitlines():
+                if re.match(r"(?i)^\s*(?:source|source url):",line):
+                    continue
+                if needle in f" {norm(line)} ":
+                    snippet=" ".join(line.split())
+                    if snippet:
+                        line_hits.append(snippet[:180])
+                if len(line_hits)>=2:
+                    break
+            if line_hits:
+                context.append((page["source_url"] or page["path"])+": "+" / ".join(line_hits))
         # A negative result should identify the corpus actually searched, not
         # misleadingly point at the first configured venue as if it matched.
         evidence_url="; ".join(urls if urls else searched_urls[:8])
+        result="found_in_collected_pages" if hits else ("not_found_in_collected_pages" if pages else "no_page_snapshots_available")
+        note_parts=[f"Searched {len(pages)} collected venue/event-page text snapshots; matches={len(hits)}."]
+        if context:
+            note_parts.append("Matching text (context only, not event verification): "+" || ".join(context[:8]))
+        if not hits:
+            note_parts.append("A negative result is limited to this bounded corpus; evidence_url lists up to eight representative searched sources, while the full crawl audit and snapshots preserve the wider corpus.")
+        note_parts.append("External ticket pages, JavaScript-only content and uncrawled pages may be missing.")
         rows.append({
             "artist":artist,
             "searched":str(bool(pages)).lower(),
-            "result":"found_in_collected_pages" if hits else ("not_found_in_collected_pages" if pages else "no_page_snapshots_available"),
+            "result":result,
             "evidence_url":evidence_url,
-            "notes":f"Searched {len(pages)} collected venue/event-page text snapshots; matches={len(hits)}; matching URLs: {'; '.join(urls[:8])}. A negative result is limited to this bounded corpus; evidence_url lists up to eight representative searched sources, while the full crawl audit and snapshots preserve the wider corpus. External ticket pages, JavaScript-only content and uncrawled pages may be missing."
+            "notes":" ".join(note_parts)
         })
     args.out.parent.mkdir(parents=True,exist_ok=True)
     with args.out.open("w",encoding="utf-8",newline="") as f:
