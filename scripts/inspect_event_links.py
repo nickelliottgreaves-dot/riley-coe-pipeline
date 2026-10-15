@@ -76,7 +76,7 @@ def extract_visible_event(page_title, visible_text):
         for i,line in enumerate(lines):
             if line.casefold().rstrip(":") == label.casefold().rstrip(":") and i+1 < len(lines):
                 return lines[i+1]
-            match=re.match(r"(?i)^"+re.escape(label.rstrip(":"))+r":\\s*(.+)$",line)
+            match=re.match(r"(?i)^"+re.escape(label.rstrip(":"))+r":\s*(.+)$",line)
             if match:
                 return match.group(1).strip()
         return ""
@@ -89,15 +89,15 @@ def extract_visible_event(page_title, visible_text):
         except ValueError:
             pass
     if not event_date:
-        match=re.search(r"(?i)\\b(20\\d{2}-\\d{2}-\\d{2})\\b",visible_text)
+        match=re.search(r"(?i)\b(20\d{2}-\d{2}-\d{2})\b",visible_text)
         if match: event_date=match.group(1)
     venue=next_value("Venue")
     if not event_date or not venue:
         return None
     title=(page_title or "").strip()
     # Common official event-page titles end with the venue after a separator.
-    if re.search(r"\\s[-|–—]\\s",title):
-        title=re.split(r"\\s[-|–—]\\s",title)[0].strip()
+    if re.search(r"\s[-|–—]\s",title):
+        title=re.split(r"\s[-|–—]\s",title)[0].strip()
     if not title or title.casefold() in {"gigs","events","what's on","whats on","home"}:
         return None
     supports=[]
@@ -113,7 +113,7 @@ def extract_visible_event(page_title, visible_text):
             supports.append(line)
     supports=list(dict.fromkeys(supports))
     price_text=next_value("Advance tickets") or next_value("Price") or next_value("Tickets")
-    price_match=re.search(r"£\\s?\\d+(?:\\.\\d{1,2})?",price_text)
+    price_match=re.search(r"£\s?\d+(?:\.\d{1,2})?",price_text)
     price=price_match.group(0).replace(" ","") if price_match else ""
     ticket_text=" ".join(lines).casefold()
     if "sold out" in ticket_text:
