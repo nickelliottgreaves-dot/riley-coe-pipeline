@@ -241,6 +241,9 @@ def main() -> int:
         "venue", "seed_candidate_links", "external_seed_links_skipped", "external_event_pages_inspected", "pages_fetched",
         "pages_failed", "same_host_links_added", "crawl_cap_reached", "status", "notes",
     ])
+    ensure_csv(inspection_dir / "event_page_fetch_failures.csv", [
+        "venue", "page_url", "crawl_depth", "http_status", "external_page", "error_type", "error_message",
+    ])
 
     pool_page_matches = out_dir / "artist_pool_page_matches.csv"
     run_stage("full_pool_page_comparison", [
@@ -297,6 +300,8 @@ def main() -> int:
     page_audit = read_csv(venue_dir / "venue_page_access_audit.csv")
     discovery_audit = read_csv(discovery_dir / "event_discovery_audit.csv")
     crawl_audit = read_csv(inspection_dir / "event_page_crawl_audit.csv")
+    fetch_failures = read_csv(inspection_dir / "event_page_fetch_failures.csv")
+    crawl_audit_failed_pages = sum(int(row.get("pages_failed") or 0) for row in crawl_audit if (row.get("pages_failed") or "0").isdigit())
     coverage = combine_venue_coverage(sources, page_audit, discovery_audit, crawl_audit)
     write_csv(out_dir / "venue_coverage.csv", COVERAGE_FIELDS, coverage)
     write_csv(out_dir / "stage_results.csv", STAGE_FIELDS, stage_results)
@@ -364,6 +369,8 @@ def main() -> int:
         "out_of_scope_event_rows": len(out_of_scope_rows),
         "simulated_source_failure": simulated_failure_venue,
         "stage_failures": sum(row["status"] != "success" for row in stage_results),
+        "failed_page_fetch_rows": len(fetch_failures),
+        "crawl_audit_failed_page_count": crawl_audit_failed_pages,
         "output_directory": str(out_dir),
         "note": "A valid PARTIAL report is the expected result when any source is incomplete; no candidate is marked verified.",
     }
