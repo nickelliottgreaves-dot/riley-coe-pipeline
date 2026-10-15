@@ -34,14 +34,44 @@ class VerifiedPoolProposalTests(unittest.TestCase):
             with (out/f"artist_pool_additions_{stamp}.csv").open(newline="",encoding="utf-8") as f:
                 additions=list(csv.DictReader(f))
             audit=json.loads((out/f"artist_pool_proposal_audit_{stamp}.json").read_text())
-            self.assertEqual([r["artist"] for r in proposed],["Existing Artist","New Artist"])
-            self.assertEqual([r["artist"] for r in additions],["New Artist"])
+            self.assertEqual([r["artist"] for r in proposed],["Existing Artist","Blondie","New Artist"])
+            self.assertEqual([r["artist"] for r in additions],["Blondie","New Artist"])
             with (out/f"artist_pool_ambiguous_review_{stamp}.csv").open(newline="",encoding="utf-8") as f:
                 ambiguous=list(csv.DictReader(f))
-            self.assertEqual([r["artist_candidate"] for r in ambiguous],["Blondie"])
-            self.assertIn("New Artist & Collaborator", additions[0]["source_basis"])
+            self.assertEqual(ambiguous, [])
+            self.assertIn("New Artist & Collaborator", additions[1]["source_basis"])
+            self.assertEqual(audit["fuzzy_ambiguity_threshold"],0.95)
             self.assertFalse(audit["authoritative_pool_modified"])
             self.assertEqual(pool.read_text().splitlines(),["index,artist,status,source_basis","1,Existing Artist,ACTIVE,baseline"])
+
+
+    def test_near_identical_artist_credit_is_held_for_alias_review(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp); pool=root/"pool.csv"; candidates=root/"verified.csv"; out=root/"out"
+            pool_fields=["index","artist","status","source_basis"]
+            self.write(pool,pool_fields,[{"index":"1","artist":"Thee Headcoatees","status":"ACTIVE","source_basis":"baseline"}])
+            cand_fields=["episode_date","episode_pid","episode_title","track_position","track_title","artist_candidate","radiofiles_artist_candidate","bbc_episode_url","radiofiles_episode_url","crosscheck_status","evidence"]
+            self.write(candidates,cand_fields,[{
+                "episode_date":"2026-10-12","episode_pid":"m0032d2m","track_title":"Example",
+                "artist_candidate":"The Headcoatees","radiofiles_artist_candidate":"The Headcoatees",
+                "crosscheck_status":"EXACT_FULL_TRACKLIST_MATCH","bbc_episode_url":"https://bbc.example/a",
+                "radiofiles_episode_url":"https://radiofiles.example/a"
+            }])
+            reconciliation=root/"reconciliation.csv"
+            self.write(reconciliation,["artist_candidate","reconciliation_status","best_similarity_score","closest_pool_candidates","episode_dates","track_examples","source_urls"],[{
+                "artist_candidate":"The Headcoatees","reconciliation_status":"UNMATCHED_REVIEW_ONLY",
+                "best_similarity_score":"0.968","closest_pool_candidates":"Thee Headcoatees",
+                "episode_dates":"2026-10-12","track_examples":"Example","source_urls":"https://radiofiles.example/a"
+            }])
+            subprocess.run([sys.executable,str(SCRIPT),"--pool",str(pool),"--verified-candidates",str(candidates),"--reconciliation",str(reconciliation),"--out-dir",str(out)],check=True,capture_output=True,text=True)
+            import datetime
+            stamp=datetime.date.today().strftime("%Y%m%d")
+            with (out/f"artist_pool_additions_{stamp}.csv").open(newline="",encoding="utf-8") as f:
+                additions=list(csv.DictReader(f))
+            with (out/f"artist_pool_ambiguous_review_{stamp}.csv").open(newline="",encoding="utf-8") as f:
+                ambiguous=list(csv.DictReader(f))
+            self.assertEqual(additions,[])
+            self.assertEqual([r["artist_candidate"] for r in ambiguous],["The Headcoatees"])
 
 if __name__=="__main__":
     unittest.main()
