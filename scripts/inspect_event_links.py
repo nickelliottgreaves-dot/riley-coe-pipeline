@@ -158,7 +158,7 @@ def extract_visible_listing_events(visible_text):
     """Extract event-card candidates from listing pages with title/date/venue lines."""
     lines=[line.strip() for line in visible_text.splitlines() if line.strip()]
     date_pattern=re.compile(r"(?i)\b(?:(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)(?:day)?\s+)?\d{1,2}\s+[A-Za-z]{3,9}\s+20\d{2}\b")
-    generic={"gigs","events","what's on","whats on","info","tickets","buy tickets","details","view as list","choose date","search","next","previous","older"}
+    generic={"gigs","events","what's on","whats on","info","more info","limited availability","limited tickets","tickets","buy tickets","book tickets","book now","details","event details","view event","view details","find out more","read more","on sale","on sale now","sold out","coming soon","view as list","choose date","search","next","previous","older","available now","full price","advance tickets"}
     known_venues={re.sub(r"[^a-z0-9]+","",name.casefold()) for name in [
         "The Cluny","Cluny 2","Boiler Shop","Wylam Brewery","The Grove","The Glasshouse",
         "Glasshouse International Centre for Music","Sage Two","Sage One","Cumberland Arms","Cobalt Studios",
@@ -184,8 +184,27 @@ def extract_visible_listing_events(visible_text):
         dt=parsed_date(line)
         if not dt or i==0:
             continue
-        title=lines[i-1].strip(" -–—:")
-        if not title or title.casefold() in generic or len(title)>180:
+        # Calendar cards sometimes place a generic CTA immediately before
+        # the date (e.g. "More Info"). Walk back a few lines to find the actual
+        # event title instead of promoting the CTA as an artist.
+        title=""
+        for back in range(i-1,max(-1,i-7),-1):
+            candidate=lines[back].strip(" -–—:")
+            if not candidate or date_pattern.search(candidate):
+                break
+            low=candidate.casefold()
+            if low in generic or re.fullmatch(r"(?:january|february|march|april|may|june|july|august|september|october|november|december)\s+20\d{2}",low):
+                continue
+            if "£" in candidate or re.match(r"(?i)^(from|price|tickets?)\b",candidate):
+                continue
+            candidate_key=re.sub(r"[^a-z0-9]+","",low)
+            if candidate_key in known_venues:
+                continue
+            if len(candidate)>180:
+                continue
+            title=candidate
+            break
+        if not title:
             continue
         j=i+1
         while j<len(lines) and lines[j] in {"/","|","–","—","-"}: j+=1
