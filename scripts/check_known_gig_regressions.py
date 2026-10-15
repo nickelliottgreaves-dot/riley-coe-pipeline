@@ -67,11 +67,8 @@ def main() -> int:
                 row.get("event_title", ""), row.get("page_title", ""),
                 row.get("artist", ""), row.get("performer_names", ""),
             ]
-            snapshot_rel = (row.get("visible_text_snapshot") or "").strip()
-            if snapshot_rel:
-                snapshot_path = args.inspection_dir / snapshot_rel
-                if snapshot_path.is_file():
-                    text_fields.append(snapshot_path.read_text(encoding="utf-8", errors="replace"))
+            # Match the performer against this specific event row, not the
+            # whole page snapshot: a listing page can contain many unrelated acts.
             haystack = norm(" ".join(str(v) for v in text_fields))
             if performer_key and f" {performer_key} " in f" {haystack} ":
                 hits.append({
