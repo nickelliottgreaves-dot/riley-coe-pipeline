@@ -301,7 +301,7 @@ The normal sweep [38739286368](https://github.com/nickelliottgreaves-dot/riley-c
 
 A bounded source fix is now committed in `config/venue_sources.csv`: Utilita Arena Newcastle's primary safety-net URL is changed to the venue-specific Songkick calendar `https://www.songkick.com/venues/29167-utilita-arena-newcastle/calendar`, which exposes dated Newcastle Arena listings in indexed content. The official venue events URL and Ticketmaster URL remain in the source notes for manual cross-check. This is an evidence-based fallback, not a claim that the new source works until the next live artifact confirms a fetch and useful dated event rows.
 
-The README has also been updated to describe the active independent runners, 847-row pool, 20 required sources, and the distinction between the current candidate finder and the legacy 15-day assembler. Latest confirmed test run before these final documentation/source-config commits: [38740073015](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38740073015), successful. The upcoming full sweep includes the same unit tests and validates the new source configuration.
+The README has been updated to describe the active independent runners, 847-row pool, 20 required sources, and the distinction between the current candidate finder and the legacy 15-day assembler. The new live sweep [38740356838](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38740356838) has now validated the Songkick source configuration and visible ticket-status extraction; details are recorded below.
 
 ## Acceptance gate
 
@@ -317,21 +317,27 @@ Before considering the candidate-finder implementation assembled:
 - A successful technical run is not represented as a COMPLETE verified gig report unless independent coverage/verification criteria are met.
 
 
-## Current handover and next live acceptance (2026-10-15)
+## Latest live sweep after Songkick fallback (2026-10-15)
 
-The latest normal run [38739286368](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38739286368) and simulated Cobalt Studios failure run [38739731517](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38739731517) both validated as PARTIAL, with 20 source rows, 847/847 pool searches, six candidate matches and zero out-of-scope event rows. The source-failure run correctly kept Cobalt partial. Both runs predate the current Utilita Songkick source config and the latest visible price/ticket-status extraction change, so the newest source/parser combination still needs a live normal sweep.
+Run [38740356838](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38740356838), commit `7d9a88cc16e137a1cfa6d7932c05b6d0b42d63f3`, completed successfully:
+- **136 unit tests passed**; independent artist-pool updater passed; independent gig-finder report validation passed.
+- Window 15 October–11 November 2026 (28 inclusive dates).
+- **20/20** venue coverage rows; **847/847** artist page-search rows and **847/847** dated-event comparison rows.
+- **7 candidate matches**, zero verified rows, and **zero out-of-scope event rows**. All five collection/matching stages succeeded; the report remains PARTIAL because source and verification coverage are incomplete.
+- Event inspection fetched **393 pages**, with **24 page failures**, 11 allowlisted third-party ticket pages inspected, 86 external seed links skipped, 91 structured Event rows and no crawl caps.
+- Source outcomes: **14 checked in captured scope, 6 partial**. The six partial sources are Boiler Shop, Cumberland Arms, Cobalt Studios, NX Newcastle, Central Gateshead / Central Bar and The Globe. Utilita Arena is no longer partial: the venue-specific Songkick calendar fetched successfully and contributed a dated candidate.
+- The seven candidate rows are: Cabaret Voltaire (17 Oct, Boiler Shop); The Wedding Present (23 Oct, Boiler Shop); Radhika support (23 Oct, Boiler Shop); Fat White Family (25 Oct, Utilita Arena Newcastle); Pys Melyn in the Louis O'Hara and His Burley Chassis lineup (27 Oct, The Globe; role unresolved); Teenage Fanclub (10 Nov, Boiler Shop); Barbican Estate (9 Nov, The Cluny; third-party calendar evidence only). All automated rows remain `verified=false`.
+- Visible ticket-status extraction now yields `SoldOut` for the Boiler Shop Cabaret Voltaire, Wedding Present and Teenage Fanclub events. Prices remain blank in automated match rows; the separate manual ledger retains the DICE-listed £6 for Pys Melyn.
+- Utilita Arena's new source `https://www.songkick.com/venues/29167-utilita-arena-newcastle/calendar` was fetched successfully. It produced Fat White Family at the 25 October Strokes show. I manually checked the official Utilita Arena event page, which confirms The Strokes with special guests Fat White Family and Alex Cameron on 25 October 2026 at 19:00; its ticket page says On Sale Now, while one Concertgoer category is sold out. Price is not visible. This manual confirmation was added to `artifacts/manual-review/gig-finder-candidate-review-2026-10-15.csv` in commit `5c19c68f9afcf4f96e2b0a003a2ba7a5131d0635`.
+- Gig-finder artifact: `riley-coe-independent-gig-finder-38740356838`, artifact ID `11976047151`. Artist-updater artifact: `riley-coe-artist-pool-updater-38740356838`, artifact ID `11976286516`.
+- All 20 `calendar_coverage_verified` flags remain false. A clean fetch and zero out-of-scope matches are not evidence that a calendar was exhaustively checked.
 
-Latest tests-only run [38740250115](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38740250115) passed after the ticket-status regex correction. Current branch changes since the last live sweep:
-- `config/venue_sources.csv` now uses the venue-specific Songkick calendar for Utilita Arena Newcastle because the Ticketmaster calendar returned HTTP 403. The official venue URL and Ticketmaster URL remain in notes.
-- `scripts/inspect_event_links.py` can supplement missing structured price/status with visible event text, and its ticket-status regex boundaries have been corrected.
-- `README.md` has been updated to describe the active independent runners, current 847-row pool, 20 required sources, and the legacy assembler distinction.
+## Immediate next actions
 
-**Next action:** this handover commit intentionally triggers a normal full sweep on the latest branch head. Check the run ID and inspect the artifact:
-1. Confirm 20/20 venue coverage rows, 847/847 page-search rows and 847/847 event-comparison rows.
-2. Confirm zero out-of-scope event rows after the Skiddle venue/city scope guard.
-3. Confirm Utilita Arena's Songkick calendar is fetched and yields only Newcastle Arena events; if not, retain partial status and document the exact failure.
-4. Check the six existing candidate matches and whether visible-text price/ticket-status extraction improves any fields without false positives.
-5. Keep all automated candidate rows `verified=false` and all 20 `calendar_coverage_verified=false` unless separate verification evidence supports a change.
-6. Preserve the current 847-row pool and backup hashes; do not promote any new artists from this updater run without an independently reviewed exact-tracklist proposal.
+1. Keep the current 847-row pool and all backups unchanged; the updater is review-only and currently proposes zero additions while holding one identity collision.
+2. Work through the **six partial sources** one at a time, beginning with Boiler Shop, Cumberland Arms, NX Newcastle, Central Gateshead / Central Bar, The Globe and Cobalt Studios. Record a concrete source/pagination gap before changing code; don't loosen the completeness gate.
+3. Reconcile the seven candidate rows with the separate manual review ledger. Four Boiler Shop candidates have official-page checks; Fat White Family is now officially cross-checked; Pys Melyn's billing role is unresolved; Barbican Estate remains third-party corroborated but lacks an official Cluny event-page confirmation.
+4. If changing code or source configuration, add a regression test where applicable and trigger a full sweep. The latest normal run and prior simulated-Cobalt run both passed with zero out-of-scope rows; repeat the simulated failure only if failure-handling code changes.
+5. Do not promote automated candidate rows to verified without a defined review-to-report policy. Do not merge to `main` or claim a COMPLETE verified gig report.
 
-Do not merge to `main` or claim a COMPLETE verified gig report. The initial repeatable PARTIAL-report path and simulated-failure handling have been demonstrated; remaining work is bounded source coverage and manual event verification, not another broad redesign.
+This is now a bounded source-coverage and event-verification task, not an open-ended architecture redesign. The repeatable PARTIAL-report path has passed normal and simulated-failure acceptance; the next meaningful work is resolving the six partial venue sources and independently reviewing the seven candidate rows.
