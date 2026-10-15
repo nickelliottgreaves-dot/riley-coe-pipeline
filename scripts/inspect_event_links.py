@@ -770,7 +770,6 @@ def main():
                     for ev in objects(data):
                         if not is_event_object(ev):
                             continue
-                        event_objects.append(ev)
                         name=clean(ev.get("name")); start=clean(ev.get("startDate"))
                         # Structured calendars frequently embed events from
                         # many months or years on every page. Keep dated rows
@@ -784,6 +783,7 @@ def main():
                             event_day=None
                         if event_day is None or not (args.start_date <= event_day <= args.end_date):
                             continue
+                        event_objects.append(ev)
                         perf,performer_fallback=event_performer_candidate(ev)
                         offers=ev.get("offers") or []; offers=offers if isinstance(offers,list) else [offers]
                         prices=[]; currencies=[]; avail=[]
