@@ -366,12 +366,8 @@ def extract_visible_listing_events(visible_text, default_venue="", start_date=No
         "Glasshouse International Centre for Music","Sage Two","Sage One","Cumberland Arms","Cobalt Studios",
         "NX Newcastle","Think Tank","O2 City Hall","O2 City Hall Newcastle","Central Bar","Central Gateshead",
         "Gosforth Civic Theatre","Newcastle University","Newcastle University Students' Union","Students' Union",
-        "Lubber Fiend","The Lubber Fiend","The Cumberland Arms","The Newgate Social","Head of Steam Newcastle",
-        "Riverside Newcastle","Newcastle Arts Centre","The Globe","Little Buildings","Utilita Arena","Utilita Arena Newcastle",
-        "ZEROX","ZEROX Newcastle"
+        "Lubber Fiend","The Globe","Little Buildings","Utilita Arena","Utilita Arena Newcastle","ZEROX","ZEROX Newcastle"
     ]}
-    # Allow both article-bearing and article-free venue labels in cards.
-    known_venues |= {key[3:] for key in list(known_venues) if key.startswith("the")}
     def parsed_date(value):
         value=re.sub(r"(?i)(\d{1,2})(st|nd|rd|th)\b",r"\1",value.strip())
         value=re.sub(r"(?<!\d)['’](\d{2})\b",r"20\1",value)
@@ -430,8 +426,6 @@ def extract_visible_listing_events(visible_text, default_venue="", start_date=No
             title=re.sub(r"(?i)\s+@\s+(?:the\s+)?central bar\s*$","",title).strip()
             if dt and title:
                 title_parts=[part.strip() for part in re.split(r"\s+\+\s+",title) if part.strip()]
-                if title_parts:
-                    title_parts[0]=re.sub(r"(?i)^(?:generator\s*&\s*)?byker grave(?: presents?)?\s*:\s*","",title_parts[0]).strip()
                 price=""; availability="not_checked"
                 for extra in lines[i+1:min(len(lines),i+6)]:
                     if inline_date_title.match(extra) or date_pattern.search(extra): break
@@ -475,10 +469,10 @@ def extract_visible_listing_events(visible_text, default_venue="", start_date=No
             forward_index=j
             break
         if forward_title and forward_index is not None:
-            artist_text=re.split(r"(?i)\\bpresents:\\s*",forward_title,maxsplit=1)[-1]
+            artist_text=re.split(r"(?i)\bpresents:\s*",forward_title,maxsplit=1)[-1]
             artist_text=artist_text.split("//",1)[-1].strip()
-            artist_text=re.sub(r"(?i)^(?:mercury prize fringe|fresh thursday)\\s*:\\s*","",artist_text)
-            title_parts=[part.strip(" -–—:") for part in re.split(r"\\s+\\+\\s+",artist_text) if part.strip(" -–—:")]
+            artist_text=re.sub(r"(?i)^(?:mercury prize fringe|fresh thursday)\s*:\s*","",artist_text)
+            title_parts=[part.strip(" -–—:") for part in re.split(r"\s+\+\s+",artist_text) if part.strip(" -–—:")]
             performers=list(title_parts or [forward_title])
             for extra in lines[forward_index+1:min(len(lines),forward_index+4)]:
                 if date_pattern.search(extra) or inline_date_title.match(extra):
@@ -487,7 +481,7 @@ def extract_visible_listing_events(visible_text, default_venue="", start_date=No
                 if low in generic or is_page_furniture(extra) or low.startswith(("send us a message","or email ","email to book")):
                     break
                 if extra.strip().startswith("+ "):
-                    performers.extend(part.strip() for part in re.split(r"\\s+\\+\\s+",extra.strip().lstrip("+ ").strip()) if part.strip())
+                    performers.extend(part.strip() for part in re.split(r"\s+\+\s+",extra.strip().lstrip("+ ").strip()) if part.strip())
                     continue
                 if "," in extra and not re.search(r"[.!?]",extra):
                     performers.extend(part.strip() for part in extra.split(",") if part.strip())
@@ -496,7 +490,7 @@ def extract_visible_listing_events(visible_text, default_venue="", start_date=No
             for extra in lines[i+1:min(len(lines),i+10)]:
                 if date_pattern.search(extra) or inline_date_title.match(extra):
                     break
-                pm=re.search(r"£\\s?\\d+(?:\\.\\d{1,2})?(?:\\s*[-–]\\s*£?\\s?\\d+(?:\\.\\d{1,2})?)?",extra,re.I)
+                pm=re.search(r"£\s?\d+(?:\.\d{1,2})?(?:\s*[-–]\s*£?\s?\d+(?:\.\d{1,2})?)?",extra,re.I)
                 if pm and not price: price=pm.group(0).replace(" ","")
                 if "sold out" in extra.casefold(): availability="SoldOut"
             found.append({
