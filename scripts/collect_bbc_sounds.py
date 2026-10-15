@@ -283,16 +283,17 @@ def main():
             explicit_next=next((u for u in page_links if u not in visited),"")
             if explicit_next:
                 next_url=explicit_next
-            elif pages<12 and (new_count>0 or fallback_pagination_used):
+            elif pages<12:
                 listing_base=args.listing_url.split("?",1)[0]
                 fallback_url=f"{listing_base}?page={pages+1}"
                 if new_count>0:
                     empty_fallback_pages=0
                 else:
                     empty_fallback_pages+=1
-                # Some BBC listing pages can repeat or be sparse. Do not stop
-                # on the first page with no new IDs; probe one more page before
-                # declaring the sequential fallback exhausted.
+                # Probe the next conventional page even when an explicit
+                # pagination link led to a page with no new IDs. Otherwise a
+                # short/duplicated page can hide older episodes in page 3+.
+                # Stop only after two consecutive pages add no new episode IDs.
                 if fallback_url not in visited and empty_fallback_pages<2:
                     next_url=fallback_url
                     fallback_pagination_used=True
