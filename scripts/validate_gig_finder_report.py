@@ -104,6 +104,9 @@ def main() -> int:
     unchecked_sources = [row.get("venue", "") for row in source_coverage if row.get("outcome") in {"not_checked", "partial"}]
     if unchecked_sources:
         warnings.append(f"{len(unchecked_sources)} venue sources are partial or not checked: {', '.join(unchecked_sources[:8])}")
+    unverified_calendars = [row.get("venue", "") for row in source_coverage if (row.get("calendar_coverage_verified") or "").casefold() != "true"]
+    if unverified_calendars:
+        warnings.append(f"{len(unverified_calendars)} source calendars have not been independently verified; a fetched page is not proof of full calendar coverage.")
     unsearched_artists = [row.get("artist", "") for row in page_matches if (row.get("searched") or "").casefold() != "true"]
     if unsearched_artists:
         warnings.append(f"{len(unsearched_artists)} pool artists lack a completed captured-page search.")
