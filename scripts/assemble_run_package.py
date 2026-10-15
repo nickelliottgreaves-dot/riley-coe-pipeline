@@ -13,7 +13,7 @@ from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 EPISODE_FIELDS=["episode_date","source","url","tracklist_status","tracks_extracted","notes"]
 VENUE_FIELDS=["venue","checked","source_url","status","notes"]
-EVENT_FIELDS=["event_date","venue","event_title","artist","artist_role","source_url","verified","price","ticket_status","notes"]
+EVENT_FIELDS=["event_date","venue","event_title","artist","artist_role","source_url","verified","price","ticket_status","discovery_method","notes"]
 UNRESOLVED_FIELDS=["event_date","venue","event_title","artist_candidate","artist_role","source_url","price","ticket_status","discovery_method","notes"]
 MATCH_FIELDS=["event_artist","matched_pool_artist","candidate_pool_artist","match_type","source_url","verified","notes"]
 REGRESSION_FIELDS=["artist","searched","result","evidence_url","notes"]
