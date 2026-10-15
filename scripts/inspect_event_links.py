@@ -740,6 +740,22 @@ def event_matches_configured_venue(event, configured_venue):
     return True
 
 
+def page_explicitly_off_venue(page_title, page_url, configured_venue):
+    """Detect venue detail pages whose title/URL explicitly names another venue."""
+    title=str(page_title or "")
+    # Songkick detail titles commonly use "Artist Tickets, Venue, date – Songkick".
+    match=re.search(r"(?i)\\btickets,\\s*([^,]+),",title)
+    if match and not event_matches_configured_venue({"location":{"name":match.group(1)}},configured_venue):
+        return True
+    path=urlparse(str(page_url or "")).path.casefold()
+    slug_match=re.search(r"-at-([a-z0-9-]+)$",path)
+    if slug_match:
+        slug=slug_match.group(1).replace("-"," ")
+        if not event_matches_configured_venue({"location":{"name":slug}},configured_venue):
+            return True
+    return False
+
+
 def event_link_matches(candidate,href,text):
     key=lambda value: re.sub(r"[^a-z0-9]+","",str(value or "").casefold())
     title=key(candidate.get("event_title",""))
@@ -893,6 +909,9 @@ def main():
                 page_title=" ".join(" ".join(p.title).split())
                 snap_name=hashlib.sha1(url.encode()).hexdigest()[:14]+".txt"
                 (snapdir/snap_name).write_text("SOURCE: "+url+"\nVENUE: "+venue+"\n\n"+visible+"\n",encoding="utf-8")
+                if page_explicitly_off_venue(page_title,url,venue):
+                    all_rows.append({"venue":venue,"page_url":url,"http_status":status,"content_type":ctype,"page_title":page_title,"event_title":"","event_date":"","performer_names":"","price":"","currency":"","availability":"","event_jsonld_found":"false","visible_text_snapshot":f"snapshots/{snap_name}","verified":"false","status":"off_venue_page_excluded","notes":"Excluded: detail page explicitly identifies a different venue than the configured calendar."})
+                    continue
                 event_objects=[]
                 for raw in p.scripts:
                     try: data=json.loads(raw)
