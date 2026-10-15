@@ -332,5 +332,64 @@ Book Tickets
             self.assertEqual(audit["crawl_cap_reached"], "false")
 
 
+    def test_complete_in_window_jsonld_avoids_redundant_event_detail_crawl(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            links = root / "links.csv"
+            sources = root / "sources.csv"
+            out = root / "out"
+            event_objects = []
+            cards = []
+            anchors = []
+            for i in range(5):
+                event_objects.append({
+                    "@type": "MusicEvent",
+                    "name": f"Act {i} @ Wylam Brewery",
+                    "startDate": "2026-10-17",
+                    "performer": {"@type": "MusicGroup", "name": f"Act {i}"},
+                    "offers": {"price": "12.00", "priceCurrency": "GBP"},
+                })
+                cards.append(f"<p>Act {i}</p><p>Sat 17 Oct 2026</p><p>Wylam Brewery</p>")
+                anchors.append(f'<a href="/events/act-{i}">Act {i}</a>')
+            html = (
+                '<title>Wylam Brewery Events</title>'
+                '<script type="application/ld+json">' + json.dumps(event_objects) + '</script>'
+                + "".join(cards) + "".join(anchors)
+            )
+            with links.open("w", encoding="utf-8", newline="") as f:
+                w = csv.DictWriter(f, fieldnames=["venue", "candidate_url", "link_text"])
+                w.writeheader()
+                for i in range(5):
+                    w.writerow({
+                        "venue": "Wylam Brewery",
+                        "candidate_url": f"https://venue.example/events/act-{i}",
+                        "link_text": f"Act {i}",
+                    })
+            with sources.open("w", encoding="utf-8", newline="") as f:
+                w = csv.DictWriter(f, fieldnames=["venue", "source_url"])
+                w.writeheader()
+                w.writerow({"venue": "Wylam Brewery", "source_url": "https://venue.example/events/"})
+
+            fetched = []
+            def fake_fetch(url):
+                fetched.append(url)
+                if url == "https://venue.example/events/":
+                    return 200, "text/html", html, False
+                raise AssertionError("Redundant detail page fetched: " + url)
+
+            with patch("inspect_event_links.fetch", side_effect=fake_fetch):
+                with patch("sys.argv", [
+                    "inspect_event_links.py", "--links", str(links),
+                    "--sources", str(sources), "--out-dir", str(out),
+                    "--start", "2026-10-15", "--end", "2026-10-28",
+                    "--delay", "0",
+                ]):
+                    self.assertEqual(main(), 0)
+
+            self.assertEqual(fetched, ["https://venue.example/events/"])
+            summary = json.loads((out / "event_page_crawl_summary.json").read_text())
+            self.assertEqual(summary["pages_inspected"], 1)
+
+
 if __name__ == "__main__":
     unittest.main()
