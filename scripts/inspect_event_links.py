@@ -8,7 +8,7 @@ unverified. It records caps and errors so an incomplete crawl cannot look comple
 """
 from __future__ import annotations
 import argparse,csv,json,re,time,hashlib
-from datetime import datetime
+from datetime import date,datetime,timedelta
 from collections import deque,defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from html.parser import HTMLParser
@@ -244,6 +244,24 @@ def is_calendar_navigation(href,text,current_url=None):
         target_number=_pagination_number(target)
         return target_number == current_number + 1
     return path.rstrip("/") in {"/events","/event","/gigs","/gig","/whats-on","/whatson","/shows","/concerts"}
+
+def is_event_object(obj):
+    """Only treat schema.org Event subtypes as event records, not breadcrumbs or organisations."""
+    if not isinstance(obj,dict):
+        return False
+    types=obj.get("@type",[])
+    if isinstance(types,str):
+        types=[types]
+    return any(str(t).casefold().rstrip("/").endswith("event") for t in types)
+
+
+def event_link_matches(candidate,href,text):
+    key=lambda value: re.sub(r"[^a-z0-9]+","",str(value or "").casefold())
+    title=key(candidate.get("event_title",""))
+    if len(title)<4:
+        return False
+    return title in key(text) or title in key(href)
+
 
 def likely(href,text):
     """Identify links worth inspecting after a venue page is fetched."""
