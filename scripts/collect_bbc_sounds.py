@@ -18,8 +18,8 @@ from urllib.request import Request,urlopen
 ROOT_URL="https://www.bbc.co.uk"
 SERIES_URL="https://www.bbc.co.uk/programmes/m001mf2c/episodes"
 UA="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
-EP_FIELDS=["episode_date","episode_title","episode_url","listing_source_url","page_fetch_status","visible_tracklist_heading_detected","tracklist_status","notes"]
-LINK_FIELDS=["episode_url","episode_title","episode_date","source_url","tracklist_status","candidate_artists","snapshot_file","notes"]
+EP_FIELDS=["episode_date","episode_title","episode_url","radiofiles_app_url","listing_source_url","page_fetch_status","visible_tracklist_heading_detected","tracklist_status","notes"]
+LINK_FIELDS=["episode_url","episode_title","episode_date","radiofiles_app_url","source_url","tracklist_status","candidate_artists","snapshot_file","notes"]
 TRACK_FIELDS=["episode_date","episode_title","episode_url","track_title","artist_candidate","extraction_method","review_status","evidence_text","notes"]
 
 class TextParser(HTMLParser):
@@ -63,6 +63,14 @@ def parse_date(text):
         try: return datetime.strptime(" ".join(m.groups()),fmt).date().isoformat()
         except ValueError: pass
     return ""
+
+def radiofiles_app_url(url):
+    """Build the public RadioFiles episode deep-link from a BBC programme ID."""
+    pid=episode_id(url)
+    if not pid:
+        return ""
+    from urllib.parse import urlencode
+    return "https://radiofiles.io/app?"+urlencode({"show":"m001mf2c","pid":pid})
 
 def episode_id(url):
     m=re.search(r"/(?:programmes|sounds/play)/(m[0-9a-z]{7,})",url,re.I)
@@ -240,10 +248,10 @@ def main():
             candidates_found=extract_tracklist_candidates(p,text,url,ep["title"],dt)
             trackrows.extend(candidates_found)
             candidate_artist_names=sorted({r["artist_candidate"] for r in candidates_found},key=str.casefold)
-            rows.append({"episode_date":dt,"episode_title":ep["title"],"episode_url":url,"listing_source_url":ep["listing_source_url"],"page_fetch_status":page_status,"visible_tracklist_heading_detected":str(has_heading).lower(),"tracklist_status":state,"notes":(note+" " if note else "")+"Page access does not prove tracklist completeness; inspect saved visible-text snapshot and official page."})
-            linkrows.append({"episode_url":url,"episode_title":ep["title"],"episode_date":dt,"source_url":url,"tracklist_status":state,"candidate_artists":"; ".join(candidate_artist_names),"snapshot_file":str(snap.relative_to(out)),"notes":f"{len(candidates_found)} provisional track/artist candidates extracted where patterns matched; manually compare against complete visible tracklist."})
+            rows.append({"episode_date":dt,"episode_title":ep["title"],"episode_url":url,"radiofiles_app_url":radiofiles_app_url(url),"listing_source_url":ep["listing_source_url"],"page_fetch_status":page_status,"visible_tracklist_heading_detected":str(has_heading).lower(),"tracklist_status":state,"notes":(note+" " if note else "")+"Page access does not prove tracklist completeness; inspect saved visible-text snapshot and official page."})
+            linkrows.append({"episode_url":url,"episode_title":ep["title"],"episode_date":dt,"radiofiles_app_url":radiofiles_app_url(url),"source_url":url,"tracklist_status":state,"candidate_artists":"; ".join(candidate_artist_names),"snapshot_file":str(snap.relative_to(out)),"notes":f"{len(candidates_found)} provisional track/artist candidates extracted where patterns matched; manually compare against complete visible tracklist."})
         except (HTTPError,URLError,TimeoutError,OSError,ValueError) as exc:
-            rows.append({"episode_date":"","episode_title":ep["title"],"episode_url":url,"listing_source_url":ep["listing_source_url"],"page_fetch_status":"failed","visible_tracklist_heading_detected":"false","tracklist_status":"inaccessible","notes":f"{type(exc).__name__}: {exc}"})
+            rows.append({"episode_date":"","episode_title":ep["title"],"episode_url":url,"radiofiles_app_url":radiofiles_app_url(url),"listing_source_url":ep["listing_source_url"],"page_fetch_status":"failed","visible_tracklist_heading_detected":"false","tracklist_status":"inaccessible","notes":f"{type(exc).__name__}: {exc}"})
             errors.append(f"Episode {url}: {type(exc).__name__}: {exc}")
         time.sleep(.15)
     fields=EP_FIELDS
