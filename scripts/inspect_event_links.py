@@ -249,15 +249,16 @@ def extract_visible_listing_events(visible_text, default_venue=""):
         # Keep the full card title but expose likely artists separately for
         # pool matching (promoter prefix and event-series branding are stripped).
         billing=title
-        artist_text=re.split(r"(?i)\\bpresents:\\s*",billing,maxsplit=1)[-1]
+        artist_text=re.split(r"(?i)\bpresents:\s*",billing,maxsplit=1)[-1]
         artist_text=artist_text.split("//",1)[-1].strip()
-        primary_names=[part.strip(" -–—:") for part in re.split(r"\\s+\\+\\s+",artist_text) if part.strip(" -–—:")]
+        artist_text=re.sub(r"(?i)^(?:mercury prize fringe|fresh thursday)\s*:\s*","",artist_text)
+        primary_names=[part.strip(" -–—:") for part in re.split(r"\s+\+\s+",artist_text) if part.strip(" -–—:")]
         performers=list(dict.fromkeys(primary_names or [title]))
         performers.extend(supports)
         price=""
         for line_after in lines[j:min(len(lines),j+6)]:
             if date_pattern.search(line_after): break
-            match_price=re.search(r"£\\s?\\d+(?:\\.\\d{1,2})?(?:\\s*[-–]\\s*£?\\s?\\d+(?:\\.\\d{1,2})?)?",line_after)
+            match_price=re.search(r"£\s?\d+(?:\.\d{1,2})?(?:\s*[-–]\s*£?\s?\d+(?:\.\d{1,2})?)?",line_after)
             if match_price:
                 price=match_price.group(0).replace(" ","")
                 break
