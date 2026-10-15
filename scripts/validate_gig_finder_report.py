@@ -73,10 +73,11 @@ def main() -> int:
         page_matches = read_csv(run_dir / "artist_pool_page_matches.csv")
         event_coverage = read_csv(run_dir / "artist_window_event_coverage.csv")
         matches = read_csv(run_dir / "artist_window_event_matches.csv")
+        out_of_scope = read_csv(run_dir / "out_of_scope_event_candidates.csv")
         read_csv(run_dir / "stage_results.csv")
     except (OSError, csv.Error, ValueError) as exc:
         errors.append(str(exc))
-        sources, pool, source_coverage, page_matches, event_coverage, matches = [], [], [], [], [], []
+        sources, pool, source_coverage, page_matches, event_coverage, matches, out_of_scope = [], [], [], [], [], [], []
 
     def check_exact_coverage(label: str, expected_names: list[str], rows: list[dict[str, str]], field: str) -> None:
         expected = [normalize_key(name) for name in expected_names if normalize_key(name)]
@@ -139,6 +140,7 @@ def main() -> int:
         "page_search_rows": len(page_matches),
         "event_comparison_rows": len(event_coverage),
         "candidate_match_rows": len(matches),
+        "out_of_scope_event_rows": len(out_of_scope),
         "errors": errors,
         "warnings": warnings,
         "important_limit": "Valid package structure does not prove exhaustive calendar coverage or independently verified gigs.",
