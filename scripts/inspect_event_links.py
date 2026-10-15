@@ -734,9 +734,9 @@ def is_external_event_detail_url(value: str) -> bool:
     if len(segments) < 2:
         return False
     if host.endswith(("eventbrite.co.uk", "eventbrite.com")):
-        return path.startswith("/e/") and len(segments) >= 3
+        return path.startswith("/e/") and len(segments) >= 2
     if host.endswith("universe.com"):
-        return path.startswith("/events/") and len(segments) >= 3
+        return path.startswith("/events/") and len(segments) >= 2
     if host.endswith("seetickets.com"):
         return path.startswith("/event/") and len(segments) >= 3
     if host.endswith("wegottickets.com"):
@@ -850,9 +850,9 @@ def main():
             visited.add(url)
             try:
                 status,ctype,html,truncated=fetch(url)
+                if "html" not in ctype.lower(): raise ValueError("Non-HTML response")
                 if urlparse(url).netloc.casefold().removeprefix("www.") != official_host.casefold().removeprefix("www."):
                     external_pages_inspected += 1
-                if "html" not in ctype.lower(): raise ValueError("Non-HTML response")
                 p=Parser(); p.feed(html); visible="\n".join(p.text)
                 # HTTP 202 is not proof that a usable page was served. Some
                 # anti-bot/JS shells return an empty HTML body with no event
