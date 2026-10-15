@@ -16,7 +16,7 @@ User explicitly wants frank status updates if things are not going to plan, no e
 - Repository: `nickelliottgreaves-dot/riley-coe-pipeline`
 - Reference/legacy development branch: `rebuild/core-gig-finder`
 - New redesign branch: `redesign/workflow-contract`
-- Last pre-sweep code/workflow commit: `b1cd880809ad1ca66c2ad0ee9ceae129f873fd69` (the following handover commit intentionally triggers the first independent full sweep).
+- Last tested implementation commit: `1701aed490bbbfd86b482ac11964c1e01e7b000a` (**121 tests passed**); the following handover commit intentionally triggers the second independent full sweep after source-scope fixes.
 - Authoritative pool: `data/artist_pool.csv`, 833 unique names.
 - Backup: `data/artist_pool_backup_20261015.csv` (preserves 747-row baseline).
 - Dated update audit says 86 additions came from eight exact BBC/RadioFiles full-tracklist matches; three mismatched episodes and 15 fuzzy-name collisions remained review-only.
@@ -48,13 +48,34 @@ Another older run [38732211948](https://github.com/nickelliottgreaves-dot/riley-
    - shared manifest builder with required fields always present and explicit `unknown/not established` previous-run value.
 4. Added `tests/test_workflow_contract.py` for 28-day date math, minimum window enforcement, manifest fields, and current registry/pool consistency.
 5. Independent inspection of current registry data confirmed 20 source rows, 20 mandatory rows, no venue-key mismatches and 833 pool names with no duplicates under the new normalization check. This was a data inspection, not yet a passing automated test run.
-6. Latest normal-push test run [38732937472](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38732937472) succeeded: **116 unit tests passed**, including the new contract, candidate-runner coverage and report-validator tests; artist-pool validation also passed. All collection jobs were skipped on this ordinary push, confirming the redesign branch no longer launches public-source scrapes for every small code change. Earlier runs were cancelled before tests started; do not count those as test results.
+6. Latest normal-push test run [38734218011](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38734218011) succeeded: **121 unit tests passed** and artist-pool validation passed. Ordinary pushes skip public-source collection on the redesign branch.
 
 
 7. Added `scripts/run_gig_finder.py`, an independent orchestration path that uses the shared contract, attempts all 20 sources, preserves stage logs, compares the full pool, emits explicit per-source and per-artist outcomes, and creates a PARTIAL report even when individual collection stages fail.
 8. Added `scripts/validate_gig_finder_report.py` to check the new report schema and require one coverage row per configured source and pool artist, without claiming exhaustive coverage.
 9. Added tests for coverage semantics and report integrity. Latest successful normal-push run: 116 tests passed (run 38732937472).
 10. Changed the redesign branch workflow so legacy all-in-one full-sweep jobs do not run on `redesign/workflow-contract`; the new independent gig finder is the only collector job intended to run on that branch during an explicit full sweep.
+
+
+## First independent live sweep: structural pass, correctness failure
+
+Run [38733027855](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38733027855) completed successfully at the job level and produced a structurally valid PARTIAL report for 2026-10-15 through 2026-11-11:
+- 20 configured source rows and 20 venue coverage rows.
+- 833 pool artists; 833 page-search rows and 833 dated-event comparison rows.
+- 580 pages inspected, 4 page failures and 2 venue crawl caps.
+- 34 candidate match rows, 14 pool artists with matches, 0 verified events.
+- The initial validator reported only four partial/not-checked sources; a later audit found that it was not warning clearly enough that **all 20 calendars remained independently unverified**. This warning has been corrected.
+- **Critical correctness defect found:** many of the 34 matches were false positives. The Songkick Cluny/Cluny 2 venue crawls followed city metro-area and artist pages, then attributed those unrelated events to Cluny/Cluny 2. Examples included Arab Strap at Howard Assembly Room, A Certain Ratio at Brudenell Social Club, and acts at Brighton/Edinburgh venues. The crawler also emitted duplicate event/artist matches from discovery and inspection.
+- The first report must not be used as a gig recommendation list. Its value was diagnostic: it exposed a source-scope bug that green jobs and schema validation alone did not catch.
+
+### Fixes now on the redesign branch (tested)
+
+- `scripts/inspect_event_links.py` restricts Songkick crawling to the configured venue calendar and concert URLs explicitly associated with that venue; metro-area and artist pages are rejected. External skipped links remain counted in the audit.
+- `scripts/match_pool_to_window_events.py` checks an explicit `@ Venue` suffix against the configured local venue registry, excludes non-local locations into `out_of_scope_event_candidates.csv`, corrects known local venue labels, and deduplicates same-event matches across source URLs while preferring detail-page evidence.
+- `scripts/run_gig_finder.py` now records accurate page-fetch outcomes, source-outcome counts and out-of-scope candidate counts.
+- `scripts/validate_gig_finder_report.py` explicitly warns when source calendars have not been independently verified.
+- Regression tests cover Songkick metro/artist-page exclusion, explicit non-local venue rejection, local venue correction, duplicate event collapse and out-of-scope audit output.
+- Latest tested code commit `1701aed490bbbfd86b482ac11964c1e01e7b000a`: 121 tests passed in run 38734218011.
 
 ## Key redesign decision
 
@@ -77,9 +98,9 @@ Do not patch the legacy assembler/validator separately again. Build two independ
 
 ## Current immediate next actions
 
-1. **Immediate:** this handover commit intentionally includes `[full-sweep]` to trigger the first live run of `scripts/run_gig_finder.py` on the redesign branch. Check its run ID and artifact; the old all-in-one collection jobs must be skipped on this branch.
-2. Inspect the new report artifact and run logs. Verify all 20 source rows and 833 artist coverage rows exist; inspect any stage failures, empty source results, crawl caps and candidate links. Do not call the report complete.
-3. Fix only reproducible defects from that run, add regression tests, and rerun the full sweep.
+1. **Immediate:** this handover commit intentionally includes `[full-sweep]` to trigger the second live run of `scripts/run_gig_finder.py` on the redesign branch. Check its run ID and artifact; the old all-in-one collection jobs must be skipped on this branch.
+2. Inspect the report and out-of-scope audit. Confirm that no event at an unrelated city/venue is attributed to Cluny/Cluny 2, duplicates are reduced, all 20 source rows and 833 artist coverage rows exist, and the validator warns that calendar coverage remains unverified. Do not call the report complete.
+3. If the fix behaves correctly, add no more speculative parser changes. Use the observed matches for targeted event-by-event verification and document any remaining specific defect with a regression test.
 4. Audit the remaining legacy scripts against `docs/WORKFLOW_REDESIGN_SPEC.md`; keep `scripts/run_core_search.py` as reference only because it covers nine core venues, not the required 20.
 5. After the candidate finder has a reliable partial-report contract, implement and test the separate BBC/RadioFiles artist-pool updater. Do not wire the legacy assembler into the new path.
 6. After each meaningful stage, update this handover with latest run ID/conclusion, tests, blockers and exact next action. Never add `[full-sweep]` to ordinary documentation or code commits unless a live scrape is intentional.
