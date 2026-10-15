@@ -12,6 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 POOL = ROOT / "data" / "artist_pool.csv"
 VENUES = ROOT / "config" / "definitive_venues.csv"
 SOURCES = ROOT / "config" / "hybrid_venue_sources.csv"
+SECONDARY = ROOT / "config" / "hybrid_secondary_sources.csv"
 FIXTURES = ROOT / "tests" / "fixtures" / "known_gig_regressions.csv"
 
 EXPECTED_VENUES = {
@@ -54,7 +55,7 @@ def norm(value: str) -> str:
 
 def main() -> int:
     problems: list[str] = []
-    for path in (POOL, VENUES, SOURCES, FIXTURES):
+    for path in (POOL, VENUES, SOURCES, SECONDARY, FIXTURES):
         if not path.is_file():
             problems.append(f"Required file missing: {path.relative_to(ROOT)}")
     if problems:
@@ -64,6 +65,7 @@ def main() -> int:
     pool_rows = read_csv(POOL)
     venue_rows = read_csv(VENUES)
     source_rows = read_csv(SOURCES)
+    secondary_rows = read_csv(SECONDARY)
     fixture_rows = read_csv(FIXTURES)
 
     pool_names = {norm(row.get("artist", "")) for row in pool_rows if row.get("artist", "").strip()}
@@ -85,6 +87,13 @@ def main() -> int:
     invalid_sources = [row.get("venue", "") for row in source_rows if not row.get("source_url", "").strip().startswith(("https://", "http://"))]
     if invalid_sources:
         problems.append("Invalid/missing HTTP(S) source URLs: " + ", ".join(invalid_sources))
+    secondary_names = [row.get("venue", "").strip() for row in secondary_rows]
+    secondary_set = set(secondary_names)
+    if len(secondary_rows) != 18 or secondary_set != EXPECTED_VENUES or len(secondary_set) != len(secondary_rows):
+        problems.append(f"Secondary source registry mismatch: {len(secondary_rows)} rows, {len(secondary_set)} unique names.")
+    invalid_secondary = [row.get("venue", "") for row in secondary_rows if not row.get("source_url", "").strip().startswith(("https://", "http://"))]
+    if invalid_secondary:
+        problems.append("Invalid/missing secondary HTTP(S) source URLs: " + ", ".join(invalid_secondary))
     if len(fixture_rows) != 5 or fixture_keys != EXPECTED_FIXTURES:
         problems.append(f"Known-gig regression fixture mismatch: {len(fixture_rows)} rows.")
     missing_artists = sorted(
@@ -101,6 +110,7 @@ def main() -> int:
         "artist_pool_rows": len(pool_rows),
         "venue_rows": len(venue_rows),
         "compatible_source_rows": len(source_rows),
+        "secondary_source_rows": len(secondary_rows),
         "known_gig_fixtures": len(fixture_rows),
         "known_fixture_performers_in_pool": len(EXPECTED_FIXTURES) - len(missing_artists),
         "problems": problems,
