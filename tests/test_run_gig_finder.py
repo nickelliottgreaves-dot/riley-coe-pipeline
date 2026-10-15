@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from scripts.run_gig_finder import combine_venue_coverage
+from scripts.run_gig_finder import combine_venue_coverage, prepare_source_registry
 
 
 class GigFinderCoverageTests(unittest.TestCase):
@@ -34,6 +34,38 @@ class GigFinderCoverageTests(unittest.TestCase):
         self.assertEqual(row["outcome"], "checked_in_captured_scope")
         self.assertNotIn("no relevant events", row["outcome"])
         self.assertEqual(row["calendar_coverage_verified"], "false")
+
+
+    def test_simulated_failure_changes_only_collector_copy_not_authoritative_registry(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            sources = root / "sources.csv"
+            with sources.open("w", encoding="utf-8", newline="") as handle:
+                writer = csv.DictWriter(handle, fieldnames=["venue", "source_url", "source_status", "notes"])
+                writer.writeheader()
+                writer.writerow({"venue": "Venue A", "source_url": "https://example.test/a", "source_status": "official", "notes": ""})
+                writer.writerow({"venue": "Venue B", "source_url": "https://example.test/b", "source_status": "official", "notes": ""})
+            copied, selected = prepare_source_registry(sources, root, "Venue A")
+            self.assertEqual(selected, "Venue A")
+            with copied.open(encoding="utf-8-sig", newline="") as handle:
+                rows = {row["venue"]: row for row in csv.DictReader(handle)}
+            self.assertEqual(rows["Venue A"]["source_url"], "http://127.0.0.1:9/simulated-source-failure")
+            self.assertEqual(rows["Venue A"]["source_status"], "simulated_failure")
+            self.assertEqual(rows["Venue B"]["source_url"], "https://example.test/b")
+            with sources.open(encoding="utf-8-sig", newline="") as handle:
+                original = {row["venue"]: row for row in csv.DictReader(handle)}
+            self.assertEqual(original["Venue A"]["source_url"], "https://example.test/a")
+
+    def test_simulated_failure_requires_exactly_one_configured_venue(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            sources = root / "sources.csv"
+            with sources.open("w", encoding="utf-8", newline="") as handle:
+                writer = csv.DictWriter(handle, fieldnames=["venue", "source_url", "source_status", "notes"])
+                writer.writeheader()
+                writer.writerow({"venue": "Venue A", "source_url": "https://example.test/a", "source_status": "official", "notes": ""})
+            with self.assertRaises(ValueError):
+                prepare_source_registry(sources, root, "Missing Venue")
 
 
 if __name__ == "__main__":
