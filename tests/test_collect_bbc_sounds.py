@@ -2,7 +2,7 @@ import sys,unittest, json, tempfile
 from pathlib import Path
 from unittest.mock import patch
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/"scripts"))
-from collect_bbc_sounds import episode_id,find_episodes,parse_date,TextParser,extract_tracklist_candidates,main
+from collect_bbc_sounds import episode_id,find_episodes,parse_date,TextParser,extract_tracklist_candidates,main,radiofiles_app_url
 
 class BBCCollectorTests(unittest.TestCase):
     def test_sequential_page_fallback_finds_more_bbc_episodes(self):
@@ -28,6 +28,17 @@ class BBCCollectorTests(unittest.TestCase):
             self.assertEqual(summary["listing_pages_fetched"], 3)
             self.assertEqual(summary["episodes_discovered"], 2)
             self.assertEqual(summary["listing_pagination_status"], "sequential_page_fallback_exhausted")
+
+    def test_radiofiles_deep_link_uses_series_and_episode_ids(self):
+        self.assertEqual(
+            radiofiles_app_url("https://www.bbc.co.uk/programmes/m0032d4c"),
+            "https://radiofiles.io/app?show=m001mf2c&pid=m0032d4c"
+        )
+        self.assertEqual(
+            radiofiles_app_url("https://www.bbc.co.uk/sounds/play/m0032d2m"),
+            "https://radiofiles.io/app?show=m001mf2c&pid=m0032d2m"
+        )
+        self.assertEqual(radiofiles_app_url("https://example.com/no-bbc-id"), "")
 
     def test_episode_id(self):
         self.assertEqual(episode_id("https://www.bbc.co.uk/programmes/m0031tk4"),"m0031tk4")
