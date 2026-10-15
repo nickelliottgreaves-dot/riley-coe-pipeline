@@ -973,7 +973,7 @@ def main():
                 if not event_objects:
                     # Do not let a generic title/date parser reintroduce a match after
                     # structured data has explicitly identified a different venue.
-                    external_city_in_title=bool(re.search(r"\\b(london|carlisle|kendal|middlesbrough|manchester|birmingham|edinburgh|glasgow|leeds)\\b",page_title.casefold()))
+                    external_city_in_title=bool(re.search(r"\b(london|carlisle|kendal|middlesbrough|manchester|birmingham|edinburgh|glasgow|leeds)\b",page_title.casefold()))
                     visible_event=None if (off_scope_structured_event_seen or (not is_calendar_page and external_city_in_title and not venue_scope_matches(page_title,venue))) else extract_visible_event(page_title,visible,venue,url)
                     visible_event_found=visible_event is not None
                     # Prefer a structured visible calendar card over a generic
