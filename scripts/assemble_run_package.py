@@ -343,6 +343,11 @@ def main():
     write_csv(out/"pool_matches.csv",MATCH_FIELDS,[])
     # Run matcher to ensure every candidate artist has a corresponding pool comparison.
     subprocess.run([sys.executable,str(ROOT/"scripts/match_event_artists.py"),"--events",str(out/"events.csv"),"--pool",str(args.pool),"--aliases",str(ROOT/"config/artist_aliases.csv"),"--out",str(out/"pool_matches.csv")],check=True)
+    pool_match_rows=read_csv(out/"pool_matches.csv",MATCH_FIELDS)
+    event_artist_names={normalize_artist(row.get("artist","")) for row in events if normalize_artist(row.get("artist",""))}
+    compared_event_artist_names={normalize_artist(row.get("event_artist","")) for row in pool_match_rows if normalize_artist(row.get("event_artist",""))}
+    event_artist_comparison_complete=event_artist_names.issubset(compared_event_artist_names)
+    artist_pool_compared=bool(pool_seed) and pool_page_search_complete and event_artist_comparison_complete
     # Also publish the dated filenames used by the weekly research workflow.
     run_day=date.today().isoformat()
     dated_exports={
@@ -375,13 +380,13 @@ def main():
     missing_inputs=[r["input_name"] for r in input_audit if r["status"] in {"missing","not_supplied"}]
     manifest={"run_date":date.today().isoformat(),"window_start":start.isoformat(),"window_end":end.isoformat(),
               "previous_successful_run":args.previous_successful_run,"claimed_status":"PARTIAL",
-              "episode_coverage_complete":False,"venue_sweep_complete":False,"artist_pool_compared":False,"artist_pool_compared_against_captured_pages":pool_page_search_complete,"all_event_sources_verified":False,
+              "episode_coverage_complete":False,"venue_sweep_complete":False,"artist_pool_compared":artist_pool_compared,"artist_pool_compared_against_captured_pages":pool_page_search_complete,"all_event_sources_verified":False,
               "researcher_notes":"Automatically assembled evidence scaffold. Regression artists were searched in the captured page corpus; negative results are bounded to those snapshots. BBC/RadioFiles tracklist mismatches, event detail pages, supports, prices/ticket status, full venue coverage and safety-net searches still require verification.",
               "package_kind":"candidate_scaffold","source_episode_rows":len(episode_rows),"candidate_event_rows":len(events),"unresolved_event_candidates":len(unresolved),
-              "mandatory_venue_rows":len(venue_rows),"venue_calendar_checks_completed":0,"regression_artists_seeded":len(regression_rows),"regression_artist_checks_completed":regression_completed,"artist_pool_page_search_rows":len(pool_page_rows),"artist_pool_page_search_completed":pool_page_search_completed,"artist_pool_page_text_matches":pool_page_match_count,
+              "mandatory_venue_rows":len(venue_rows),"venue_calendar_checks_completed":0,"artist_pool_compared":artist_pool_compared,"event_artist_comparison_complete":event_artist_comparison_complete,"regression_artists_seeded":len(regression_rows),"regression_artist_checks_completed":regression_completed,"artist_pool_page_search_rows":len(pool_page_rows),"artist_pool_page_search_completed":pool_page_search_completed,"artist_pool_page_text_matches":pool_page_match_count,
               "input_file_audit":"input_file_audit.csv","venue_discovery_coverage":"venue_discovery_coverage.csv","tracklist_candidate_review":"tracklist_candidate_review.csv","dated_exports":list(dated_exports)+[dedup_path.name],"missing_or_unsupplied_inputs":missing_inputs,"input_files_present":sum(r["status"]=="present" for r in input_audit)}
     (out/"run_manifest.json").write_text(json.dumps(manifest,indent=2)+"\n",encoding="utf-8")
-    summary={"output_directory":str(out),"status":"PARTIAL","episode_rows":len(episode_rows),"event_candidate_rows":len(events),"unresolved_event_candidates":len(unresolved),"mandatory_venue_rows":len(venue_rows),"regression_artists_seeded":len(regression_rows),"regression_artist_checks_completed":regression_completed,"artist_pool_page_search_rows":len(pool_page_rows),"artist_pool_page_search_completed":pool_page_search_completed,"artist_pool_page_text_matches":pool_page_match_count,"complete_claimed":False,"missing_or_unsupplied_inputs":missing_inputs}
+    summary={"output_directory":str(out),"status":"PARTIAL","episode_rows":len(episode_rows),"event_candidate_rows":len(events),"unresolved_event_candidates":len(unresolved),"mandatory_venue_rows":len(venue_rows),"artist_pool_compared":artist_pool_compared,"event_artist_comparison_complete":event_artist_comparison_complete,"regression_artists_seeded":len(regression_rows),"regression_artist_checks_completed":regression_completed,"artist_pool_page_search_rows":len(pool_page_rows),"artist_pool_page_search_completed":pool_page_search_completed,"artist_pool_page_text_matches":pool_page_match_count,"complete_claimed":False,"missing_or_unsupplied_inputs":missing_inputs}
     (out/"package_assembly_summary.json").write_text(json.dumps(summary,indent=2)+"\n",encoding="utf-8")
     print(json.dumps(summary,indent=2))
     return 0
