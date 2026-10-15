@@ -103,6 +103,22 @@ Audition for the Newcastle University Symphony Orchestra!"""
         self.assertEqual(rows[1]["venue"], "Cluny 2")
         self.assertEqual(rows[2]["event_title"], "Discharge")
 
+    def test_listing_parser_skips_generic_cta_and_availability_labels(self):
+        visible = """Allie X
+More Info
+Mon 26 Oct 2026
+Sage Two
+Tickets
+The Strokes
+Limited Availability
+Sun 25 Oct 2026
+Utilita Arena Newcastle
+Tickets"""
+        rows = extract_visible_listing_events(visible)
+        self.assertEqual([r["event_title"] for r in rows], ["Allie X", "The Strokes"])
+        self.assertNotIn("More Info", [r["event_title"] for r in rows])
+        self.assertNotIn("Limited Availability", [r["event_title"] for r in rows])
+
     def test_crawl_prioritizes_official_calendar_and_only_in_window_details(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp)
