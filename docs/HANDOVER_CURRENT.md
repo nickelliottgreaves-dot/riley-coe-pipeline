@@ -451,4 +451,12 @@ Implemented on `redesign/workflow-contract`:
 
 Latest tests-only run [38743726417](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38743726417) passed: **140 tests**, including the new distinction between external ticket failures and calendar-capture failures.
 
-This handover commit intentionally triggers a live full sweep. Inspect the artifact and confirm that the new columns reconcile with the failure ledger, the six external-ticket-heavy venues are no longer mislabelled as calendar-capture failures, Cobalt remains partial for its internal failure, and the report remains PARTIAL with all 20 calendar-verification flags false.
+Normal live sweep [38743825036](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38743825036) passed with the revised semantics:
+- 20/20 source coverage rows, 847/847 artist comparisons, seven candidates, zero out-of-scope matches, zero verified automated rows.
+- 21 failure-ledger rows exactly match 21 crawl-audit failures; the three media assets are no longer counted.
+- Coverage outcomes are now 19 `checked_in_captured_scope`, one `partial` (Cobalt Studios, due to a same-host 404). The 20 external ticket-page failures remain explicitly counted (five Boiler Shop, three Cumberland Arms, six NX Newcastle, five Central Gateshead, one The Globe) but no longer mislabel the venue calendar capture as failed.
+- All 20 calendar-completeness flags remain false; the report status remains PARTIAL.
+
+The main-branch deployment path has also been prepared in `.github/workflows/validate.yml`: the new independent gig finder and review-only artist updater are enabled on `main` as well as the redesign branch, while the legacy all-in-one jobs are isolated to `rebuild/core-gig-finder`. Regression tests enforce those trigger conditions. Latest test run [38744373253](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38744373253) passed: **143 tests**.
+
+This handover commit intentionally triggers the final simulated-Cobalt acceptance run against the latest code and trigger conditions. Confirm the run remains PARTIAL, the Cobalt outage is recorded in the failure ledger, counts reconcile, and no external-ticket-only venue is mislabeled as a calendar-capture failure. If it passes, prepare a review PR from `redesign/workflow-contract` to `main`; do not merge without the user's approval.
