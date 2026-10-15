@@ -184,6 +184,18 @@ Run [38737840049](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/a
 - Artifact: `riley-coe-independent-gig-finder-38737840049` (artifact ID `11974723379`). Artist-updater artifact: `riley-coe-artist-pool-updater-38737840049` (artifact ID `11974303383`); it preserves the 847-row pool, reports 8 exact episode matches, 3 mismatches, 1 episode without a cross-check, zero new additions and one held identity collision.
 
 
+
+## Simulated failure with external ticket pages: report passed; one stale test was fixed
+
+Run [38738353461](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38738353461) exercised the new external-ticketing crawler with Cobalt Studios deliberately failing. The gig-finder job and report validator succeeded:
+- 20/20 source coverage rows and 847/847 artist rows in both comparisons.
+- Six candidate matches, 11 allowlisted external event pages inspected, 76 external seed links skipped, zero crawl caps.
+- Cobalt Studios marked partial; the venue inventory and event discovery stages exited non-zero as intended, while inspection/matching/assembly continued.
+- All 20 venue crawl-audit rows now contain the updated note describing the bounded external ticket-page allowlist; no stale “external ticketing hosts are not crawled” notes remain.
+
+The overall workflow run was red only because an older unit test still expected the superseded audit-note wording. That test was updated in commit `8621174bc0`; latest test run [38738382257](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38738382257) passed **132 tests**. This means the failure-simulation acceptance needs one clean rerun with the updated test, which the next handover commit triggers.
+
+
 ## Key redesign decision
 
 Do not patch the legacy assembler/validator separately again. Build two independent processes around one contract:
@@ -205,8 +217,8 @@ Do not patch the legacy assembler/validator separately again. Build two independ
 
 ## Current immediate next actions
 
-1. **Immediate:** this handover commit includes `[full-sweep] [simulate-source-failure]` to rerun the deliberate Cobalt Studios failure on the current code and 847-row pool. Confirm 20 venue rows and 847 rows for both artist comparisons; Cobalt must be partial; package validation must pass; and per-venue audit notes must no longer claim external ticket pages are never crawled.
-2. The clean normal sweep [38737840049](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38737840049) has 6 candidates and 11 external event pages inspected. Confirm the simulation preserves the same local-only safeguards and six-page cap.
+1. **Immediate:** this handover commit includes `[full-sweep] [simulate-source-failure]` to rerun the deliberate Cobalt Studios failure on the current code and 847-row pool after the stale test was fixed. Require all jobs, including unit tests, to pass; the report must contain 20 source rows and 847 rows for both artist comparisons, mark Cobalt partial, and pass validation.
+2. Confirm the clean normal sweep [38737840049](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38737840049) remains the live baseline: 6 candidates and 11 external event pages inspected, no out-of-scope matches, 0 verified by the automated runner.
 3. Improve source-level completeness, especially venues where a fetched landing page has no dated event rows (Cumberland Arms, Little Buildings, Lubber Fiend, ZEROX, NUSU and others). Use concrete source evidence and keep calendar coverage false unless pagination/coverage is established.
 4. Keep the three mismatch-episode candidates held; resolve The Headcoatees vs Thee Headcoatees only with reliable source evidence. The 14 `ADD_TO_POOL` decisions have explicit track/source rationale in the manual review CSV.
 5. Resolve the remaining Cluny issue: Ticketmaster's venue calendar corroborates Barbican Estate's date and venue, but the official Cluny event page is still unconfirmed; retain third-party-only status and unknown price/ticket status until better evidence is found.
