@@ -7,7 +7,7 @@ from inspect_event_links import extract_visible_event, extract_visible_listing_e
 class EventPageCrawlerTests(unittest.TestCase):
     def test_calendar_pagination_is_prioritized_over_detail_pages(self):
         self.assertTrue(is_calendar_navigation("/gigs/page/2/", "Next"))
-        self.assertTrue(is_calendar_navigation("/events/?page=3", "3"))
+        self.assertTrue(is_calendar_navigation("/events/?page=3", "3", "https://example.com/events/?page=2"))
         self.assertFalse(is_calendar_navigation("/listing/ben-quad/", "Ben Quad"))
         self.assertFalse(is_calendar_navigation("/events/ben-quad/", "Ben Quad"))
 
