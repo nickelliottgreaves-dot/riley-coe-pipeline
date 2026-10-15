@@ -72,9 +72,16 @@ def likely(href,text):
     return bool(re.search(r"event|gig|show|concert|ticket|whats-on|whatson|live-music|performance|listing|page=|next|older",href+" "+text,re.I))
 
 def is_calendar_navigation(href,text):
-    """Prioritize calendar pages and pagination over individual event details."""
+    """Prioritize true calendar and pagination links, not every event detail URL."""
+    path=urlparse(href).path.casefold()
     blob=(href+" "+text).casefold()
-    return bool(re.search(r"(?:[?&](?:page|paged|month|year)=|/page/|/date/|/calendar/|/events?/|/gigs?/|next|older|previous|\b\d+\s*$)",blob))
+    if re.search(r"[?&](?:page|paged|month|year)=",href,re.I):
+        return True
+    if re.search(r"/(?:page|date|calendar)/",path):
+        return True
+    if path.rstrip("/") in {"/events","/event","/gigs","/gig","/whats-on","/whatson","/shows","/concerts"}:
+        return True
+    return bool(re.search(r"\\b(next|older|previous|newer)\\b",blob))
 
 def main():
     ap=argparse.ArgumentParser()
