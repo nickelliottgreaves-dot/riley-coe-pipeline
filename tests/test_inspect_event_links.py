@@ -105,6 +105,19 @@ Mercury Prize Fringe: Ancient Infinity Orchestra + Weston (DJ)
         self.assertEqual(rows[2]["performer_names"], "Ancient Infinity Orchestra; Weston (DJ)")
         self.assertEqual(rows[2]["price"], "£0-12")
 
+    def test_venue_homepage_title_is_not_misclassified_as_an_event(self):
+        visible = """SOURCE: https://www.boilershop.net/
+VENUE: Boiler Shop
+Boiler Shop
+Events
+The Wedding Present
+Fri
+23 Oct
+'
+26
+7:00 pm"""
+        self.assertIsNone(extract_visible_event("Boiler Shop", visible, "Boiler Shop"))
+
     def test_extracts_unlabelled_boiler_shop_date_and_support_billing(self):
         visible = """SOURCE: https://www.boilershop.net/events/the-wedding-present-23-10-26
 VENUE: Boiler Shop
