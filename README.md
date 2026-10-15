@@ -4,7 +4,7 @@ Private repository for building an auditable, fail-closed weekly Riley & Coe art
 
 ## Current milestone
 
-This repository contains the 747-row artist-pool seed, a mandatory venue registry, a fail-closed evidence validator, regression tests, and scheduled/manual collectors for Mixcloud episode inventory, BBC Sounds episode inventory and provisional track candidates, official venue page discovery, and bounded event-page inspection. The assembler creates a dated `PARTIAL` evidence package and exports the requested CSV families.
+This repository contains a versioned artist pool, a mandatory venue registry, a fail-closed evidence validator, regression tests, and scheduled/manual collectors for official BBC Sounds episode pages, RadioFiles tracklist fallback, official venue page discovery, and bounded event-page inspection. BBC and RadioFiles tracklists are cross-checked before any new artist can be proposed for the pool. The assembler creates a dated `PARTIAL` evidence package and exports the requested CSV families.
 
 **Important limitation:** this is still not a complete weekly gig-research service. The collectors do not prove full tracklist or venue-calendar coverage, do not reliably extract all support acts, and do not complete independent safety-net searches. No run may be described as complete until the evidence is reviewed and the validator passes.
 
@@ -33,17 +33,13 @@ The second command is expected to fail until a genuine evidence package exists. 
 
 The validator checks submitted evidence; it cannot prove that the internet was searched exhaustively. Research coverage must therefore include source URLs and explicit per-venue/per-episode outcomes. The collector phase will need to record collection failures and use independent source coverage, not merely set booleans to true.
 
-## First collector milestone: Mixcloud inventory
+## Episode-source contract: BBC Sounds + RadioFiles
 
-The scheduled/manual workflow now runs `scripts/collect_mixcloud.py` against the public Mixcloud API account `SixMusicAlternative` for the preceding seven days and stores a downloadable Actions artifact containing:
-- `mixcloud_episode_inventory.csv`
-- `mixcloud_api_track_candidates.csv`
-- `mixcloud_collection_audit.json`
+The weekly workflow uses BBC Sounds and RadioFiles only. The official BBC Sounds collector discovers Riley & Coe episode pages, preserves visible-text snapshots and raw HTML, and extracts the official embedded `aod_tracks` module where present. The player URL (`/sounds/play/<pid>`) is preferred because the programme metadata page may expose only a partial visible list. Future or unavailable player pages fall back to the official programme page without being treated as complete tracklists.
 
-This is deliberately a discovery inventory, not a claim that tracklists are complete. API sections are labelled as candidates requiring visible-page verification; absent sections are marked unavailable. The search fallback uses Mixcloud’s documented `q`/`type` search parameters and applies the requested date window locally, rather than sending list-connection date filters to search. If the account endpoint and API search return no candidates, the collector also probes public profile and public site-search HTML for dated Riley & Coe show links; these remain candidates and must be verified. BBC Sounds inventory is handled separately by `scripts/collect_bbc_sounds.py`. Venue research is also handled by separate candidate-discovery and event-page inspection stages. The full-run validator remains a separate fail-closed gate.
+RadioFiles is a fallback and cross-check source, not an authority by itself. The workflow preserves each RadioFiles episode/tracklist response, reconciles artist candidates against the pool, and compares every BBC embedded track row with the RadioFiles rows by episode, position, title and compatible artist credit. Only non-empty full lists that match position-by-position are eligible for a dated pool proposal. Episodes with missing rows, count differences or track mismatches remain review-only.
 
-After a scheduled run, open the repository's **Actions** tab, open the latest **Riley & Coe evidence validation** run, and download the artifact named `riley-coe-mixcloud-inventory-...`. GitHub scheduled workflows run on the default branch and may be delayed, so the Actions history is the source of truth for whether a run actually happened.
-
+The workflow also writes a dated artist-pool proposal, a backup of the previous pool, an additions-only CSV with BBC and RadioFiles source URLs, and a separate fuzzy-match review CSV. Candidates with a fuzzy pool-name match at or above 0.72 are held for manual identity/alias review. The proposal script never changes the authoritative pool on its own; pool updates are applied only after the proposal is independently checked.
 ## Venue source inventory and matching
 
 The scheduled/manual workflow also fetches configured official venue pages and preserves visible text plus `venue_page_access_audit.csv` as an Actions artifact. This proves only that a page was reachable and its text was captured. It does **not** prove that every date, pagination page, event detail, or support act in the 14-day window was checked. The collector therefore reports zero completed calendar checks by design.
@@ -59,7 +55,7 @@ Do not approve an alias without a source/reason. Fuzzy candidates never become p
 ## What is still missing before a genuinely complete run
 
 - BBC Sounds coverage and a reliable saved last-successful-run cursor.
-- Visible-page verification of each Mixcloud tracklist, with artist extraction only after completeness is established.
+- Position-by-position verification of each full BBC embedded tracklist against RadioFiles before artist promotion.
 - Calendar-aware event extraction, pagination/detail-page traversal, 14-day filtering, support-act extraction, prices/ticket status, and a regional safety-net search.
 - End-to-end creation of the dated run package and proof that all required outputs can be read back.
 
@@ -81,7 +77,7 @@ The scheduled/manual Actions workflow runs this for today through the following 
 Example after downloading the collector artifacts:
 
 ```bash
-python scripts/assemble_run_package.py --start 2026-10-13 --end 2026-10-26 --episodes artifacts/mixcloud/mixcloud_episode_inventory.csv --events artifacts/event-candidates/event_candidates.csv --venue-audit artifacts/event-candidates/event_discovery_audit.csv --out-dir data/runs/2026-10-13_to_2026-10-26
+python scripts/assemble_run_package.py --start 2026-10-13 --end 2026-10-26 --bbc-episodes artifacts/bbc-sounds/bbc_episode_inventory.csv --bbc-embedded-track-candidates artifacts/bbc-sounds/bbc_embedded_track_candidates.csv --bbc-embedded-tracklist-audit artifacts/bbc-sounds/bbc_embedded_tracklist_audit.csv --bbc-radiofiles-episode-crosscheck artifacts/radiofiles/bbc-crosscheck/bbc_radiofiles_episode_crosscheck.csv --bbc-radiofiles-verified-candidates artifacts/radiofiles/bbc-crosscheck/verified_episode_artist_candidates.csv --radiofiles-episodes artifacts/radiofiles/radiofiles_episode_inventory.csv --radiofiles-track-candidates artifacts/radiofiles/radiofiles_track_candidates.csv --events artifacts/event-candidates/event_candidates.csv --venue-audit artifacts/event-candidates/event_discovery_audit.csv --out-dir data/runs/2026-10-13_to_2026-10-26
 python scripts/validate_run.py --run-dir data/runs/2026-10-13_to_2026-10-26 --pool data/artist_pool.csv
 ```
 
@@ -115,7 +111,7 @@ The assembler also emits dated copies for downstream use: `Riley_Coe_events_<sta
 
 ### Unified track-candidate review queue
 
-The assembler preserves the original `mixcloud_api_track_candidates.csv` and `bbc_track_candidates.csv` inputs and emits both `tracklist_candidate_review.csv` and `Riley_Coe_tracklist_candidate_review_<run-date>.csv`, normalising candidate artist, title, episode URL/date, extraction method and review status. Every Mixcloud API candidate and every BBC pattern/JSON-LD candidate is labelled `needs_manual_review`. This queue helps review the whole candidate pool but is not a complete tracklist and must not be used as evidence that an episode has been fully audited.
+The assembler preserves the visible-text BBC candidates, official embedded `aod_tracks` rows, RadioFiles candidates, episode cross-check audit and exact-match artist candidates. It emits both `tracklist_candidate_review.csv` and `Riley_Coe_tracklist_candidate_review_<run-date>.csv`, normalising candidate artist, title, episode URL/date, extraction method and review status. Candidates remain review-only unless their full episode list passes the BBC/RadioFiles cross-check.
 
 The assembler also imports Event JSON-LD rows found by the bounded event-page inspector into `events.csv` when the structured date falls within the requested window. Performers remain `performer_role_unverified`; rows without performer metadata are retained in `unresolved_event_candidates.csv`. Duplicate event/artist/source rows are deduplicated, and none of these imports is marked verified.
 
@@ -132,8 +128,9 @@ The configured venue discovery registry now includes four optional safety-net ve
 The event-page inspector receives the full venue registry and writes one crawl-audit row per configured venue, including venues for which discovery found zero candidate links. Such rows use `NO_SEED_LINKS` and explicitly mean "discovery gap"—never "no relevant gigs". The dated discovery coverage export includes mandatory and optional venues, while only the 16 required venues block the mandatory venue-completion gate.
 
 
-### Mixcloud discovery fallback and validation
+### Tracklist and pool-promotion safeguards
 
-The Mixcloud collector tries the public account API, supported search API, public profile/site-search HTML, Bing RSS, and DuckDuckGo HTML in sequence. Search-engine results are discovery candidates only; they are date-filtered and the public show URL is fetched before acceptance. Generic unavailable-page shells that return HTTP 200 are rejected, and an individual show's API detail request failing does not certify a tracklist. Episode candidates and extracted artist rows remain incomplete until the visible tracklist has been independently checked. Public search indexing can be stale or incomplete, so an empty or partial inventory must be reported as a gap, not as a complete archive.
+A successful HTTP response, a visible `Music Played` heading, or a non-empty candidate CSV is not proof of completeness. The collector saves raw HTML and audit rows so the embedded official BBC tracklist can be inspected. RadioFiles rows are compared against that full BBC list by position. In the current dated refresh, eight episode tracklists matched exactly and three did not; only candidates from the exact matches were considered for the pool. Fifteen fuzzy-name collisions were held for manual review rather than added. See `data/artist_pool_update_audit_20261015.json`, `data/artist_pool_additions_20261015.csv`, and `data/artist_pool_ambiguous_review_20261015.csv` for the dated evidence and audit.
+
 
 The event-page inspection budget is 120 pages per venue per run. Reaching that cap still makes coverage partial; the larger limit is intended to reduce premature cut-offs, not to certify that a venue calendar is exhaustive.
