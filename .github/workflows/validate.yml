@@ -50,7 +50,7 @@ jobs:
           PY
 
   bbc-sounds-inventory:
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[full-sweep]'))
+    if: github.ref_name != 'redesign/workflow-contract' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[full-sweep]')))
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -73,7 +73,7 @@ jobs:
           retention-days: 30
 
   radiofiles-inventory:
-    if: always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[full-sweep]')))
+    if: always() && github.ref_name != 'redesign/workflow-contract' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[full-sweep]')))
     needs: [bbc-sounds-inventory]
     runs-on: ubuntu-latest
     steps:
@@ -150,6 +150,34 @@ jobs:
         with:
           name: riley-coe-venue-page-inventory-${{ github.run_id }}
           path: artifacts/venue-pages/
+          if-no-files-found: warn
+          retention-days: 30
+
+  independent-gig-finder:
+    if: github.ref_name == 'redesign/workflow-contract' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[full-sweep]')))
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Run independent contract-driven gig finder
+        run: python scripts/run_gig_finder.py --run-id "$GITHUB_RUN_ID" --out-dir artifacts/gig-finder-run
+      - name: Validate candidate report structure and explicit coverage
+        if: always()
+        run: |
+          if [ -d artifacts/gig-finder-run ]; then
+            python scripts/validate_gig_finder_report.py --run-dir artifacts/gig-finder-run --pool data/artist_pool.csv --sources config/venue_sources.csv
+          else
+            echo "Gig-finder report directory was not created."
+            exit 1
+          fi
+      - name: Preserve independent gig-finder report and logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: riley-coe-independent-gig-finder-${{ github.run_id }}
+          path: artifacts/gig-finder-run/
           if-no-files-found: warn
           retention-days: 30
 
