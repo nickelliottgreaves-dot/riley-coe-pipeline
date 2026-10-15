@@ -1,12 +1,20 @@
 import csv, json, subprocess, sys, tempfile, unittest
+from datetime import date
 from unittest.mock import patch
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/"scripts"))
 import inspect_event_links as crawler
-from inspect_event_links import canonicalize_url, event_link_matches, event_performer_candidate, extract_visible_event, extract_visible_listing_events, is_calendar_navigation, is_event_object, likely, main
+from inspect_event_links import calendar_target_in_window, canonicalize_url, event_link_matches, event_performer_candidate, extract_visible_event, extract_visible_listing_events, is_calendar_navigation, is_event_object, likely, main
 
 class EventPageCrawlerTests(unittest.TestCase):
+    def test_calendar_date_filters_stay_inside_requested_window(self):
+        start=date(2026,10,15); end=date(2026,10,28)
+        self.assertTrue(calendar_target_in_window("https://thecluny.com/gigs/date/2026/10",start,end))
+        self.assertFalse(calendar_target_in_window("https://thecluny.com/gigs/date/2026/11",start,end))
+        self.assertTrue(calendar_target_in_window("https://cobaltstudios.co.uk/whats-on/?date=23-10-2026",start,end))
+        self.assertFalse(calendar_target_in_window("https://cobaltstudios.co.uk/whats-on/?date=30-10-2026",start,end))
+
     def test_canonical_url_removes_tracking_but_preserves_pagination(self):
         self.assertEqual(
             canonicalize_url("https://thecluny.com/gigs/page/2/?utm_source=mail&ref=abc"),
