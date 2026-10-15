@@ -227,6 +227,10 @@ jobs:
             --start "$START" --end "$END" \
             --bbc-episodes "artifacts/riley-coe-bbc-sounds-inventory-${{ github.run_id }}/bbc_episode_inventory.csv" \
             --bbc-track-candidates "artifacts/riley-coe-bbc-sounds-inventory-${{ github.run_id }}/bbc_track_candidates.csv" \
+            --bbc-embedded-track-candidates "artifacts/riley-coe-bbc-sounds-inventory-${{ github.run_id }}/bbc_embedded_track_candidates.csv" \
+            --bbc-embedded-tracklist-audit "artifacts/riley-coe-bbc-sounds-inventory-${{ github.run_id }}/bbc_embedded_tracklist_audit.csv" \
+            --bbc-radiofiles-episode-crosscheck "artifacts/riley-coe-radiofiles-inventory-${{ github.run_id }}/bbc-crosscheck/bbc_radiofiles_episode_crosscheck.csv" \
+            --bbc-radiofiles-verified-candidates "artifacts/riley-coe-radiofiles-inventory-${{ github.run_id }}/bbc-crosscheck/verified_episode_artist_candidates.csv" \
             --radiofiles-episodes "artifacts/riley-coe-radiofiles-inventory-${{ github.run_id }}/radiofiles_episode_inventory.csv" \
             --radiofiles-track-candidates "artifacts/riley-coe-radiofiles-inventory-${{ github.run_id }}/radiofiles_track_candidates.csv" \
             --events "artifacts/riley-coe-event-candidates-${{ github.run_id }}/event_candidates.csv" \
