@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Create review-only RadioFiles artist/episode reconciliation reports."""
+"""Create review-only RadioFiles artist/episode reconciliation reports.
+
+[full-sweep] Each run compares retrieved candidates to the preserved 747-row
+baseline and records episode gaps without promoting unverified artists.
+"""
 import argparse, csv, json, re, unicodedata
 from collections import defaultdict
 from datetime import date
