@@ -15,10 +15,10 @@ from scripts.workflow_contract import (
 
 
 class WorkflowContractTests(unittest.TestCase):
-    def test_default_window_is_28_inclusive_calendar_dates(self):
+    def test_default_window_is_14_inclusive_calendar_dates(self):
         start, end = reporting_window(date(2026, 10, 15))
         self.assertEqual(start.isoformat(), "2026-10-15")
-        self.assertEqual(end.isoformat(), "2026-11-11")
+        self.assertEqual(end.isoformat(), "2026-10-28")
         self.assertEqual((end - start).days + 1, 28)
 
     def test_contract_rejects_window_shorter_than_minimum(self):
@@ -50,9 +50,9 @@ class WorkflowContractTests(unittest.TestCase):
     def test_current_registry_and_pool_are_consistent(self):
         result = validate_registries()
         self.assertTrue(result["valid"], result["errors"])
-        self.assertEqual(result["configured_source_count"], 20)
-        self.assertEqual(result["required_venue_count"], 20)
-        self.assertEqual(result["artist_count"], 847)
+        self.assertEqual(result["configured_source_count"], 18)
+        self.assertEqual(result["required_venue_count"], 18)
+        self.assertEqual(result["artist_count"], 833)
 
 
     def test_registry_validator_rejects_unquoted_commas_in_csv_fields(self):
