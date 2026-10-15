@@ -158,7 +158,7 @@ def extract_visible_event(page_title, visible_text):
         "notes":"Candidate extracted from visible event-page text; independently verify title, artist billing/support, date, room, price and ticket status."
     }
 
-def extract_visible_listing_events(visible_text):
+def extract_visible_listing_events(visible_text, default_venue=""):
     """Extract event-card candidates from listing pages with title/date/venue lines."""
     lines=[line.strip() for line in visible_text.splitlines() if line.strip()]
     date_pattern=re.compile(r"(?i)\b(?:(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)(?:day)?\s+)?\d{1,2}\s+[A-Za-z]{3,9}\s+20\d{2}\b")
@@ -188,37 +188,55 @@ def extract_visible_listing_events(visible_text):
         dt=parsed_date(line)
         if not dt or i==0:
             continue
-        # Calendar cards sometimes place a generic CTA immediately before
-        # the date (e.g. "More Info"). Walk back a few lines to find the actual
-        # event title instead of promoting the CTA as an artist.
-        title=""
-        for back in range(i-1,max(-1,i-7),-1):
-            candidate=lines[back].strip(" -–—:")
-            if not candidate or date_pattern.search(candidate):
+        # Two common card layouts are supported:
+        #   title -> date -> venue
+        #   date -> category -> title -> time/price (venue inferred from the
+        #   official source page, e.g. Cobalt Studios' programme).
+        categories={"live music","music","club night","club","live comedy","comedy","theatre","dance",
+                    "festival","film","talk","workshop","family","community event","special event",
+                    "club events","live","gig","gigs"}
+        default_key=re.sub(r"[^a-z0-9]+","",str(default_venue or "").casefold())
+        next_line=lines[i+1] if i+1<len(lines) else ""
+        next_key=re.sub(r"[^a-z0-9]+","",next_line.casefold())
+        category_first=bool(default_key and next_line.casefold().rstrip(":") in categories and i+2<len(lines))
+        if category_first:
+            title=lines[i+2].strip(" -–—:")
+            venue_line=default_venue
+            j=i+3
+        else:
+            # Calendar cards sometimes place a generic CTA immediately before
+            # the date (e.g. "More Info"). Walk back a few lines to find title.
+            title=""
+            for back in range(i-1,max(-1,i-7),-1):
+                candidate=lines[back].strip(" -–—:")
+                if not candidate or date_pattern.search(candidate):
+                    break
+                low=candidate.casefold()
+                if low in generic or re.fullmatch(r"(?:january|february|march|april|may|june|july|august|september|october|november|december)\s+20\d{2}",low):
+                    continue
+                if "£" in candidate or re.match(r"(?i)^(from|price|tickets?)\b",candidate):
+                    continue
+                candidate_key=re.sub(r"[^a-z0-9]+","",low)
+                if candidate_key in known_venues:
+                    continue
+                if len(candidate)>180:
+                    continue
+                title=candidate
                 break
-            low=candidate.casefold()
-            if low in generic or re.fullmatch(r"(?:january|february|march|april|may|june|july|august|september|october|november|december)\s+20\d{2}",low):
+            if not title:
                 continue
-            if "£" in candidate or re.match(r"(?i)^(from|price|tickets?)\b",candidate):
+            j=i+1
+            while j<len(lines) and lines[j] in {"/","|","–","—","-"}: j+=1
+            if j>=len(lines): continue
+            venue_line=lines[j]
+            venue_key=re.sub(r"[^a-z0-9]+","",venue_line.casefold())
+            if venue_key not in known_venues:
                 continue
-            candidate_key=re.sub(r"[^a-z0-9]+","",low)
-            if candidate_key in known_venues:
-                continue
-            if len(candidate)>180:
-                continue
-            title=candidate
-            break
-        if not title:
-            continue
-        j=i+1
-        while j<len(lines) and lines[j] in {"/","|","–","—","-"}: j+=1
-        if j>=len(lines): continue
-        venue_line=lines[j]
-        venue_key=re.sub(r"[^a-z0-9]+","",venue_line.casefold())
-        if venue_key not in known_venues:
+            j+=1
+        if not title or title.casefold() in generic or len(title)>180:
             continue
         supports=[]
-        k=j+1
+        k=j
         if k<len(lines) and lines[k].casefold()=="with support from":
             k+=1
             while k<len(lines):
@@ -228,10 +246,25 @@ def extract_visible_listing_events(visible_text):
                 if len(lines[k])<=120 and lines[k].casefold() not in generic and lines[k] not in {"/","|"}:
                     supports.append(lines[k])
                 k+=1
-        performers=list(dict.fromkeys([title]+supports))
+        # Keep the full card title but expose likely artists separately for
+        # pool matching (promoter prefix and event-series branding are stripped).
+        billing=title
+        artist_text=re.split(r"(?i)\\bpresents:\\s*",billing,maxsplit=1)[-1]
+        artist_text=artist_text.split("//",1)[-1].strip()
+        primary_names=[part.strip(" -–—:") for part in re.split(r"\\s+\\+\\s+",artist_text) if part.strip(" -–—:")]
+        performers=list(dict.fromkeys(primary_names or [title]))
+        performers.extend(supports)
+        price=""
+        for line_after in lines[j:min(len(lines),j+6)]:
+            if date_pattern.search(line_after): break
+            match_price=re.search(r"£\\s?\\d+(?:\\.\\d{1,2})?(?:\\s*[-–]\\s*£?\\s?\\d+(?:\\.\\d{1,2})?)?",line_after)
+            if match_price:
+                price=match_price.group(0).replace(" ","")
+                break
         found.append({
             "event_title":title,"event_date":dt,"venue":venue_line,
-            "performer_names":"; ".join(performers),"price":"","currency":"","availability":"not_checked",
+            "performer_names":"; ".join(performers),"price":price,"currency":"GBP" if price else "",
+            "availability":"not_checked",
             "notes":"Candidate extracted from visible venue calendar card; independently verify artist billing/support, exact room, date, price and ticket status."
         })
     unique=[]; seen=set()
