@@ -16,6 +16,48 @@ def norm(value: str) -> str:
     value="".join(ch for ch in value if not unicodedata.combining(ch))
     return " ".join(re.sub(r"[^a-z0-9]+"," ",value).split())
 
+def canonical_venue(value: str) -> str:
+    """Normalize common display-name variants without merging distinct rooms."""
+    key=norm(value)
+    aliases={
+        "o2 city hall":"O2 City Hall Newcastle",
+        "city hall newcastle":"O2 City Hall Newcastle",
+        "o2 city hall newcastle":"O2 City Hall Newcastle",
+        "boiler shop newcastle":"Boiler Shop",
+        "boiler shop":"Boiler Shop",
+        "the cumberland arms":"Cumberland Arms",
+        "cumberland arms":"Cumberland Arms",
+        "lubber fiend":"The Lubber Fiend",
+        "the lubber fiend":"The Lubber Fiend",
+        "the cluny":"The Cluny",
+        "cluny":"The Cluny",
+        "cluny 2":"Cluny 2",
+        "the newgate social":"The Newgate Social",
+        "newgate social":"The Newgate Social",
+    }
+    return aliases.get(key," ".join(str(value or "").split()).strip())
+
+
+def canonical_event_identity(title: str, performer: str) -> str:
+    """Collapse title variants such as 'Artist @ Venue' onto the billed act."""
+    title_key=norm(title)
+    performer_key=norm(performer)
+    if performer_key and performer_key in title_key:
+        return performer_key
+    simplified=str(title or "").split(" @ ",1)[0].split(":",1)[0].split(" + ",1)[0]
+    return norm(simplified)
+
+
+def title_quality(title: str) -> tuple[int, int]:
+    """Prefer a descriptive bill over bare artist@venue and generic variants."""
+    value=str(title or "")
+    score=0
+    if "+" in value: score+=8
+    if ":" in value: score+=4
+    if " @ " not in value: score+=3
+    return score,len(value)
+
+
 def read_csv(path: Path) -> list[dict[str,str]]:
     if not path.exists(): return []
     with path.open(encoding="utf-8-sig",newline="") as f:
@@ -130,11 +172,13 @@ def main() -> int:
                         "ticket_status":row.get("ticket_status",row.get("availability","")),
                         "notes":(hit.get("notes") or "")+" Artist name is also present in the event title or explicit performer field; still verify billing, source details, price and ticket status.",
                     })
-    # Deduplicate the same event/performer across primary and secondary sources,
-    # while retaining every distinct evidence URL in the output row.
+    # Deduplicate the same event/performer across sources even when the
+    # source titles or venue display names differ; retain all evidence URLs.
     dedup={}
     for row in candidates:
-        key=(row["event_date"],norm(row["venue"]),norm(row["event_title"]),row["performer_norm"])
+        row["venue"]=canonical_venue(row.get("venue",""))
+        key=(row["event_date"],norm(row["venue"]),row["performer_norm"],
+             canonical_event_identity(row.get("event_title",""),row.get("performer","")))
         if key not in dedup:
             dedup[key]=row
         else:
@@ -142,14 +186,17 @@ def main() -> int:
             urls=[u.strip() for u in (prior.get("source_url","")+";"+row.get("source_url","")).split(";") if u.strip()]
             prior["source_url"]="; ".join(dict.fromkeys(urls))
             kinds=list(dict.fromkeys(k for k in (prior.get("source_kind",""),row.get("source_kind","")) if k))
-            # Preserve the established full-page billing match as the primary
-            # match basis when it is one of the deduplicated evidence paths.
             if "pool_page_text_match" in kinds:
                 prior["source_kind"]="pool_page_text_match"
             else:
                 prior["source_kind"]="+".join(dict.fromkeys("+".join(kinds).split("+")))
             notes=[n for n in (prior.get("notes",""),row.get("notes","")) if n]
             prior["notes"]=" | ".join(dict.fromkeys(notes))
+            if title_quality(row.get("event_title","")) > title_quality(prior.get("event_title","")):
+                prior["event_title"]=row.get("event_title","")
+            for field in ("price","ticket_status"):
+                if not prior.get(field) and row.get(field):
+                    prior[field]=row[field]
     candidates=list(dedup.values())
     by_artist={}
     for artist in unique:
