@@ -212,8 +212,8 @@ def extract_visible_event(page_title, visible_text, default_venue=""):
     # role labels or prose paragraphs, so these acts can be compared to the pool.
     credit_names=[]
     section_start=None
-    stop_sections={"what's happening in the music","what is happening in the music","what you'll hear",
-                   "what they are playing","what they're playing","need to know","more from",
+    stop_sections={"what s happening in the music","what is happening in the music","what you ll hear",
+                   "what they are playing","what they re playing","need to know","more from",
                    "your visit","tickets","stay connected"}
     role_labels={"conductor","cello","violin","piano","vocals","guitar","drums","composer","leader",
                  "viola","orchestra","bass","percussion","director","tenor","soprano","mezzo soprano",
