@@ -20,7 +20,7 @@ from urllib.request import Request,urlopen
 
 UA="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
 EVENT_FIELDS=["venue","page_url","http_status","content_type","page_title","event_title","event_date","performer_names","price","currency","availability","event_jsonld_found","visible_text_snapshot","verified","status","notes"]
-AUDIT_FIELDS=["venue","seed_candidate_links","external_seed_links_skipped","pages_fetched","pages_failed","same_host_links_added","crawl_cap_reached","status","notes"]
+AUDIT_FIELDS=["venue","seed_candidate_links","explicit_regression_seed_pages","external_seed_links_skipped","non_event_seed_links_skipped","non_event_links_skipped","pages_fetched","pages_failed","same_host_links_added","crawl_cap_reached","status","notes"]
 
 class Parser(HTMLParser):
     def __init__(self):
