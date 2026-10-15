@@ -99,8 +99,8 @@ def extract_visible_event(page_title, visible_text, default_venue=""):
     def next_value(label, source_lines=None):
         source_lines=source_lines or lines
         for i,line in enumerate(source_lines):
-            if line.casefold().rstrip(":") == label.casefold().rstrip(":") and i+1 < len(lines):
-                return lines[i+1]
+            if line.casefold().rstrip(":") == label.casefold().rstrip(":") and i+1 < len(source_lines):
+                return source_lines[i+1]
             match=re.match(r"(?i)^"+re.escape(label.rstrip(":"))+r":\s*(.+)$",line)
             if match:
                 return match.group(1).strip()
