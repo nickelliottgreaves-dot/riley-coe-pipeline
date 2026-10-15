@@ -99,6 +99,30 @@ class EvidencePackageTests(unittest.TestCase):
             self.assertEqual(undated["artist_candidate"],"Undated Artist")
             self.assertIn("Date missing or invalid",undated["notes"])
 
+    def test_shared_calendar_room_ambiguity_is_not_misattributed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            inspection=root/"inspection.csv"
+            fields=["venue","page_url","event_title","event_date","performer_names","price","currency","availability","event_jsonld_found","status","notes"]
+            with inspection.open("w",newline="",encoding="utf-8") as f:
+                w=csv.DictWriter(f,fieldnames=fields); w.writeheader()
+                for venue in ["The Cluny","Cluny 2"]:
+                    w.writerow({"venue":venue,"page_url":"https://thecluny.com/gigs/","event_title":"Shared Calendar Show",
+                        "event_date":"2026-10-20","performer_names":"Pool Artist; Support Act",
+                        "event_jsonld_found":"false","status":"visible_event_candidate_needs_review","notes":"Same shared listing"})
+            out=root/"run"
+            subprocess.run([sys.executable,str(ROOT/"scripts/assemble_run_package.py"),
+                "--start","2026-10-13","--end","2026-10-26","--event-page-inspection",str(inspection),
+                "--out-dir",str(out)],check=True,capture_output=True,text=True)
+            with (out/"events.csv").open(newline="",encoding="utf-8") as f:
+                events=list(csv.DictReader(f))
+            self.assertEqual(events,[])
+            with (out/"unresolved_event_candidates.csv").open(newline="",encoding="utf-8") as f:
+                unresolved=list(csv.DictReader(f))
+            self.assertEqual(len(unresolved),2)
+            self.assertTrue(all(r["discovery_method"]=="shared_calendar_room_ambiguous" for r in unresolved))
+            self.assertTrue(all("actual room is independently confirmed" in r["notes"] for r in unresolved))
+
     def test_creates_partial_package_and_refuses_overwrite(self):
         with tempfile.TemporaryDirectory() as tmp:
             out=Path(tmp)/"run"
