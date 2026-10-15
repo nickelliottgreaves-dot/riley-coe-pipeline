@@ -6,7 +6,7 @@ from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-AGENT="riley-coe-pipeline/0.1 (public venue calendar discovery)"
+AGENT="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
 FIELDS=["venue","source_url","source_status","http_status","content_type","page_title","calendar_coverage_status","text_file","notes"]
 
 class VisibleText(HTMLParser):
@@ -44,7 +44,7 @@ def main():
             errors.append(f"{venue}: missing source URL")
             rows.append(row); continue
         try:
-            req=Request(url,headers={"User-Agent":AGENT,"Accept":"text/html,application/xhtml+xml"})
+            req=Request(url,headers={"User-Agent":AGENT,"Accept":"text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8","Accept-Language":"en-GB,en;q=0.9"})
             with urlopen(req,timeout=25) as response:
                 code=response.status; ctype=response.headers.get("Content-Type","")
                 raw=response.read(2_000_001)
