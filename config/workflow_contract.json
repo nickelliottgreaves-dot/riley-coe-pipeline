@@ -1,6 +1,6 @@
 {
   "contract_version": 1,
-  "reporting_window_days": 28,
+  "reporting_window_days": 14,
   "minimum_reporting_window_days": 14,
   "artist_pool_path": "data/artist_pool.csv",
   "venue_sources_path": "config/venue_sources.csv",
