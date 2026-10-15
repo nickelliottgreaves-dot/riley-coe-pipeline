@@ -41,7 +41,7 @@ def main() -> int:
                 except OSError: continue
                 source=source_from_snapshot(path,text)
                 searchable_text="\n".join(line for line in text.splitlines()
-                    if not re.match(r"(?i)^\\s*(?:source|source url):",line))
+                    if not re.match(r"(?i)^\s*(?:source|source url):",line))
                 pages.append({"path":str(path),"source_url":source,"text":text,"normalized":norm(searchable_text)})
     fallback_urls=[]
     if args.venues.exists():
