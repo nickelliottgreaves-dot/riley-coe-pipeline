@@ -6,14 +6,16 @@ on:
       - hybrid-gig-research
     paths:
       - '.github/workflows/weekly-hybrid-gig-search.yml'
-      - 'config/hybrid_venue_sources.csv'
       - 'config/definitive_venues.csv'
+      - 'config/hybrid_venue_sources.csv'
+      - 'config/hybrid_secondary_sources.csv'
       - 'scripts/discover_event_candidates.py'
       - 'scripts/inspect_event_links.py'
       - 'scripts/match_pool_to_window_events.py'
       - 'scripts/validate_hybrid_baseline.py'
       - 'scripts/check_known_gig_regressions.py'
       - 'data/artist_pool.csv'
+      - 'tests/fixtures/known_gig_regressions.csv'
   workflow_dispatch:
   schedule:
     - cron: "0 8 * * 1"
@@ -37,15 +39,16 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Run existing unit and collector regression tests
-        run: python -m unittest discover -s tests -v
+      - name: Run unit tests and validate both source registries
+        run: |
+          python -m unittest discover -s tests -v
+          python scripts/validate_hybrid_baseline.py
 
-      - name: Validate fixed baseline and report window
+      - name: Set dated 28-day window and create output directory
         id: window
         shell: bash
         run: |
           set -euo pipefail
-          python scripts/validate_hybrid_baseline.py
           START="$(python -c 'from datetime import date; print(date.today().isoformat())')"
           END="$(python -c 'from datetime import date,timedelta; print((date.today()+timedelta(days=27)).isoformat())')"
           POOL_ROWS="$(python -c 'import csv; f=open("data/artist_pool.csv",encoding="utf-8-sig",newline=""); print(sum(1 for _ in csv.DictReader(f)))')"
@@ -53,12 +56,12 @@ jobs:
           echo "end=$END" >> "$GITHUB_OUTPUT"
           echo "pool_rows=$POOL_ROWS" >> "$GITHUB_OUTPUT"
           mkdir -p "artifacts/hybrid-search-$START"
-          echo "Search window: $START to $END (28 calendar days)" >> "$GITHUB_STEP_SUMMARY"
-          echo "Artist pool: $POOL_ROWS rows; pool is read-only during gig search." >> "$GITHUB_STEP_SUMMARY"
-          echo "Venue scope: 18 separate venue/room identities." >> "$GITHUB_STEP_SUMMARY"
+          echo "Search window: $START to $END (28 calendar days)." >> "$GITHUB_STEP_SUMMARY"
+          echo "Artist pool: $POOL_ROWS rows; read-only during gig search." >> "$GITHUB_STEP_SUMMARY"
+          echo "Coverage passes: 18 primary source rows + 18 independent secondary calendar rows." >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Discover structured events and candidate links across 18 configured venues
-        id: discovery
+      - name: Discover primary venue calendars and event links
+        if: always()
         shell: bash
         run: |
           set +e
@@ -66,42 +69,99 @@ jobs:
             --sources config/hybrid_venue_sources.csv \
             --start "${{ steps.window.outputs.start }}" \
             --end "${{ steps.window.outputs.end }}" \
-            --out-dir "artifacts/hybrid-search-${{ steps.window.outputs.start }}/discovery"
-          CODE=$?
-          echo "exit_code=$CODE" >> "$GITHUB_OUTPUT"
-          # Preserve the audit and any candidate rows even if some sources fail.
-          exit 0
+            --out-dir "artifacts/hybrid-search-${{ steps.window.outputs.start }}/primary-discovery"
+          echo "Primary discovery exit code: $?"
 
-      - name: Inspect event pages and bounded same-host calendar links
-        id: inspection
+      - name: Discover independent secondary venue calendars and event links
         if: always()
         shell: bash
         run: |
           set +e
-          OUT="artifacts/hybrid-search-${{ steps.window.outputs.start }}"
-          LINKS="$OUT/discovery/event_link_candidates.csv"
-          if [ ! -f "$LINKS" ]; then
-            mkdir -p "$OUT/discovery"
-            printf 'venue,link_text,candidate_url,source_page_url,candidate_reason,verified,notes\n' > "$LINKS"
-          fi
-          python scripts/inspect_event_links.py \
-            --links "$LINKS" \
-            --sources config/hybrid_venue_sources.csv \
-            --out-dir "$OUT/inspection" \
+          python scripts/discover_event_candidates.py \
+            --sources config/hybrid_secondary_sources.csv \
             --start "${{ steps.window.outputs.start }}" \
             --end "${{ steps.window.outputs.end }}" \
-            --max-pages-per-venue 35 --max-depth 2
-          CODE=$?
-          echo "Event inspection exit code: $CODE"
+            --out-dir "artifacts/hybrid-search-${{ steps.window.outputs.start }}/secondary-discovery"
+          echo "Secondary discovery exit code: $?"
 
-      - name: Match all artists in the preserved pool against dated candidates
+      - name: Inspect primary and secondary event pages
         if: always()
         shell: bash
         run: |
           set +e
           OUT="artifacts/hybrid-search-${{ steps.window.outputs.start }}"
-          EVENTS="$OUT/discovery/event_candidates.csv"
-          INSPECTED="$OUT/inspection/event_page_inspection.csv"
+          for PASS in primary secondary; do
+            SOURCES="config/hybrid_venue_sources.csv"
+            [ "$PASS" = "secondary" ] && SOURCES="config/hybrid_secondary_sources.csv"
+            LINKS="$OUT/$PASS-discovery/event_link_candidates.csv"
+            [ -f "$LINKS" ] || { mkdir -p "$OUT/$PASS-discovery"; printf 'venue,link_text,candidate_url,source_page_url,candidate_reason,verified,notes\n' > "$LINKS"; }
+            python scripts/inspect_event_links.py \
+              --links "$LINKS" \
+              --sources "$SOURCES" \
+              --out-dir "$OUT/$PASS-inspection" \
+              --start "${{ steps.window.outputs.start }}" \
+              --end "${{ steps.window.outputs.end }}" \
+              --max-pages-per-venue 35 --max-depth 2
+            echo "$PASS inspection exit code: $?"
+          done
+
+      - name: Combine both passes and snapshot evidence
+        if: always()
+        shell: bash
+        run: |
+          python - <<'PY'
+          import csv, shutil
+          from pathlib import Path
+          root = Path("artifacts/hybrid-search-${{ steps.window.outputs.start }}")
+          combined = root / "combined"
+          combined.mkdir(parents=True, exist_ok=True)
+          def read(path):
+              if not path.exists(): return []
+              with path.open(encoding="utf-8-sig", newline="") as f: return list(csv.DictReader(f))
+          def write(path, rows, fields):
+              with path.open("w", encoding="utf-8", newline="") as f:
+                  w=csv.DictWriter(f, fieldnames=fields, extrasaction="ignore")
+                  w.writeheader()
+                  w.writerows(rows)
+          event_fields=["event_date","venue","event_title","artist","artist_role","source_url","verified","price","ticket_status","discovery_method","notes"]
+          inspected_fields=["venue","page_url","http_status","content_type","page_title","event_title","event_date","performer_names","price","currency","availability","event_jsonld_found","visible_text_snapshot","verified","status","notes"]
+          all_events=[]
+          all_inspected=[]
+          for pass_name in ("primary","secondary"):
+              event_path=root/f"{pass_name}-discovery/event_candidates.csv"
+              for row in read(event_path):
+                  row["notes"] = f"[{pass_name}] " + (row.get("notes") or "")
+                  all_events.append(row)
+              inspection_dir=root/f"{pass_name}-inspection"
+              for row in read(inspection_dir/"event_page_inspection.csv"):
+                  rel=(row.get("visible_text_snapshot") or "").strip()
+                  if rel:
+                      src=inspection_dir/rel
+                      if src.is_file():
+                          target_dir=combined/"snapshots"
+                          target_dir.mkdir(parents=True, exist_ok=True)
+                          target=target_dir/src.name
+                          if target.exists() and target.read_bytes()!=src.read_bytes():
+                              target=target_dir/f"{pass_name}-{src.name}"
+                          shutil.copy2(src,target)
+                          row["visible_text_snapshot"]="snapshots/"+target.name
+                  row["notes"] = f"[{pass_name}] " + (row.get("notes") or "")
+                  all_inspected.append(row)
+          write(combined/"event_candidates.csv", all_events, event_fields)
+          write(combined/"event_page_inspection.csv", all_inspected, inspected_fields)
+          print(f"Combined discovery event rows: {len(all_events)}")
+          print(f"Combined inspected event/page rows: {len(all_inspected)}")
+          print(f"Combined text snapshots: {len(list((combined/'snapshots').glob('*.txt')))}")
+          PY
+
+      - name: Match the entire preserved artist pool against both source passes
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          OUT="artifacts/hybrid-search-${{ steps.window.outputs.start }}"
+          EVENTS="$OUT/combined/event_candidates.csv"
+          INSPECTED="$OUT/combined/event_page_inspection.csv"
           [ -f "$EVENTS" ] || printf 'event_date,venue,event_title,artist,artist_role,source_url,verified,price,ticket_status,discovery_method,notes\n' > "$EVENTS"
           [ -f "$INSPECTED" ] || printf 'venue,page_url,http_status,content_type,page_title,event_title,event_date,performer_names,price,currency,availability,event_jsonld_found,visible_text_snapshot,verified,status,notes\n' > "$INSPECTED"
           python scripts/match_pool_to_window_events.py \
@@ -113,84 +173,90 @@ jobs:
             --out "$OUT/artist_window_event_matches.csv"
           echo "Pool matching exit code: $?"
 
-      - name: Check five known-gig regression cases against naturally collected candidates
+      - name: Check the five known-gig regressions against both source passes
         if: always()
         shell: bash
         run: |
           set +e
           OUT="artifacts/hybrid-search-${{ steps.window.outputs.start }}"
-          EVENTS="$OUT/discovery/event_candidates.csv"
-          INSPECTED="$OUT/inspection/event_page_inspection.csv"
-          [ -f "$EVENTS" ] || printf 'event_date,venue,event_title,artist,artist_role,source_url,verified,price,ticket_status,discovery_method,notes\\n' > "$EVENTS"
-          [ -f "$INSPECTED" ] || printf 'venue,page_url,http_status,content_type,page_title,event_title,event_date,performer_names,price,currency,availability,event_jsonld_found,visible_text_snapshot,verified,status,notes\\n' > "$INSPECTED"
           python scripts/check_known_gig_regressions.py \
             --fixtures tests/fixtures/known_gig_regressions.csv \
-            --events "$EVENTS" \
-            --inspected "$INSPECTED" \
-            --inspection-dir "$OUT/inspection" \
+            --events "$OUT/combined/event_candidates.csv" \
+            --inspected "$OUT/combined/event_page_inspection.csv" \
+            --inspection-dir "$OUT/combined" \
             --out "$OUT/known_gig_regressions.csv"
           echo "Regression check exit code: $?"
 
-      - name: Produce explicit coverage and result status
+      - name: Produce source coverage and honest result status
         if: always()
         shell: bash
         run: |
           python - <<'PY'
           import csv, json, os
           from pathlib import Path
-          out = Path("artifacts/hybrid-search-${{ steps.window.outputs.start }}")
-          discovery = out / "discovery/event_discovery_audit.csv"
-          inspection = out / "inspection/event_page_crawl_audit.csv"
-          matches = out / "artist_window_event_matches.csv"
-          regression_path = out / "known_gig_regressions.summary.json"
+          out=Path("artifacts/hybrid-search-${{ steps.window.outputs.start }}")
           def rows(path):
               if not path.exists(): return []
-              with path.open(encoding="utf-8-sig", newline="") as f: return list(csv.DictReader(f))
-          venue_rows = rows(discovery)
-          inspection_rows = rows(inspection)
-          match_rows = rows(matches)
-          regression = json.loads(regression_path.read_text(encoding="utf-8")) if regression_path.exists() else {"fixtures": 5, "recovered": 0, "not_recovered": 5, "status": "NOT_RUN"}
-          expected = 18
-          usable = sum(1 for r in venue_rows if r.get("status") == "fetched_candidates_only")
-          failed = [r.get("venue", "") for r in venue_rows if r.get("status") != "fetched_candidates_only"]
-          capped = [r.get("venue", "") for r in inspection_rows if str(r.get("crawl_cap_reached", "")).casefold() in {"true","1","yes"}]
-          summary = {
-              "window_start": "${{ steps.window.outputs.start }}",
-              "window_end": "${{ steps.window.outputs.end }}",
-              "window_days": 28,
-              "artist_pool_rows": int("${{ steps.window.outputs.pool_rows }}"),
-              "venues_expected": expected,
-              "venue_source_rows_audited": len(venue_rows),
-              "venue_sources_with_fetch_candidates": usable,
-              "venue_sources_failed_or_unusable": failed,
-              "event_page_venues_audited": len(inspection_rows),
-              "event_page_crawl_caps": capped,
-              "candidate_pool_matches": len(match_rows),
-              "known_gig_regressions": regression,
-              "verified_gigs": 0,
-              "status": "LIMITED_RESULTS",
-              "reason": "This collector identifies candidates, not verified gigs; source fetches and bounded crawling do not prove full calendar coverage, and independent secondary-listing research is still required.",
-              "pool_modified": False
+              with path.open(encoding="utf-8-sig",newline="") as f: return list(csv.DictReader(f))
+          primary_audit=rows(out/"primary-discovery/event_discovery_audit.csv")
+          secondary_audit=rows(out/"secondary-discovery/event_discovery_audit.csv")
+          primary_crawl=rows(out/"primary-inspection/event_page_crawl_audit.csv")
+          secondary_crawl=rows(out/"secondary-inspection/event_page_crawl_audit.csv")
+          matches=rows(out/"artist_window_event_matches.csv")
+          reg_path=out/"known_gig_regressions.summary.json"
+          regression=json.loads(reg_path.read_text(encoding="utf-8")) if reg_path.exists() else {"fixtures":5,"recovered":0,"not_recovered":5,"status":"NOT_RUN"}
+          primary_ok=sum(r.get("status")=="fetched_candidates_only" for r in primary_audit)
+          secondary_ok=sum(r.get("status")=="fetched_candidates_only" for r in secondary_audit)
+          primary_failed=[r.get("venue","") for r in primary_audit if r.get("status")!="fetched_candidates_only"]
+          secondary_failed=[r.get("venue","") for r in secondary_audit if r.get("status")!="fetched_candidates_only"]
+          caps=[f"primary:{r.get('venue','')}" for r in primary_crawl if str(r.get("crawl_cap_reached","")).casefold() in {"true","1","yes"}]
+          caps += [f"secondary:{r.get('venue','')}" for r in secondary_crawl if str(r.get("crawl_cap_reached","")).casefold() in {"true","1","yes"}]
+          summary={
+            "window_start":"${{ steps.window.outputs.start }}",
+            "window_end":"${{ steps.window.outputs.end }}",
+            "window_days":28,
+            "artist_pool_rows":int("${{ steps.window.outputs.pool_rows }}"),
+            "venues_expected":18,
+            "primary_sources_audited":len(primary_audit),
+            "primary_sources_usable":primary_ok,
+            "primary_sources_failed_or_unusable":primary_failed,
+            "secondary_sources_audited":len(secondary_audit),
+            "secondary_sources_usable":secondary_ok,
+            "secondary_sources_failed_or_unusable":secondary_failed,
+            "event_page_venues_audited":len(primary_crawl)+len(secondary_crawl),
+            "event_page_crawl_caps":caps,
+            "candidate_pool_matches":len(matches),
+            "known_gig_regressions":regression,
+            "verified_gigs":0,
+            "status":"LIMITED_RESULTS",
+            "reason":"Two-source candidate search only. Independent source evidence improves recall, but all candidates still require event-level verification and bounded crawling cannot prove full calendar completeness.",
+            "pool_modified":False
           }
-          (out / "run_summary.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
-          (out / "venue_coverage.csv").write_text(
-              "venue,source_url,fetch_status,notes\n" +
-              "".join(",".join('"' + str(r.get(k, "")).replace('"','""') + '"' for k in ("venue","source_url","status","notes")) + "\n" for r in venue_rows),
-              encoding="utf-8")
-          print(json.dumps(summary, indent=2))
-          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as f:
+          (out/"run_summary.json").write_text(json.dumps(summary,indent=2)+"\n",encoding="utf-8")
+          coverage=[]
+          for label,items in (("primary",primary_audit),("secondary",secondary_audit)):
+              for r in items:
+                  coverage.append({"source_pass":label,"venue":r.get("venue",""),"source_url":r.get("source_url",""),"http_status":r.get("http_status",""),"fetch_status":r.get("status",""),"notes":r.get("notes","")})
+          with (out/"venue_coverage.csv").open("w",encoding="utf-8",newline="") as f:
+              w=csv.DictWriter(f,fieldnames=["source_pass","venue","source_url","http_status","fetch_status","notes"])
+              w.writeheader();w.writerows(coverage)
+          print(json.dumps(summary,indent=2))
+          with open(os.environ["GITHUB_STEP_SUMMARY"],"a",encoding="utf-8") as f:
               f.write("## Weekly hybrid Riley & Coe Gig Search\n\n")
               f.write(f"- Window: {summary['window_start']} to {summary['window_end']} (28 days)\n")
               f.write(f"- Artist pool rows: {summary['artist_pool_rows']}\n")
-              f.write(f"- Venue sources fetched: {usable}/{expected}\n")
-              f.write(f"- Candidate artist/event rows: {len(match_rows)}\n")
-              f.write("- Verified gigs: 0 (manual/independent verification required)\n")
+              f.write(f"- Primary sources usable: {primary_ok}/18\n")
+              f.write(f"- Secondary sources usable: {secondary_ok}/18\n")
+              f.write(f"- Candidate artist/event rows after deduplication: {len(matches)}\n")
+              f.write(f"- Known-gig regression cases recovered: {regression.get('recovered',0)}/{regression.get('fixtures',5)} ({regression.get('status','NOT_RUN')})\n")
+              f.write("- Verified gigs: 0 (manual verification required)\n")
               f.write("- Final status: LIMITED_RESULTS\n")
-              if failed: f.write("- Failed/unusable sources: " + ", ".join(failed) + "\n")
-              if capped: f.write("- Crawl-capped venues: " + ", ".join(capped) + "\n")
+              if primary_failed: f.write("- Primary source failures: "+", ".join(primary_failed)+"\n")
+              if secondary_failed: f.write("- Secondary source failures: "+", ".join(secondary_failed)+"\n")
+              if caps: f.write("- Crawl caps reached: "+", ".join(caps)+"\n")
           PY
 
-      - name: Preserve dated report, event pages, candidates and coverage audit
+      - name: Preserve dated report, both source passes, matches and evidence snapshots
         if: always()
         uses: actions/upload-artifact@v4
         with:
