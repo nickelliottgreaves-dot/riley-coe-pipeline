@@ -59,7 +59,7 @@ Do not approve an alias without a source/reason. Fuzzy candidates never become p
 - Calendar-aware event extraction, pagination/detail-page traversal, 14-day filtering, support-act extraction, prices/ticket status, and a regional safety-net search.
 - End-to-end creation of the dated run package and proof that all required outputs can be read back.
 
-Until these stages exist and pass the evidence gate, the scheduled validator is expected to fail. That is safer than reporting a partial collection as complete.
+Until these stages exist and pass the evidence gate, the evidence report must remain `PARTIAL`. A structurally valid PARTIAL package exits successfully so the scheduled workflow can deliver its review artifacts; data-integrity errors still fail, and a `COMPLETE` claim remains blocked until every evidence gate passes.
 
 ## Event-candidate discovery milestone
 
@@ -81,7 +81,7 @@ python scripts/assemble_run_package.py --start 2026-10-13 --end 2026-10-26 --bbc
 python scripts/validate_run.py --run-dir data/runs/2026-10-13_to_2026-10-26 --pool data/artist_pool.csv
 ```
 
-The validator is expected to reject this scaffold until tracklists and venues are actually verified and regression checks completed. Never edit the manifest to `COMPLETE` just to make the gate pass.
+The validator should accept a structurally valid scaffold as `PARTIAL` until tracklists and venues are actually verified and regression checks completed. It must reject a `COMPLETE` claim until the gates pass. Never edit the manifest to `COMPLETE` just to make the gate pass.
 
 ## BBC Sounds episode inventory
 
