@@ -202,22 +202,6 @@ jobs:
             --out "$OUT/known_gig_regressions.csv"
           echo "Regression check exit code: $?"
 
-      - name: Verify candidate matches against natural source evidence
-        if: success()
-        shell: bash
-        run: |
-          set +e
-          OUT="artifacts/hybrid-search-${{ steps.window.outputs.start }}"
-          python scripts/verify_event_candidates.py \
-            --matches "$OUT/artist_window_event_matches.csv" \
-            --events "$OUT/combined/event_candidates.csv" \
-            --inspected "$OUT/combined/event_page_inspection.csv" \
-            --primary-sources config/hybrid_venue_sources.csv \
-            --secondary-sources config/hybrid_secondary_sources.csv \
-            --natural-links "$OUT/combined/event_link_candidates.csv" \
-            --out "$OUT/verified_event_review.csv"
-          echo "Event-level verification exit code: $?"
-
       - name: Verify event candidates against naturally collected source evidence
         if: success()
         shell: bash

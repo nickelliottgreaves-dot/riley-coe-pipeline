@@ -42,6 +42,9 @@ class VerifyEventCandidatesTests(unittest.TestCase):
                 {"artist_pool_name": "Dexys Midnight Runners", "event_date": "2026-10-21",
                  "venue": "O2 City Hall Newcastle", "event_title": "Dexys Midnight Runners @ O2 City Hall",
                  "matched_performer": "Dexys Midnight Runners"},
+                {"artist_pool_name": "Dexys Midnight Runners", "event_date": "2026-10-20",
+                 "venue": "O2 City Hall Newcastle", "event_title": "Dexys Midnight Runners",
+                 "matched_performer": "Dexys Midnight Runners"},
             ])
             self.write_csv(events, [
                 "event_date", "venue", "event_title", "artist", "source_url", "notes",
@@ -53,10 +56,13 @@ class VerifyEventCandidatesTests(unittest.TestCase):
                  "artist": "Ye Gods", "source_url": "https://soundbitenortheast.com/newcastle-gigs/"},
                 {"event_date": "2026-10-21", "venue": "O2 City Hall Newcastle",
                  "event_title": "Dexys Midnight Runners @ O2 City Hall", "artist": "Dexys Midnight Runners",
-                 "source_url": "https://www.songkick.com/venues/885211-o2-city-hall/calendar"},
+                 "source_url": "https://www.songkick.com/concerts/43121168-dexys-midnight-runners-at-o2-city-hall"},
+                {"event_date": "2026-10-20", "venue": "O2 City Hall Newcastle",
+                 "event_title": "Dexys Midnight Runners", "artist": "Dexys Midnight Runners",
+                 "source_url": "https://www.academymusicgroup.com/o2cityhallnewcastle"},
                 {"event_date": "2026-10-21", "venue": "O2 City Hall Newcastle",
                  "event_title": "Dexys Midnight Runners @ O2 City Hall", "artist": "Dexys Midnight Runners",
-                 "source_url": "https://www.axs.com/uk/venues/2301/o2-city-hall-newcastle-upon-tyne-tickets"},
+                 "source_url": "https://www.axs.com/events/123456/dexys-midnight-runners-tickets"},
             ])
             self.write_csv(inspected, [
                 "venue", "page_url", "event_title", "event_date", "performer_names", "status", "notes",
@@ -67,27 +73,28 @@ class VerifyEventCandidatesTests(unittest.TestCase):
                  "event_date": "2026-10-16", "performer_names": "Ye Gods; Pale World; Y Gwacter; Depletion",
                  "status": "visible_event_candidate_needs_review", "notes": "Explicit regression seed page"},
             ])
-            self.write_csv(primary, ["venue", "source_url", "source_type"], [
+            self.write_csv(primary, ["venue", "source_url", "source_status"], [
                 {"venue": "Boiler Shop", "source_url": "https://www.boilershop.net/events",
-                 "source_type": "configured_official_calendar"},
+                 "source_status": "configured_official_calendar"},
                 {"venue": "The Lubber Fiend", "source_url": "https://www.thelubberfiend.com/venue",
-                 "source_type": "configured_official_site"},
+                 "source_status": "configured_official_site"},
                 {"venue": "O2 City Hall Newcastle", "source_url": "https://www.academymusicgroup.com/o2cityhallnewcastle/events",
                  "source_type": "configured_official_calendar"},
             ])
-            self.write_csv(secondary, ["venue", "source_url", "source_type"], [
+            self.write_csv(secondary, ["venue", "source_url", "source_status"], [
                 {"venue": "The Lubber Fiend", "source_url": "https://soundbitenortheast.com/newcastle-gigs/",
-                 "source_type": "secondary_citywide_gig_guide"},
+                 "source_status": "secondary_citywide_gig_guide"},
                 {"venue": "O2 City Hall Newcastle", "source_url": "https://www.songkick.com/venues/885211-o2-city-hall/calendar",
-                 "source_type": "secondary_venue_calendar"},
+                 "source_status": "secondary_venue_calendar"},
                 {"venue": "Cobalt Studios", "source_url": "https://www.axs.com/uk/venues/2301/o2-city-hall-newcastle-upon-tyne-tickets",
-                 "source_type": "secondary_ticketing_calendar"},
+                 "source_status": "secondary_ticketing_calendar"},
             ])
             self.write_csv(natural, ["candidate_url", "source_page_url"], [
                 {"candidate_url": "https://www.boilershop.net/events/heaven-17", "source_page_url": "https://www.boilershop.net/events"},
                 {"candidate_url": "https://soundbitenortheast.com/newcastle-gigs/", "source_page_url": "https://soundbitenortheast.com/newcastle-gigs/"},
-                {"candidate_url": "https://www.songkick.com/venues/885211-o2-city-hall/calendar", "source_page_url": "https://www.songkick.com/venues/885211-o2-city-hall/calendar"},
-                {"candidate_url": "https://www.axs.com/uk/venues/2301/o2-city-hall-newcastle-upon-tyne-tickets", "source_page_url": "https://www.axs.com/uk/venues/2301/o2-city-hall-newcastle-upon-tyne-tickets"},
+                {"candidate_url": "https://www.songkick.com/concerts/43121168-dexys-midnight-runners-at-o2-city-hall", "source_page_url": "https://www.songkick.com/venues/885211-o2-city-hall/calendar"},
+                {"candidate_url": "https://www.academymusicgroup.com/o2cityhallnewcastle/events/dexys-midnight-runners-tickets-ae1342102", "source_page_url": "https://www.academymusicgroup.com/o2cityhallnewcastle/events"},
+                {"candidate_url": "https://www.axs.com/events/123456/dexys-midnight-runners-tickets", "source_page_url": "https://www.axs.com/uk/venues/2301/o2-city-hall-newcastle-upon-tyne-tickets"},
             ])
 
             with patch("sys.argv", [
@@ -99,9 +106,12 @@ class VerifyEventCandidatesTests(unittest.TestCase):
                 self.assertEqual(main(), 0)
 
             with out.open(encoding="utf-8", newline="") as stream:
-                rows = {row["artist_pool_name"]: row for row in csv.DictReader(stream)}
+                output_rows = list(csv.DictReader(stream))
+            rows = {row["artist_pool_name"]: row for row in output_rows if row["event_date"] != "2026-10-20"}
             self.assertEqual(rows["Heaven 17"]["verification_status"], "verified_official_source")
             self.assertEqual(rows["Dexys Midnight Runners"]["verification_status"], "verified_cross_source")
+            dexys_wrong_date=next(row for row in output_rows if row["event_date"]=="2026-10-20")
+            self.assertEqual(dexys_wrong_date["verification_status"], "candidate_needs_manual_review")
             self.assertEqual(rows["Ye Gods"]["verification_status"], "candidate_needs_manual_review")
             summary = json.loads(out.with_suffix(".summary.json").read_text(encoding="utf-8"))
             self.assertEqual(summary["verified_events"], 2)

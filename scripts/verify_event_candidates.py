@@ -84,6 +84,29 @@ def venue_matches(actual: str, expected: str) -> bool:
     return any(alias and f" {norm(alias)} " in padded for alias in aliases)
 
 
+def is_calendar_hub_url(url: str, venue: str, source_rows: list[dict[str, str]], configured_urls: set[tuple[str, str]]) -> bool:
+    key = url_key(url)
+    if key in configured_urls:
+        return True
+    venue_norm = norm(venue)
+    for source in source_rows:
+        if norm(source.get("venue", "")) != venue_norm:
+            continue
+        source_url = (source.get("source_url") or "").strip()
+        if not source_url:
+            continue
+        source_key = url_key(source_url)
+        if source_key[0] != key[0]:
+            continue
+        candidate_path = key[1].rstrip("/")
+        source_path = source_key[1].rstrip("/")
+        # A venue homepage can be the parent of its configured /events or /gigs
+        # route. Do not use a homepage's unrelated nearby date heading as proof.
+        if candidate_path and source_path.startswith(candidate_path + "/"):
+            return True
+    return False
+
+
 def contains_performer(row: dict[str, str], performer: str) -> bool:
     performer_norm = norm(performer)
     if not performer_norm:
@@ -179,6 +202,8 @@ def main() -> int:
             explicitly_seeded = "explicit regression seed page" in note.casefold()
             naturally_collected = key in natural_url_keys or key in configured_source_urls
             if explicitly_seeded and not naturally_collected:
+                continue
+            if is_calendar_hub_url(url, venue, [*primary_rows, *secondary_rows], configured_source_urls):
                 continue
 
             domain = host(url)
