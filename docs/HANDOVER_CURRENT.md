@@ -16,7 +16,7 @@ User explicitly wants frank status updates if things are not going to plan, no e
 - Repository: `nickelliottgreaves-dot/riley-coe-pipeline`
 - Reference/legacy development branch: `rebuild/core-gig-finder`
 - New redesign branch: `redesign/workflow-contract`
-- Last tested implementation commit: `1701aed490bbbfd86b482ac11964c1e01e7b000a` (**121 tests passed**); the following handover commit intentionally triggers the second independent full sweep after source-scope fixes.
+- Last tested implementation commit: `4c38dba7343fde758fac229dd8b71ced67cf4801` (**123 tests passed**); a manual review ledger is also preserved. The following handover commit intentionally triggers the simulated-source-failure acceptance run.
 - Authoritative pool: `data/artist_pool.csv`, 833 unique names.
 - Backup: `data/artist_pool_backup_20261015.csv` (preserves 747-row baseline).
 - Dated update audit says 86 additions came from eight exact BBC/RadioFiles full-tracklist matches; three mismatched episodes and 15 fuzzy-name collisions remained review-only.
@@ -81,14 +81,14 @@ Run [38734330424](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/a
 - No venue crawl cap was reached in this run.
 - The validator passed structural integrity with no errors, and correctly warned that **all 20 source calendars remain independently unverified**. This is a valid PARTIAL candidate package, not proof of exhaustive coverage.
 
-The five candidate rows to review from the artifact are:
-1. 17 Oct — Cabaret Voltaire at Boiler Shop (official Boiler Shop event page; candidate, sold out).
-2. 23 Oct — The Wedding Present at Boiler Shop (official page; candidate, sold out).
-3. 23 Oct — Radhika associated with The Wedding Present bill at Boiler Shop (support-role candidate; sold out).
-4. 10 Nov — Teenage Fanclub at Boiler Shop (official page; candidate, sold out).
-5. 9 Nov — Barbican Estate at The Cluny (Songkick safety-net source; needs independent confirmation against the venue's own listings).
+The five candidate rows were independently reviewed and recorded in `artifacts/manual-review/gig-finder-candidate-review-2026-10-15.csv`:
+1. 17 Oct — Cabaret Voltaire at Boiler Shop: date, venue, billing and sold-out status confirmed on the official Boiler Shop page; Gazelle Twin is also billed; price not visible.
+2. 23 Oct — The Wedding Present at Boiler Shop: date, venue, headline and sold-out status confirmed on the official page; Radhika is listed as support; price not visible.
+3. 23 Oct — Radhika support: support billing confirmed on the same official page; sold-out status applies to the event; price not visible.
+4. 10 Nov — Teenage Fanclub at Boiler Shop: date, venue, headline and sold-out status confirmed on the official page; price not visible.
+5. 9 Nov — Barbican Estate at The Cluny: listed on the venue-specific Songkick calendar for Newcastle; **official Cluny cross-check still pending**, with price and ticket status unknown.
 
-The artifact is `riley-coe-independent-gig-finder-38734330424` (artifact ID `11972410390`). All candidate rows remain `verified=false`; blank price fields have not been inferred.
+The artifact is `riley-coe-independent-gig-finder-38734330424` (artifact ID `11972410390`). The pipeline's match rows correctly remain `verified=false`; the separate manual ledger records what was checked and what remains unresolved.
 
 ### Fixes on the redesign branch, with regression tests
 
@@ -97,7 +97,7 @@ The artifact is `riley-coe-independent-gig-finder-38734330424` (artifact ID `119
 - `scripts/run_gig_finder.py` records actual page-fetch outcomes, source-outcome counts and out-of-scope candidate counts.
 - `scripts/validate_gig_finder_report.py` warns when source calendars have not been independently verified.
 - Regression tests cover Songkick metro/artist-page exclusion, explicit non-local venue rejection, local venue correction, duplicate event collapse and out-of-scope audit output.
-- Latest test run [38734218011](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38734218011): **121 tests passed**. The live sweep run also passed the unit-tests job.
+- Latest test run [38735058918](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38735058918): **123 tests passed**. The live sweep run also passed the unit-tests job.
 
 ## Key redesign decision
 
@@ -120,10 +120,10 @@ Do not patch the legacy assembler/validator separately again. Build two independ
 
 ## Current immediate next actions
 
-1. Independently verify the five candidate rows from run 38734330424 against the original event sources, particularly Barbican Estate at The Cluny; check date, billing/support, price and ticket status where available. Keep all matches unverified until this is done.
-2. Add a deterministic simulated-source-failure acceptance test to prove a source failure still yields a valid PARTIAL report with a source-level failure record.
-3. Run the independent gig finder a second time after those changes, then compare outputs and confirm repeatability. Do not count the first sweep as passing acceptance because it exposed false positives.
-4. Only after Process A passes these checks, implement and test the separate BBC/RadioFiles artist-pool updater. Do not wire the legacy assembler into the new path.
+1. **Immediate:** this handover commit includes `[full-sweep] [simulate-source-failure]` and will trigger an acceptance run with a controlled failure injected for Cobalt Studios. Confirm the report still assembles and validates as PARTIAL, with Cobalt marked partial and the original venue registry unchanged.
+2. Review the simulated-run artifact and logs; update this handover with its run ID, source outcomes and validation result.
+3. The normal run 38734330424 is the first passing Process A run; the next simulated-failure run should be the second acceptance run. Do not count the earlier false-positive run 38733027855 as passing acceptance.
+4. After the failure-injection run passes, the core gig finder has two useful end-to-end demonstrations. Then implement the separate BBC/RadioFiles artist-pool updater. Do not wire the legacy assembler into the new path.
 4. Audit the remaining legacy scripts against `docs/WORKFLOW_REDESIGN_SPEC.md`; keep `scripts/run_core_search.py` as reference only because it covers nine core venues, not the required 20.
 5. After the candidate finder has a reliable partial-report contract, implement and test the separate BBC/RadioFiles artist-pool updater. Do not wire the legacy assembler into the new path.
 6. After each meaningful stage, update this handover with latest run ID/conclusion, tests, blockers and exact next action. Never add `[full-sweep]` to ordinary documentation or code commits unless a live scrape is intentional.
