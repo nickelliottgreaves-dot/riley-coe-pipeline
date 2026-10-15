@@ -64,15 +64,15 @@ class WorkflowContractTests(unittest.TestCase):
                 json.dumps(load_contract()), encoding="utf-8"
             )
             (root / "config" / "venue_sources.csv").write_text(
-                "venue,source_url,source_status,notes\\n"
-                "Test Venue,https://example.test/events,official,Note with comma, extra field\\n",
+                "venue,source_url,source_status,notes\n"
+                "Test Venue,https://example.test/events,official,Note with comma, extra field\n",
                 encoding="utf-8",
             )
             (root / "config" / "required_venues.csv").write_text(
-                "venue,mandatory\\nTest Venue,true\\n", encoding="utf-8"
+                "venue,mandatory\nTest Venue,true\n", encoding="utf-8"
             )
             (root / "data" / "artist_pool.csv").write_text(
-                "index,artist,status,source_basis\\n1,Test Artist,ACTIVE,baseline\\n",
+                "index,artist,status,source_basis\n1,Test Artist,ACTIVE,baseline\n",
                 encoding="utf-8",
             )
             result = validate_registries(root)
