@@ -824,6 +824,7 @@ def main():
     def crawl_venue(venue, urls):
         all_rows=[]
         audits=[]
+        failures=[]
         queue=deque(); queued=set(); visited=set(); failed=0; added=0; cap=False; external_pages_inspected=0
         canonical_urls=[]
         primary_source_url=urls[0] if urls else ""
@@ -864,6 +865,7 @@ def main():
             if len(visited)>=args.max_pages_per_venue:
                 cap=True; break
             visited.add(url)
+            status = ""
             try:
                 status,ctype,html,truncated=fetch(url)
                 if "html" not in ctype.lower(): raise ValueError("Non-HTML response")
@@ -1027,21 +1029,29 @@ def main():
                             added+=1
             except (HTTPError,URLError,TimeoutError,OSError,ValueError) as exc:
                 failed+=1
-                all_rows.append({"venue":venue,"page_url":url,"http_status":"","content_type":"","page_title":"","event_title":"","event_date":"","performer_names":"","price":"","currency":"","availability":"","event_jsonld_found":"false","visible_text_snapshot":"","verified":"false","status":"fetch_failed","notes":f"{type(exc).__name__}: {exc}"})
+                error_status = getattr(exc,"code","") or status or ""
+                external_page = urlparse(url).netloc.casefold().removeprefix("www.") != official_host.casefold().removeprefix("www.")
+                failures.append({
+                    "venue": venue, "page_url": url, "crawl_depth": str(depth),
+                    "http_status": str(error_status), "external_page": str(external_page).lower(),
+                    "error_type": type(exc).__name__, "error_message": str(exc),
+                })
+                all_rows.append({"venue":venue,"page_url":url,"http_status":str(error_status),"content_type":"","page_title":"","event_title":"","event_date":"","performer_names":"","price":"","currency":"","availability":"","event_jsonld_found":"false","visible_text_snapshot":"","verified":"false","status":"fetch_failed","notes":f"{type(exc).__name__}: {exc}"})
             time.sleep(max(0,args.delay))
         audits.append({"venue":venue,"seed_candidate_links":len(set(urls)),"external_seed_links_skipped":external_seed_links_skipped,"external_event_pages_inspected":external_pages_inspected,"pages_fetched":len(visited)-failed,"pages_failed":failed,"same_host_links_added":added,"crawl_cap_reached":str(cap).lower(),"status":"PARTIAL" if urls else "NO_SEED_LINKS","notes":("Bounded crawl only; cap, JavaScript content, pagination and event/support completeness require review. Up to six allowlisted external ticketing event-detail pages per venue may be inspected; those pages are not recursively crawled." if urls else "No candidate links supplied for this configured venue. This is a discovery gap, not evidence that the calendar is empty.")})
-        return all_rows, audits
+        return all_rows, audits, failures
 
     # Crawl independent venues concurrently so a slow or blocked site cannot
     # make the entire 20-venue sweep serially wait on every timeout.
-    all_rows=[]; audits=[]
+    all_rows=[]; audits=[]; all_failures=[]
     venue_items=list(by_venue.items())
     with ThreadPoolExecutor(max_workers=8) as executor:
         futures=[executor.submit(crawl_venue, venue, urls) for venue, urls in venue_items]
         for future in futures:
-            venue_rows, venue_audits = future.result()
+            venue_rows, venue_audits, venue_failures = future.result()
             all_rows.extend(venue_rows)
             audits.extend(venue_audits)
+            all_failures.extend(venue_failures)
     # Deduplicate identical candidate rows emitted by repeated embedded
     # JSON-LD blocks or overlapping visible-card parsing on the same venue.
     # Keep source-page distinctions in the retained row's URL and snapshot.
@@ -1050,7 +1060,7 @@ def main():
     for row in all_rows:
         def norm(value):
             return " ".join(re.sub(r"[^a-z0-9]+"," ",str(value or "").casefold()).split())
-        key=(norm(row.get("venue")),norm(row.get("event_title")),str(row.get("event_date") or "")[:10],norm(row.get("performer_names")),norm(row.get("status")))
+        key=(norm(row.get("venue")),norm(row.get("event_title")),str(row.get("event_date") or "")[:10],norm(row.get("performer_names")),norm(row.get("status")),norm(row.get("page_url")) if row.get("status")=="fetch_failed" else "")
         if row.get("event_date") and row.get("event_date")[:10]:
             try:
                 day=date.fromisoformat(row["event_date"][:10])
@@ -1065,6 +1075,9 @@ def main():
     all_rows=deduped_rows
     with (args.out_dir/"event_page_inspection.csv").open("w",encoding="utf-8",newline="") as f:
         w=csv.DictWriter(f,fieldnames=EVENT_FIELDS);w.writeheader();w.writerows(all_rows)
+    failure_fields=["venue","page_url","crawl_depth","http_status","external_page","error_type","error_message"]
+    with (args.out_dir/"event_page_fetch_failures.csv").open("w",encoding="utf-8",newline="") as f:
+        w=csv.DictWriter(f,fieldnames=failure_fields);w.writeheader();w.writerows(all_failures)
     with (args.out_dir/"event_page_crawl_audit.csv").open("w",encoding="utf-8",newline="") as f:
         w=csv.DictWriter(f,fieldnames=AUDIT_FIELDS);w.writeheader();w.writerows(audits)
     summary={"venues_configured":sum(1 for _ in audits),"venues_with_seed_links":sum(r["seed_candidate_links"]>0 for r in audits),"venues_without_seed_links":sum(r["seed_candidate_links"]==0 for r in audits),"pages_inspected":sum(r["pages_fetched"]+r["pages_failed"] for r in audits),"pages_failed":sum(r["pages_failed"] for r in audits),"external_seed_links_skipped":sum(r["external_seed_links_skipped"] for r in audits),"external_event_pages_inspected":sum(r["external_event_pages_inspected"] for r in audits),"event_jsonld_rows":sum(r["event_jsonld_found"]=="true" for r in all_rows),"crawl_caps_reached":sum(r["crawl_cap_reached"]=="true" for r in audits),"status":"PARTIAL","limitations":["No event row is marked verified.","Only same-host links are followed after seed discovery, apart from at most six allowlisted third-party ticketing event-detail pages per venue; those pages are not recursively crawled.","JavaScript-only calendars, hidden pagination, unallowlisted third-party ticket pages and support acts can be missed.","Manual event-by-event verification and venue coverage records remain required."]}
