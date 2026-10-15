@@ -68,6 +68,27 @@ Doors:
         self.assertEqual(row["performer_names"], "Skating Polly; Lord Friday The 13th")
         self.assertIn("independently verify", row["notes"])
 
+    def test_category_first_cards_use_default_venue_and_extract_price(self):
+        visible = """AUTUMN PROGRAMME 2026
+Featured Events:
+17 Oct 2026
+Club Night
+L.A.D's presents: Marion Hawkes + Sami J
+11pm
+£9-14
+17 Oct 2026
+Club Night
+Some Like It Early Presents: Colleen 'Cosmo' Murphy
+7pm
+£10-15"""
+        rows = extract_visible_listing_events(visible, "Cobalt Studios")
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(rows[0]["event_date"], "2026-10-17")
+        self.assertEqual(rows[0]["venue"], "Cobalt Studios")
+        self.assertEqual(rows[0]["price"], "£9-14")
+        self.assertEqual(rows[0]["performer_names"], "Marion Hawkes; Sami J")
+        self.assertEqual(rows[1]["performer_names"], "Colleen 'Cosmo' Murphy")
+
     def test_detail_page_with_generic_page_title_is_not_promoted_as_an_event(self):
         visible = """Jack Savoretti
 Date:
