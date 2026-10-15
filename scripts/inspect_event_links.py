@@ -199,17 +199,38 @@ def extract_visible_listing_events(visible_text):
 def likely(href,text):
     return bool(re.search(r"event|gig|show|concert|ticket|whats-on|whatson|live-music|performance|listing|page=|next|older",href+" "+text,re.I))
 
-def is_calendar_navigation(href,text):
-    """Prioritize true calendar and pagination links, not every event detail URL."""
-    path=urlparse(href).path.casefold()
+def _pagination_number(url):
+    parsed=urlparse(url)
+    query=dict((k.casefold(),v) for k,v in __import__("urllib.parse",fromlist=["parse_qs"]).parse_qs(parsed.query).items())
+    for key in ("page","paged","p","currentpage","pagenumber"):
+        if key in query and query[key]:
+            try: return int(query[key][0])
+            except (ValueError,TypeError): pass
+    match=re.search(r"/page/(\d+)(?:/|$)",parsed.path,re.I)
+    return int(match.group(1)) if match else 1
+
+
+def is_pagination_link(href,text):
     blob=(href+" "+text).casefold()
-    if re.search(r"[?&](?:page|paged|month|year)=",href,re.I):
+    path=urlparse(href).path.casefold()
+    return bool(
+        re.search(r"[?&](?:page|paged|p|currentpage|pagenumber)=",href,re.I)
+        or re.search(r"/page/\d+(?:/|$)",path)
+        or re.search(r"\b(next|older|previous|newer)\b",text,re.I)
+    )
+
+
+def is_calendar_navigation(href,text,current_url=None):
+    """Prioritize only the next pagination page, not every numbered archive page."""
+    target=urljoin(current_url,href) if current_url else href
+    path=urlparse(target).path.casefold()
+    if re.search(r"\b(next|older|previous|newer)\b",text,re.I) and is_pagination_link(href,text):
         return True
-    if re.search(r"/(?:page|date|calendar)/",path):
-        return True
-    if path.rstrip("/") in {"/events","/event","/gigs","/gig","/whats-on","/whatson","/shows","/concerts"}:
-        return True
-    return bool(re.search(r"\\b(next|older|previous|newer)\\b",blob))
+    if is_pagination_link(href,text):
+        current_number=_pagination_number(current_url) if current_url else 1
+        target_number=_pagination_number(target)
+        return target_number == current_number + 1
+    return path.rstrip("/") in {"/events","/event","/gigs","/gig","/whats-on","/whatson","/shows","/concerts"}
 
 def main():
     ap=argparse.ArgumentParser()
@@ -296,7 +317,7 @@ def main():
                         target=target.split("#",1)[0]
                         if target not in visited and not any(x[0]==target for x in queue):
                             item=(target,depth+1)
-                            if is_calendar_navigation(href,txt):
+                            if is_calendar_navigation(href,txt,url):
                                 queue.appendleft(item)
                             else:
                                 queue.append(item)
