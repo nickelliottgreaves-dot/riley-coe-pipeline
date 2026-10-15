@@ -2,7 +2,7 @@ import csv, json, subprocess, sys, tempfile, unittest
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/"scripts"))
-from inspect_event_links import extract_visible_event, is_calendar_navigation
+from inspect_event_links import extract_visible_event, extract_visible_listing_events, is_calendar_navigation
 
 class EventPageCrawlerTests(unittest.TestCase):
     def test_calendar_pagination_is_prioritized_over_detail_pages(self):
@@ -35,6 +35,38 @@ Doors:
         self.assertEqual(row["price"], "£17.50")
         self.assertEqual(row["performer_names"], "Skating Polly; Lord Friday The 13th")
         self.assertIn("independently verify", row["notes"])
+
+    def test_extracts_multiple_dated_cards_from_cluny_calendar(self):
+        visible = """Gigs
+October 2026
+Skating Polly
+Thu 15 Oct 2026
+/
+The Cluny
+With support from
+Lord Friday The 13th
+Info
+Tickets
+Florentenes
+Thu 15 Oct 2026
+/
+Cluny 2
+Info
+Tickets
+Discharge
+Fri 16 Oct 2026
+/
+The Cluny
+Info
+Tickets"""
+        rows = extract_visible_listing_events(visible)
+        self.assertEqual(len(rows), 3)
+        self.assertEqual(rows[0]["event_title"], "Skating Polly")
+        self.assertEqual(rows[0]["event_date"], "2026-10-15")
+        self.assertEqual(rows[0]["venue"], "The Cluny")
+        self.assertEqual(rows[0]["performer_names"], "Skating Polly; Lord Friday The 13th")
+        self.assertEqual(rows[1]["venue"], "Cluny 2")
+        self.assertEqual(rows[2]["event_title"], "Discharge")
 
     def test_crawler_preserves_unverified_status_and_audit(self):
         with tempfile.TemporaryDirectory() as tmp:
