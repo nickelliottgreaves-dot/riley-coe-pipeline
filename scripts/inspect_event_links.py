@@ -276,7 +276,7 @@ def extract_visible_event(page_title, visible_text, default_venue=""):
     # "Sheku Kanneh-Mason plays Saint-Saëns". Keep the full display title but
     # extract the actual lead act for exact pool matching.
     lead_match=re.match(r"(?i)^(.+?)\s+(?:plays|performs)\s+",billing_title)
-    primary=lead_match.group(1).strip() if lead_match else (title_acts[0] if title_acts else (billing_title.split(":",1)[0].strip() if ":" in billing_title else billing_title))
+    primary=lead_match.group(1).strip() if lead_match else (title_acts[0] if len(title_acts)>1 else (billing_title.split(":",1)[0].strip() if ":" in billing_title else billing_title))
     # Classical/ensemble detail pages often list credits in a "Who's playing it"
     # section with a role on the line after each name. Keep the names, not the
     # role labels or prose paragraphs, so these acts can be compared to the pool.
