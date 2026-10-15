@@ -118,6 +118,34 @@ Fri
 7:00 pm"""
         self.assertIsNone(extract_visible_event("Boiler Shop", visible, "Boiler Shop"))
 
+    def test_cobalt_detail_uses_main_ordinal_date_price_and_billed_acts(self):
+        visible = """SOURCE: https://cobaltstudios.co.uk/events/l-a-ds-presents-marion-hawkes/
+VENUE: Cobalt Studios
+L.A.D’s presents: Marion Hawkes + Sami J - Cobalt Studios
+Club Night
+Sat 17th October 2026
+11pm
+9-14
+Location:
+Venue Space, Cobalt Studios, Newcastle
+Marion Hawkes
+Support from L.A.Ds and Slack’s Radio resident
+Sami J
+—
+You may also like...
+15 Oct 2026
+Live Music
+Fresh Thursday // Right of Way + James Leonard Hewitson
+7pm
+£8-16
+SOLD OUT"""
+        row = extract_visible_event("L.A.D’s presents: Marion Hawkes + Sami J - Cobalt Studios", visible, "Cobalt Studios")
+        self.assertIsNotNone(row)
+        self.assertEqual(row["event_date"], "2026-10-17")
+        self.assertEqual(row["price"], "£9-14")
+        self.assertEqual(row["performer_names"], "Marion Hawkes; Sami J")
+        self.assertEqual(row["availability"], "not_checked")
+
     def test_extracts_unlabelled_boiler_shop_date_and_support_billing(self):
         visible = """SOURCE: https://www.boilershop.net/events/the-wedding-present-23-10-26
 VENUE: Boiler Shop
