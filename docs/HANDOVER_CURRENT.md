@@ -421,10 +421,11 @@ Live acceptance run [38742152167](https://github.com/nickelliottgreaves-dot/rile
 
 Inspection of those 24 failures showed that three were same-host image files on The Globe's website. These are not HTML event pages and should not have been crawled or counted as failures. Added `is_non_html_asset_url` filtering for obvious image/video/audio/CSS/JS/font assets in both seed and discovered links. Added a regression test to ensure media URLs are skipped and do not appear in the failure ledger. The first test commit had a fixture quoting error; that was fixed. Latest test run [38742724507](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38742724507) passed: **139 tests**.
 
-This handover commit intentionally triggers a new normal full sweep. Verify that:
-1. The failure ledger still matches the crawl audit count exactly.
-2. The Globe's three media-asset failures have disappeared; other genuine failures remain explicitly listed.
-3. The 20-source / 847-artist coverage, seven candidate matches and zero out-of-scope rows remain stable.
-4. The report validator passes and the result remains PARTIAL.
+The normal live sweep [38742825828](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38742825828) completed successfully with the media filter:
+- `event_page_fetch_failures.csv`: 21 rows; crawl audit `pages_failed` total: 21. Validator passed.
+- The three Globe image-link failures disappeared; no image/media URLs appear in the failure ledger.
+- 20 source coverage rows, 847/847 artist page comparisons, 847/847 event comparisons, seven candidate matches, zero out-of-scope rows, zero verified rows, and zero stage failures.
+- 14 sources checked in captured scope and six remain partial. The 21 genuine fetch failures are five Universe 503s at Boiler Shop, three SeeTickets/Ents24 403s at Cumberland Arms, one internal Cobalt Studios 404, six ticket-provider failures at NX Newcastle, five SeeTickets 403s at Central Gateshead, and one Skiddle HTTP 202 at The Globe.
+- Run artifact: `riley-coe-independent-gig-finder-38742825828`, ID `11976690632`.
 
-After that normal sweep, run one simulated-Cobalt failure against the current ledger implementation. Do not merge to `main` or mark the research COMPLETE.
+This handover commit intentionally triggers the simulated-Cobalt failure acceptance run against the same ledger implementation. Verify that the report still assembles as PARTIAL, the failure ledger count matches the crawl audit, and the Cobalt outage is explicitly recorded without changing the authoritative pool. Do not merge to `main` or mark the research COMPLETE.
