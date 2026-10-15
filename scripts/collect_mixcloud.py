@@ -164,7 +164,7 @@ def fetch_html_cloudcasts(username: str, since: date, until: date) -> tuple[list
     path_pattern = (
         r"(?i)(?:https?://(?:www\\.)?mixcloud\\.com)?/?"
         + re.escape(username.strip("/"))
-        + r"/riley[-_]coe[^\\\"'\\s<>]*"
+        + r"/riley[-_]coe[A-Za-z0-9/_-]*"
     )
     raw_paths = re.findall(path_pattern, html_text)
     link_candidates = list(parser.links)
