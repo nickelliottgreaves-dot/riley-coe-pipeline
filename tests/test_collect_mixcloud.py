@@ -68,7 +68,6 @@ class MixcloudInventoryTests(unittest.TestCase):
                     "name": "Riley & Coe Tuesday 6 October 2026",
                     "url": "https://www.mixcloud.com/SixMusicAlternative/riley-coe-tuesday-6th-october-2026/",
                     "key": "/SixMusicAlternative/riley-coe-tuesday-6th-october-2026/",
-                    "created_time": "2026-10-06T20:00:00Z"
                 }]}
             return {"data": []}
 
