@@ -208,6 +208,20 @@ Fixes now committed:
 - Latest test run [38739200928](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38739200928) passed **135 tests** (including a mocked Cardiff-to-Lubber-Fiend scope regression). This run was tests-only; the new live full sweep is being triggered by the handover commit below and must demonstrate that the false Skiddle matches disappear.
 
 
+
+## Clean normal sweep after Skiddle scope fix
+
+Run [38739286368](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38739286368) completed successfully with the Skiddle venue-scope guard, repaired CSV source notes and 847-row pool. Unit tests and the independent artist-pool updater also passed.
+
+- 20/20 venue coverage rows, 847/847 artist page-search rows and 847/847 dated-event comparison rows.
+- **6 candidate matches; 0 out-of-scope event rows; 0 automatically verified event rows.** The false Cardiff/Birmingham events attributed to Lubber Fiend/Little Buildings in run 38738653337 are gone. Do not use that older 21-candidate report as a valid event list; it was the run that exposed the bug.
+- 393 pages inspected, 25 fetch failures, 11 allowlisted external ticketing pages inspected, 86 external seed links skipped, zero crawl caps. Thirteen sources were checked within captured scope and seven are partial. All calendar completeness flags remain false.
+- The two collector stages `venue_page_inventory` and `event_candidate_discovery` returned non-zero because Ticketmaster's Utilita Arena calendar returned HTTP 403. Their partial outputs were retained; the runner continued, emitted all source/artist rows and passed report validation. Utilita Arena remains partial.
+- The three Skiddle safety-net sources (Lubber Fiend, Little Buildings, ZEROX) now inspect only the configured venue path and do not follow other city/venue pages. Each yielded one page and no crawl cap. No Cardiff/Birmingham matches survive.
+- Candidate matches remain Barbican Estate at The Cluny; Cabaret Voltaire at Boiler Shop; Pys Melyn in the DICE lineup at The Globe; Radhika support for The Wedding Present; Teenage Fanclub; and The Wedding Present. Manual review details are in `artifacts/manual-review/gig-finder-candidate-review-2026-10-15.csv`.
+- Artifact: `riley-coe-independent-gig-finder-38739286368` (ID `11975545893`). Artist-updater artifact: `riley-coe-artist-pool-updater-38739286368` (ID `11975290618`).
+
+
 ## Key redesign decision
 
 Do not patch the legacy assembler/validator separately again. Build two independent processes around one contract:
