@@ -16,7 +16,7 @@ User explicitly wants frank status updates if things are not going to plan, no e
 - Repository: `nickelliottgreaves-dot/riley-coe-pipeline`
 - Reference/legacy development branch: `rebuild/core-gig-finder`
 - New redesign branch: `redesign/workflow-contract`
-- Latest test run [38736989381](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38736989381) passed **130 tests** with the reviewed 847-row pool; it includes the shared contract, timeout guard and fuzzy-identity proposal tests. The current handover commit will trigger a deliberate Cobalt Studios source-failure run against all 847 artists.
+- Latest test run [38737693907](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38737693907) passed **132 tests** with the reviewed 847-row pool; it includes the shared contract, timeout guard, fuzzy-identity proposal tests, and bounded external ticket-page crawling. This handover commit will trigger a normal live sweep using the updated external-ticket-page logic.
 - **Current authoritative pool:** `data/artist_pool.csv`, **847 unique names**. It was expanded from 833 to 847 in commit `cf649137aa31202e646d014c3b3885f5e761189e` after manual review of 14 exact-crosscheck artists.
 - **Preserved prior pool:** `data/artist_pool_backup_20261015.csv` is the 833-row pool immediately before that 14-artist review; `data/artist_pool_backup_20261015_pre_fuzzy_review.csv` preserves an earlier baseline. Do not replace or delete either backup.
 - Historical audit `data/artist_pool_update_audit_20261015.json` documents the earlier 747→833 update: 86 additions from eight exact BBC/RadioFiles full-tracklist matches. It is intentionally historical, not the final 847-row audit.
@@ -159,6 +159,16 @@ Run [38737058283](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/a
 - The dated manual review ledger now has a secondary Ticketmaster venue-calendar link for Barbican Estate. Ticketmaster's Cluny calendar corroborates 9 Nov 2026 at 19:30 and The Cluny; its linked Universe event page returned 503. This is independent third-party corroboration, not an official Cluny event-page confirmation; price and ticket status remain unknown. The row is now `third_party_calendar_cross_checked`, not fully verified.
 
 
+
+## Bounded external ticketing-page support (new code; live verification pending)
+
+- Identified a concrete coverage gap: the previous crawler skipped all third-party links, including event-specific pages from Universe, See Tickets, WeGotTickets, Eventbrite, TicketSource, TicketTailor, Skiddle, TicketWeb, Fatsoma, Ents24, Dice, Ticketmaster, Gigantic and Eventim.
+- `scripts/inspect_event_links.py` now admits only specific event-detail URLs on an allowlist, with a default maximum of **6 external event pages per venue**. It does not recursively follow links from those pages. Generic venue/promoter pages, account/cart/search pages, Songkick metro pages and artist pages remain excluded. The audit now records `external_event_pages_inspected` separately from `external_seed_links_skipped`.
+- `scripts/run_gig_finder.py` carries that count into `venue_coverage.csv`.
+- Regression tests cover valid event-detail URL patterns, rejection of generic/unrelated pages, one external event page being inspected, and no recursive crawl. The first test run caught two URL-pattern mistakes; these were fixed in commit `f584650b5d11ba60343c12488bdb676dd4a6a540`. Latest tests passed: **132 tests**.
+- The latest full sweep [38737058283](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38737058283) predates this code. The next full sweep must confirm the allowlist yields useful external event evidence without reintroducing out-of-area Songkick matches or exceeding the cap.
+
+
 ## Key redesign decision
 
 Do not patch the legacy assembler/validator separately again. Build two independent processes around one contract:
@@ -180,12 +190,13 @@ Do not patch the legacy assembler/validator separately again. Build two independ
 
 ## Current immediate next actions
 
-1. **Immediate:** this handover commit includes `[full-sweep] [simulate-source-failure]` to run the deliberate Cobalt Studios failure against the current 847-row pool. Check the run ID and artifact; the report must still contain 20 venue rows and 847 rows for both artist comparisons, with Cobalt marked partial and the package validator passing.
-2. The latest normal sweep [38737058283](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38737058283) passed with the 847-row pool and timeout guard; its report is PARTIAL, not complete. Confirm the simulation run also passes.
-3. Improve source-level completeness, especially venues where a fetched landing page has no dated event rows (Cumberland Arms, Little Buildings, Lubber Fiend, ZEROX, NUSU and others). Use concrete source evidence and keep calendar coverage false unless pagination/coverage is established.
-4. Keep the three mismatch-episode candidates held; resolve The Headcoatees vs Thee Headcoatees only with reliable source evidence. The 14 `ADD_TO_POOL` decisions have explicit track/source rationale in the manual review CSV.
-5. Resolve the remaining Cluny issue: Ticketmaster's venue calendar corroborates Barbican Estate's date and venue, but the official Cluny event page is still unconfirmed; retain third-party-only status and unknown price/ticket status until better evidence is found.
-6. Do not merge to `main` until source coverage and verification criteria are satisfied.
+1. **Immediate:** this handover commit includes `[full-sweep]` to run the normal live sweep against the current 847-row pool with the new bounded external ticketing-page support. Check the run ID, 20 venue rows, 847/847 artist comparison rows, `external_event_pages_inspected`, and candidate matches. Legacy all-in-one jobs should remain skipped.
+2. Confirm the crawler does not reintroduce non-local Songkick matches, does not recursively crawl ticketing sites, and respects the six external-page-per-venue cap. All candidate rows remain unverified until the separate manual ledger supports them.
+3. After reviewing the normal run, rerun the simulated Cobalt Studios source failure on this latest code and confirm a valid PARTIAL report with 20 venue rows and 847 artist rows.
+4. Improve source-level completeness, especially venues where a fetched landing page has no dated event rows (Cumberland Arms, Little Buildings, Lubber Fiend, ZEROX, NUSU and others). Use concrete source evidence and keep calendar coverage false unless pagination/coverage is established.
+5. Keep the three mismatch-episode candidates held; resolve The Headcoatees vs Thee Headcoatees only with reliable source evidence. The 14 `ADD_TO_POOL` decisions have explicit track/source rationale in the manual review CSV.
+6. Resolve the remaining Cluny issue: Ticketmaster's venue calendar corroborates Barbican Estate's date and venue, but the official Cluny event page is still unconfirmed; retain third-party-only status and unknown price/ticket status until better evidence is found.
+7. Do not merge to `main` until source coverage and verification criteria are satisfied.
 8. Audit the remaining legacy scripts against `docs/WORKFLOW_REDESIGN_SPEC.md`; keep `scripts/run_core_search.py` as reference only because it covers nine core venues, not the required 20.
 9. After each meaningful stage, update this handover with latest run ID/conclusion, tests, blockers and exact next action. Never add `[full-sweep]` to ordinary documentation or code commits unless a live scrape is intentional.
 
