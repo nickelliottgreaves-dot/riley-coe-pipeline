@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 import tempfile
 import unittest
+from pathlib import Path
 
 from scripts.run_gig_finder import combine_venue_coverage, prepare_source_registry
 
