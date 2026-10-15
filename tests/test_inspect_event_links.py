@@ -177,14 +177,20 @@ Classical 26/27
 Sage One
 Book Now
 Tickets – £5.00 to £53.00
-Who’s on stage
+Who's playing it
+Dinis Sousa
+conductor
 Sheku Kanneh-Mason
-Royal Northern Sinfonia"""
+cello
+Royal Northern Sinfonia
+What's happening in the music?
+Saint-Saëns' packs energy into his concerto."""
         row=extract_visible_event("Sheku Kanneh-Mason plays Saint-Saëns | The Glasshouse",visible,"Sage Two")
         self.assertIsNotNone(row)
         self.assertEqual(row["event_date"],"2026-10-16")
         self.assertEqual(row["venue"],"Sage One")
         self.assertEqual(row["price"],"£5.00 to £53.00")
+        self.assertEqual(row["performer_names"],"Sheku Kanneh-Mason; Dinis Sousa; Royal Northern Sinfonia")
 
     def test_glasshouse_detail_page_at_external_touring_venue_is_excluded(self):
         visible = """Thursday 15 October 2026 |
