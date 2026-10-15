@@ -437,3 +437,18 @@ The simulated-Cobalt acceptance run [38743222752](https://github.com/nickelliott
 The static-media filter and per-URL failure ledger are now acceptance-tested on both a normal live sweep ([38742825828](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38742825828)) and a simulated-source-failure sweep ([38743222752](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38743222752)). The next bounded task is to separate *venue-calendar capture status* from *third-party ticket-page fetch failures* in the coverage ledger: five venues are currently labelled partial mainly because their external ticketing pages return 403/503, despite their venue calendar pages being fetched. Add separate same-host and external-detail failure counts; only a failed primary/calendar page, same-host pagination/detail failure, crawl cap, or failed discovery should make the venue source outcome `partial`. External ticket-page failures must remain visible and keep individual event verification unresolved, while the overall report remains PARTIAL and all calendar-completeness flags stay false.
 
 Do not merge to `main` or mark the research COMPLETE. Keep the 847-row reviewed pool and the 747/833-row historical backups unchanged.
+
+
+## Coverage-status semantics update (2026-10-15)
+
+The per-URL failure ledger made it clear that most of the six `partial` venue rows in earlier runs were caused by external ticketing pages returning 403/503, not by failure to fetch the venue's own calendar. The crawler still records those failures, and event-level details remain unresolved, but the source outcome should describe calendar capture rather than whether every third-party ticket page was readable.
+
+Implemented on `redesign/workflow-contract`:
+- `venue_coverage.csv` now has `same_host_pages_failed` and `external_detail_pages_failed` alongside the total `detail_pages_failed`.
+- External ticket/detail fetch failures remain counted and described in notes, but do not by themselves label the venue calendar capture `partial`.
+- A primary/source fetch failure, discovery failure, same-host failure, crawl cap or unclassified failure still yields `partial`. Missing/incomplete failure ledgers fail closed by treating unclassified failures as same-host failures.
+- Calendar completeness remains `false` for all sources; the overall report stays `PARTIAL` until independently verified.
+
+Latest tests-only run [38743726417](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38743726417) passed: **140 tests**, including the new distinction between external ticket failures and calendar-capture failures.
+
+This handover commit intentionally triggers a live full sweep. Inspect the artifact and confirm that the new columns reconcile with the failure ledger, the six external-ticket-heavy venues are no longer mislabelled as calendar-capture failures, Cobalt remains partial for its internal failure, and the report remains PARTIAL with all 20 calendar-verification flags false.
