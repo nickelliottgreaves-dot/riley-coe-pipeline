@@ -222,7 +222,7 @@ def main():
     ap.add_argument("--listing-url",default=SERIES_URL); ap.add_argument("--radiofiles-discovery",action="store_true",help="Supplement BBC listing discovery with recent RadioFiles episode PIDs, then fetch official BBC pages")
     args=ap.parse_args(); start=date.fromisoformat(args.start); end=date.fromisoformat(args.end)
     if end<start: ap.error("--end must not precede --start")
-    out=args.out_dir; snaps=out/"snapshots"; snaps.mkdir(parents=True,exist_ok=True)
+    out=args.out_dir; snaps=out/"snapshots"; snaps.mkdir(parents=True,exist_ok=True); raw_snaps=out/"raw_html"; raw_snaps.mkdir(parents=True,exist_ok=True)
     episodes=[]; tracklists=[]; errors=[]; listing_pages=[]; visited=set(); listing_failed=False; fallback_pagination_used=False; listing_exhausted=False; empty_fallback_pages=0
     next_url=args.listing_url; pages=0
     while next_url and next_url not in visited and pages<12:
@@ -305,6 +305,11 @@ def main():
             else: note=""
             snap=snaps/(episode_id(url)+".txt")
             snap.write_text("SOURCE: "+url+"\nLISTING: "+ep["listing_source_url"]+"\n\n"+text+"\n",encoding="utf-8")
+            # Preserve raw HTML as well as visible text. BBC pages can show only
+            # three tracks plus a "Show more" control; raw markup helps investigate
+            # embedded state/API clues without treating that partial list as complete.
+            raw_snap=raw_snaps/(episode_id(url)+".html")
+            raw_snap.write_text(html,encoding="utf-8")
             state="visible_tracklist_heading_detected_needs_review" if has_heading else "tracklist_not_detected_needs_review"
             candidates_found=extract_tracklist_candidates(p,text,url,ep["title"],dt)
             trackrows.extend(candidates_found)
