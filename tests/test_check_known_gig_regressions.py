@@ -49,5 +49,36 @@ class KnownGigRegressionTests(unittest.TestCase):
             self.assertEqual(summary["not_recovered"], 1)
 
 
+    def test_seeded_parser_recovery_does_not_pass_natural_discovery_gate(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            fixtures = root / "fixtures.csv"
+            with fixtures.open("w", encoding="utf-8", newline="") as f:
+                w = csv.DictWriter(f, fieldnames=["fixture_id", "event_date", "venue", "event_title", "performer"])
+                w.writeheader()
+                w.writerow({"fixture_id": "1", "event_date": "2026-10-15", "venue": "Boiler Shop",
+                            "event_title": "Heaven 17", "performer": "Heaven 17"})
+            events = root / "events.csv"
+            with events.open("w", encoding="utf-8", newline="") as f:
+                w = csv.DictWriter(f, fieldnames=["event_date", "venue", "event_title", "artist", "source_url", "notes"])
+                w.writeheader()
+                w.writerow({"event_date": "2026-10-15", "venue": "Boiler Shop", "event_title": "Heaven 17",
+                            "artist": "Heaven 17", "source_url": "https://venue.example/heaven",
+                            "notes": "Explicit regression seed page; parser coverage only."})
+            inspected = root / "inspected.csv"
+            with inspected.open("w", encoding="utf-8", newline="") as f:
+                w = csv.DictWriter(f, fieldnames=["event_date", "venue", "event_title", "performer_names", "page_url", "notes"])
+                w.writeheader()
+            out = root / "regressions.csv"
+            with patch("sys.argv", ["check_known_gig_regressions.py", "--fixtures", str(fixtures),
+                                    "--events", str(events), "--inspected", str(inspected),
+                                    "--inspection-dir", str(root), "--out", str(out)]):
+                self.assertEqual(main(), 1)
+            summary = json.loads(out.with_suffix(".summary.json").read_text(encoding="utf-8"))
+            self.assertEqual(summary["parser_status"], "PASS")
+            self.assertEqual(summary["natural_discovery_status"], "INCOMPLETE")
+            self.assertEqual(summary["status"], "PARSER_PASS_NATURAL_DISCOVERY_INCOMPLETE")
+
+
 if __name__ == "__main__":
     unittest.main()
