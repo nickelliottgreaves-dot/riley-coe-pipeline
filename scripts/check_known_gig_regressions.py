@@ -41,6 +41,7 @@ def main() -> int:
     ap.add_argument("--events", type=Path, required=True)
     ap.add_argument("--inspected", type=Path, required=True)
     ap.add_argument("--inspection-dir", type=Path, required=True)
+    ap.add_argument("--natural-links", type=Path, default=None, help="Unseeded discovery links used to measure natural discovery")
     ap.add_argument("--out", type=Path, required=True)
     args = ap.parse_args()
 
@@ -50,6 +51,16 @@ def main() -> int:
         candidates.append(("discovery", row))
     for row in read_csv(args.inspected):
         candidates.append(("inspection", row))
+    def url_key(value: str) -> str:
+        from urllib.parse import urlparse
+        parsed=urlparse(str(value or "").strip())
+        return (parsed.netloc.casefold().removeprefix("www."), parsed.path.rstrip("/"))
+    natural_urls=set()
+    for row in read_csv(args.natural_links) if args.natural_links else []:
+        for field in ("candidate_url","source_page_url"):
+            value=(row.get(field) or "").strip()
+            if value.startswith(("http://","https://")):
+                natural_urls.add(url_key(value))
 
     results = []
     for fixture in fixtures:
@@ -58,6 +69,7 @@ def main() -> int:
         performer = (fixture.get("performer") or "").strip()
         performer_key = norm(performer)
         hits = []
+        natural_hits = []
         for kind, row in candidates:
             row_day = (row.get("event_date") or "").strip()[:10]
             row_venue = (row.get("venue") or "").strip()
@@ -71,19 +83,32 @@ def main() -> int:
             # whole page snapshot: a listing page can contain many unrelated acts.
             haystack = norm(" ".join(str(v) for v in text_fields))
             if performer_key and f" {performer_key} " in f" {haystack} ":
-                hits.append({
+                hit = {
                     "evidence_kind": kind,
                     "event_date": row_day,
                     "venue": row_venue,
                     "event_title": row.get("event_title", ""),
                     "source_url": row.get("source_url") or row.get("page_url") or "",
-                })
+                    "notes": row.get("notes",""),
+                }
+                hits.append(hit)
+                explicit_seed = "Explicit regression seed page" in str(row.get("notes",""))
+                if not explicit_seed:
+                    natural_hits.append(hit)
+                source_url=hit["source_url"]
+                if source_url and url_key(source_url) in natural_urls:
+                    natural_hits.append(hit)
+        # Remove duplicate evidence objects while retaining the natural/seed distinction.
+        natural_hits = list({json.dumps(h,sort_keys=True):h for h in natural_hits}.values())
         results.append({
             "fixture_id": fixture.get("fixture_id", ""),
             "expected_date": day,
             "expected_venue": venue,
             "expected_performer": performer,
             "result": "recovered" if hits else "not_recovered",
+            "natural_result": "naturally_recovered" if natural_hits else "not_naturally_recovered",
+            "explicit_seed_recovered": "true" if any("Explicit regression seed page" in str(h.get("notes","")) for h in hits) else "false",
+            "natural_evidence_count": len(natural_hits),
             "evidence_count": len(hits),
             "evidence": json.dumps(hits, ensure_ascii=False),
             "notes": "A pass requires matching collected date, venue and performer evidence; the URL slug alone does not count."
@@ -93,7 +118,7 @@ def main() -> int:
     with args.out.open("w", encoding="utf-8", newline="") as stream:
         writer = csv.DictWriter(stream, fieldnames=[
             "fixture_id", "expected_date", "expected_venue", "expected_performer",
-            "result", "evidence_count", "evidence", "notes"
+            "result", "natural_result", "explicit_seed_recovered", "natural_evidence_count", "evidence_count", "evidence", "notes"
         ])
         writer.writeheader()
         writer.writerows(results)
@@ -101,6 +126,8 @@ def main() -> int:
         "fixtures": len(results),
         "recovered": sum(r["result"] == "recovered" for r in results),
         "not_recovered": sum(r["result"] != "recovered" for r in results),
+        "naturally_recovered": sum(r["natural_result"] == "naturally_recovered" for r in results),
+        "not_naturally_recovered": sum(r["natural_result"] != "naturally_recovered" for r in results),
         "status": "PASS" if results and all(r["result"] == "recovered" for r in results) else "FAIL",
         "results_file": str(args.out),
     }
