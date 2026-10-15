@@ -24,7 +24,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: weekly-hybrid-riley-coe-gig-search
+  group: weekly-hybrid-riley-coe-gig-search-14-day
   cancel-in-progress: true
 
 jobs:
