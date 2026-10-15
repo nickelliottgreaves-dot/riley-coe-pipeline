@@ -1,6 +1,6 @@
 name: Riley & Coe evidence validation
 
-# A commit message containing [full-sweep] runs a diagnostic end-to-end collection (including sequential pagination, venue scoping, date-window-aware detail crawling, performer-title fallback and RadioFiles review integration). Mixcloud is intentionally excluded; BBC Sounds and RadioFiles are the episode sources.
+# A commit message containing [full-sweep] runs a diagnostic end-to-end collection (including sequential pagination, venue scoping, date-window-aware detail crawling, performer-title fallback and RadioFiles review integration). The episode sources are BBC Sounds and RadioFiles; the collection is fail-closed when tracklist completeness is uncertain.
 
 on:
   push:
