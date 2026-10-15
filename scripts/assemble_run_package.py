@@ -106,7 +106,7 @@ def main():
             status=(crosscheck.get("crosscheck_status") or "").strip()
             if status=="EXACT_FULL_TRACKLIST_MATCH": return "complete"
             if status=="MISMATCH_REQUIRES_REVIEW": return "incomplete"
-        if int(count or 0)==0 and any(token in (source_state or "").casefold() for token in ("next_data_not_found","tracklist unavailable","zero tracks")):
+        if int(count or 0)==0 and any(token in (source_state or "").casefold() for token in ("next_data_not_found","tracklist unavailable","zero tracks","tracklist has zero","source=none","zero rows")):
             return "unavailable"
         return "not_yet_checked"
     radiofiles_track_counts={}
@@ -122,7 +122,7 @@ def main():
         crosscheck=crosscheck_by_pid.get(pid)
         count=(crosscheck.get("bbc_track_rows","") if crosscheck else embedded_track_counts.get((r.get("episode_date",""),pid),0))
         source_state=(r.get("tracklist_status") or "needs_review").strip()
-        normalized_state=episode_state(crosscheck,count,source_state)
+        normalized_state=episode_state(crosscheck,count,source_state+" "+(r.get("notes","") or ""))
         cross_note=""
         if crosscheck:
             cross_note=f" Cross-check {crosscheck.get('crosscheck_status')}: BBC tracks={crosscheck.get('bbc_track_rows')}, RadioFiles tracks={crosscheck.get('radiofiles_track_rows')}, matched={crosscheck.get('matched_track_rows')}, mismatched={crosscheck.get('mismatched_track_rows')}. RadioFiles URL: {crosscheck.get('radiofiles_episode_url','')}."
@@ -138,7 +138,7 @@ def main():
         crosscheck=crosscheck_by_pid.get(pid)
         count=(crosscheck.get("radiofiles_track_rows","") if crosscheck else radiofiles_track_counts.get((r.get("episode_date",""),r.get("source_url","")),0))
         source_state=(r.get("tracklist_status") or "needs_review").strip()
-        normalized_state=episode_state(crosscheck,count,source_state)
+        normalized_state=episode_state(crosscheck,count,source_state+" "+(r.get("notes","") or ""))
         cross_note=""
         if crosscheck:
             cross_note=f" Cross-check {crosscheck.get('crosscheck_status')}: BBC tracks={crosscheck.get('bbc_track_rows')}, RadioFiles tracks={crosscheck.get('radiofiles_track_rows')}, matched={crosscheck.get('matched_track_rows')}, mismatched={crosscheck.get('mismatched_track_rows')}. BBC URL: {crosscheck.get('bbc_episode_url','')}."
@@ -358,6 +358,7 @@ def main():
         elif audit.get("notes"): note_parts.append(audit["notes"])
         venue_rows.append({"venue":name,"checked":checked,"source_url":discovery.get("source_url") or audit.get("source_url") or src.get("source_url",""),
                            "status":status,"notes":" ".join(note_parts)})
+    episode_coverage_complete=bool(episode_rows) and all((row.get("tracklist_status") or "").casefold()=="complete" for row in episode_rows)
     write_csv(out/"episodes.csv",EPISODE_FIELDS,episode_rows)
     write_csv(out/"venue_coverage.csv",VENUE_FIELDS,venue_rows)
     write_csv(out/"events.csv",EVENT_FIELDS,events)
@@ -428,13 +429,13 @@ def main():
     missing_inputs=[r["input_name"] for r in input_audit if r["status"] in {"missing","not_supplied"}]
     manifest={"run_date":date.today().isoformat(),"window_start":start.isoformat(),"window_end":end.isoformat(),
               "previous_successful_run":args.previous_successful_run,"claimed_status":"PARTIAL",
-              "episode_coverage_complete":False,"venue_sweep_complete":False,"artist_pool_compared":artist_pool_compared,"artist_pool_compared_against_captured_pages":pool_page_search_complete,"all_event_sources_verified":False,
+              "episode_coverage_complete":episode_coverage_complete,"venue_sweep_complete":False,"artist_pool_compared":artist_pool_compared,"artist_pool_compared_against_captured_pages":pool_page_search_complete,"all_event_sources_verified":False,
               "researcher_notes":"Automatically assembled evidence scaffold. Regression artists were searched in the captured page corpus; negative results are bounded to those snapshots. BBC/RadioFiles tracklist mismatches, event detail pages, supports, prices/ticket status, full venue coverage and safety-net searches still require verification.",
               "package_kind":"candidate_scaffold","source_episode_rows":len(episode_rows),"candidate_event_rows":len(events),"unresolved_event_candidates":len(unresolved),
               "mandatory_venue_rows":len(venue_rows),"venue_calendar_checks_completed":0,"artist_pool_compared":artist_pool_compared,"event_artist_comparison_complete":event_artist_comparison_complete,"regression_artists_seeded":len(regression_rows),"regression_artist_checks_completed":regression_completed,"artist_pool_page_search_rows":len(pool_page_rows),"artist_pool_page_search_completed":pool_page_search_completed,"artist_pool_page_text_matches":pool_page_match_count,
               "input_file_audit":"input_file_audit.csv","venue_discovery_coverage":"venue_discovery_coverage.csv","tracklist_candidate_review":"tracklist_candidate_review.csv","dated_exports":list(dated_exports)+[dedup_path.name],"missing_or_unsupplied_inputs":missing_inputs,"input_files_present":sum(r["status"]=="present" for r in input_audit)}
     (out/"run_manifest.json").write_text(json.dumps(manifest,indent=2)+"\n",encoding="utf-8")
-    summary={"output_directory":str(out),"status":"PARTIAL","episode_rows":len(episode_rows),"event_candidate_rows":len(events),"unresolved_event_candidates":len(unresolved),"mandatory_venue_rows":len(venue_rows),"artist_pool_compared":artist_pool_compared,"event_artist_comparison_complete":event_artist_comparison_complete,"regression_artists_seeded":len(regression_rows),"regression_artist_checks_completed":regression_completed,"artist_pool_page_search_rows":len(pool_page_rows),"artist_pool_page_search_completed":pool_page_search_completed,"artist_pool_page_text_matches":pool_page_match_count,"complete_claimed":False,"missing_or_unsupplied_inputs":missing_inputs}
+    summary={"output_directory":str(out),"status":"PARTIAL","episode_coverage_complete":episode_coverage_complete,"episode_rows":len(episode_rows),"event_candidate_rows":len(events),"unresolved_event_candidates":len(unresolved),"mandatory_venue_rows":len(venue_rows),"artist_pool_compared":artist_pool_compared,"event_artist_comparison_complete":event_artist_comparison_complete,"regression_artists_seeded":len(regression_rows),"regression_artist_checks_completed":regression_completed,"artist_pool_page_search_rows":len(pool_page_rows),"artist_pool_page_search_completed":pool_page_search_completed,"artist_pool_page_text_matches":pool_page_match_count,"complete_claimed":False,"missing_or_unsupplied_inputs":missing_inputs}
     (out/"package_assembly_summary.json").write_text(json.dumps(summary,indent=2)+"\n",encoding="utf-8")
     print(json.dumps(summary,indent=2))
     return 0
