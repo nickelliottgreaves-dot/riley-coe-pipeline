@@ -22,7 +22,7 @@ class BBCRadioFilesCrosscheckTests(unittest.TestCase):
                 ["episode_date","episode_url","track_position","track_title","artist_candidate"],
                 [
                     {"episode_date":"2026-10-13","episode_url":"https://www.bbc.co.uk/sounds/play/m0031tk4","track_position":"1","track_title":"Song One","artist_candidate":"Artist One"},
-                    {"episode_date":"2026-10-13","episode_url":"https://www.bbc.co.uk/sounds/play/m0031tk4","track_position":"2","track_title":"Song Two","artist_candidate":"Artist Two"},
+                    {"episode_date":"2026-10-13","episode_url":"https://www.bbc.co.uk/sounds/play/m0031tk4","track_position":"2","track_title":"Song Two","artist_candidate":"Artist Two & Collaborator"},
                     {"episode_date":"2026-10-14","episode_url":"https://www.bbc.co.uk/sounds/play/m0031tk5","track_position":"1","track_title":"Song Three","artist_candidate":"Artist Three"},
                 ])
             self.write_csv(bbc_episodes, ["episode_date","episode_url","page_fetch_status"], [
@@ -52,7 +52,7 @@ class BBCRadioFilesCrosscheckTests(unittest.TestCase):
             self.assertEqual(by_pid["m0031tk5"]["crosscheck_status"], "MISMATCH_REQUIRES_REVIEW")
             with (out / "verified_episode_artist_candidates.csv").open(newline="", encoding="utf-8") as handle:
                 candidates = list(csv.DictReader(handle))
-            self.assertEqual({row["artist_candidate"] for row in candidates}, {"Artist One","Artist Two"})
+            self.assertEqual({row["artist_candidate"] for row in candidates}, {"Artist One","Artist Two & Collaborator"})
             audit = json.loads((out / "bbc_radiofiles_crosscheck_audit.json").read_text())
             self.assertFalse(audit["pool_modified"])
             self.assertEqual(audit["episodes_with_exact_full_tracklist_match"], 1)
