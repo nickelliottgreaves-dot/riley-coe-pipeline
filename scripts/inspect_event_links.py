@@ -447,6 +447,8 @@ def extract_visible_listing_events(visible_text, default_venue="", start_date=No
             candidate=lines[j].strip(" -–—:")
             if date_pattern.search(candidate) or inline_date_title.match(candidate):
                 break
+            if candidate in {"/","|","–","—","-"}:
+                continue
             key=re.sub(r"[^a-z0-9]+","",candidate.casefold())
             if key in known_venues:
                 break
