@@ -37,10 +37,16 @@ jobs:
           with p.open(encoding="utf-8-sig", newline="") as f:
               rows = list(csv.DictReader(f))
           names = [row["artist"].strip().casefold() for row in rows]
-          assert len(rows) == 747, f"Expected 747 seed rows, found {len(rows)}"
+          assert len(rows) >= 747, f"Artist pool unexpectedly shrank below the 747-row baseline: {len(rows)}"
           assert len(names) == len(set(names)), "Duplicate normalized artist names in seed pool"
           assert all(row["artist"].strip() and row["status"].strip() for row in rows), "Blank artist/status"
-          print(f"Artist pool seed OK: {len(rows)} rows")
+          backup = Path("data/artist_pool_backup_20261015.csv")
+          if backup.exists():
+              with backup.open(encoding="utf-8-sig", newline="") as f:
+                  baseline = list(csv.DictReader(f))
+              baseline_names = {row["artist"].strip().casefold() for row in baseline}
+              assert baseline_names.issubset(set(names)), "Updated pool dropped an artist from the preserved 747-row backup"
+          print(f"Artist pool OK: {len(rows)} rows; baseline preservation checked when dated backup exists")
           PY
 
   bbc-sounds-inventory:
