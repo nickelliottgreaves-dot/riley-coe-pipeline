@@ -222,6 +222,20 @@ Run [38739286368](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/a
 - Artifact: `riley-coe-independent-gig-finder-38739286368` (ID `11975545893`). Artist-updater artifact: `riley-coe-artist-pool-updater-38739286368` (ID `11975290618`).
 
 
+
+## Latest completed acceptance run: simulated source failure with Skiddle guard
+
+Run [38739731517](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38739731517) completed successfully. Unit tests, the independent gig finder and the review-only artist updater all passed; the legacy collector jobs remained skipped on this branch.
+
+- The simulated Cobalt Studios failure produced a structurally valid **PARTIAL** report: 20/20 venue rows; 847/847 page-search rows; 847/847 event-comparison rows; 6 candidate matches; **0 out-of-scope event rows**; 0 automatically verified rows.
+- 308 pages inspected, 25 failed fetches, 11 allowlisted external ticketing pages inspected, 85 external seed links skipped, zero crawl caps. Thirteen sources are checked in captured scope and seven are partial; all 20 calendar-completeness flags remain false.
+- Cobalt Studios is partial due to the deliberate connection-refused failure. Utilita Arena is partial because Ticketmaster returns HTTP 403. Both collection stages retained partial outputs and returned non-zero, while event inspection, pool comparison, matching and report validation completed.
+- The Skiddle venue-scope fix is effective: no Cardiff/Birmingham event or other Newcastle venue is attributed to Lubber Fiend, Little Buildings or ZEROX. The earlier run `38738653337` with 21 false candidates is invalid for research use; the clean normal run `38739286368` and this simulation both have zero out-of-scope matches.
+- Per-venue audit notes consistently describe the bounded external ticket-page allowlist. The CSV registry validator rejects malformed rows with unquoted commas, and the source notes have been repaired.
+- The current manual review ledger has six rows, including Pys Melyn on the DICE listing for The Globe (27 October, 19:00, £6; role described only as lineup, not explicitly support). Barbican Estate remains third-party corroborated, not official-Cluny-confirmed.
+- Latest known passing test run: [38739200928](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38739200928), **135 tests passed**. README was also updated to remove the stale 14-day/16-mandatory-venue description and reflect the 28-day window and 20 required sources.
+
+
 ## Key redesign decision
 
 Do not patch the legacy assembler/validator separately again. Build two independent processes around one contract:
