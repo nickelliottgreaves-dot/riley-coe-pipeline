@@ -276,7 +276,15 @@ def main():
     ap.add_argument("--max-pages-per-venue",type=int,default=30)
     ap.add_argument("--max-depth",type=int,default=2)
     ap.add_argument("--delay",type=float,default=.12)
+    ap.add_argument("--start",default=date.today().isoformat(),help="First local event date to inspect")
+    ap.add_argument("--end",default=(date.today()+timedelta(days=13)).isoformat(),help="Last local event date to inspect")
     args=ap.parse_args()
+    try:
+        args.start_date=date.fromisoformat(args.start)
+        args.end_date=date.fromisoformat(args.end)
+    except ValueError:
+        ap.error("--start and --end must be ISO dates")
+    if args.start_date>args.end_date: ap.error("--start must not be after --end")
     if args.max_pages_per_venue<1: ap.error("--max-pages-per-venue must be positive")
     args.out_dir.mkdir(parents=True,exist_ok=True); snapdir=args.out_dir/"snapshots"; snapdir.mkdir(exist_ok=True)
     with args.links.open(encoding="utf-8-sig",newline="") as f: seeds=list(csv.DictReader(f))
