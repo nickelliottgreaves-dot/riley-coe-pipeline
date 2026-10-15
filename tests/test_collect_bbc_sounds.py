@@ -1,9 +1,34 @@
-import sys,unittest
+import sys,unittest, json
 from pathlib import Path
+from unittest.mock import patch
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/"scripts"))
-from collect_bbc_sounds import episode_id,find_episodes,parse_date,TextParser,extract_tracklist_candidates
+from collect_bbc_sounds import episode_id,find_episodes,parse_date,TextParser,extract_tracklist_candidates,main
 
 class BBCCollectorTests(unittest.TestCase):
+    def test_sequential_page_fallback_finds_more_bbc_episodes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            listing = "https://www.bbc.co.uk/programmes/m001mf2c/episodes"
+            def fake_fetch(url):
+                if url == listing:
+                    return 200, "text/html", '<a href="/programmes/m0031tk4">Episode One</a>'
+                if url == listing + "?page=2":
+                    return 200, "text/html", '<a href="/programmes/m0031tk5">Episode Two</a>'
+                if url == listing + "?page=3":
+                    return 200, "text/html", '<p>No more episodes</p>'
+                if url.endswith("m0031tk4"):
+                    return 200, "text/html", '<p>24 Sep 2026</p><h2>Tracklist</h2><p>Song One - Artist One</p>'
+                if url.endswith("m0031tk5"):
+                    return 200, "text/html", '<p>25 Sep 2026</p><h2>Tracklist</h2><p>Song Two - Artist Two</p>'
+                raise AssertionError("Unexpected URL: " + url)
+            with patch("collect_bbc_sounds.fetch", side_effect=fake_fetch), \
+                 patch("collect_bbc_sounds.time.sleep"), \
+                 patch("sys.argv", ["collect_bbc_sounds.py", "--start", "2026-09-24", "--end", "2026-10-15", "--out-dir", tmp]):
+                self.assertEqual(main(), 0)
+            summary=json.loads((Path(tmp)/"bbc_collection_summary.json").read_text())
+            self.assertEqual(summary["listing_pages_fetched"], 3)
+            self.assertEqual(summary["episodes_discovered"], 2)
+            self.assertEqual(summary["listing_pagination_status"], "sequential_page_fallback_exhausted")
+
     def test_episode_id(self):
         self.assertEqual(episode_id("https://www.bbc.co.uk/programmes/m0031tk4"),"m0031tk4")
         self.assertEqual(episode_id("https://www.bbc.co.uk/sounds/play/m0031tk4"),"m0031tk4")
