@@ -41,6 +41,13 @@ class RadioFilesCollectorTests(unittest.TestCase):
         self.assertFalse(result["count_match"])
         self.assertFalse(result["internally_consistent"])
 
+    def test_empty_tracklist_is_unavailable_not_complete(self):
+        payload = {"tracks": [], "count": 0, "date": "15 Oct 2026", "source": "none"}
+        result = validate_tracklist(payload, "m0032cm3", date(2026, 10, 15))
+        self.assertTrue(result["count_match"])
+        self.assertFalse(result["internally_consistent"])
+        self.assertIn("Tracklist has zero rows", result["row_errors"][0])
+
     def test_missing_artist_or_title_does_not_pass_validation(self):
         payload = {
             "tracks": [{"title": "Free Way"}, {"artist": "Dave Lewis"}],
