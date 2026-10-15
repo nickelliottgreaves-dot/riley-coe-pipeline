@@ -100,7 +100,9 @@ def main():
     # Add Event JSON-LD candidates from inspected detail pages; they remain unverified.
     inspected_rows=read_csv(args.event_page_inspection,["venue","page_url","event_title","event_date","performer_names","price","currency","availability","event_jsonld_found","notes"]) if args.event_page_inspection else []
     for item in inspected_rows:
-        if (item.get("event_jsonld_found") or "").casefold() != "true":
+        structured=(item.get("event_jsonld_found") or "").casefold() == "true"
+        visible_candidate=(item.get("status") or "").casefold() == "visible_event_candidate_needs_review"
+        if not (structured or visible_candidate):
             continue
         raw=(item.get("event_date") or "").strip()
         dt=raw[:10] if len(raw)>=10 else ""
@@ -111,17 +113,17 @@ def main():
             except ValueError:
                 dt=""  # Preserve malformed dates in unresolved review output.
         base={"event_date":dt,"venue":item.get("venue",""),"event_title":item.get("event_title",""),
-              "source_url":item.get("page_url",""),"verified":"false","discovery_method":"inspected_page_jsonld",
+              "source_url":item.get("page_url",""),"verified":"false","discovery_method":"inspected_page_jsonld" if structured else "visible_event_text",
               "price":(item.get("price","") + ((" "+item.get("currency","")) if item.get("currency") else "")).strip(),
               "ticket_status":item.get("availability","")}
         performers=[x.strip() for x in (item.get("performer_names") or "").split(";") if x.strip()]
         if performers:
             for performer in performers:
                 event_rows.append({**base,"artist":performer,"artist_role":"performer_role_unverified",
-                    "notes":"Inspected-page JSON-LD candidate; billing role and details need independent verification. "+(item.get("notes") or "")})
+                    "notes":("Inspected-page JSON-LD candidate" if structured else "Visible event-text candidate")+"; billing role and details need independent verification. "+(item.get("notes") or "")})
         else:
             event_rows.append({**base,"artist":"","artist_role":"unknown",
-                "notes":"Unresolved inspected-page JSON-LD candidate; performer not exposed. "+(item.get("notes") or "")})
+                "notes":("Unresolved inspected-page JSON-LD candidate" if structured else "Unresolved visible event-text candidate")+"; performer not exposed. "+(item.get("notes") or "")})
     # Preserve only event rows inside the requested window; every candidate remains unverified.
     events=[]; unresolved=[]; seen_event_keys=set()
     for r in event_rows:
