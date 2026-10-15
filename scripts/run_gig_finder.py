@@ -28,7 +28,7 @@ DISCOVERY_EVENT_FIELDS = ["event_date", "venue", "event_title", "artist", "artis
 LINK_FIELDS = ["venue", "link_text", "candidate_url", "source_page_url", "candidate_reason", "verified", "notes"]
 INSPECTED_FIELDS = ["venue", "page_url", "http_status", "content_type", "page_title", "event_title", "event_date", "performer_names", "price", "currency", "availability", "event_jsonld_found", "visible_text_snapshot", "verified", "status", "notes"]
 MATCH_FIELDS = ["artist_pool_name", "event_date", "venue", "event_title", "matched_performer", "source_url", "source_kind", "match_basis", "candidate_status", "price", "ticket_status", "verified", "notes"]
-COVERAGE_FIELDS = ["venue", "source_url", "page_fetch_status", "http_status", "discovery_status", "candidate_events", "candidate_links", "detail_pages_fetched", "detail_pages_failed", "crawl_cap_reached", "calendar_coverage_verified", "outcome", "notes"]
+COVERAGE_FIELDS = ["venue", "source_url", "page_fetch_status", "http_status", "discovery_status", "candidate_events", "candidate_links", "detail_pages_fetched", "detail_pages_failed", "external_event_pages_inspected", "crawl_cap_reached", "calendar_coverage_verified", "outcome", "notes"]
 STAGE_FIELDS = ["stage", "status", "exit_code", "timeout_seconds", "command", "log_file", "notes"]
 STAGE_TIMEOUT_SECONDS = 300
 
@@ -162,6 +162,7 @@ def combine_venue_coverage(
             "candidate_links": discovery.get("candidate_links_found", "0"),
             "detail_pages_fetched": crawl.get("pages_fetched", "0"),
             "detail_pages_failed": failed_pages or "0",
+            "external_event_pages_inspected": crawl.get("external_event_pages_inspected", "0"),
             "crawl_cap_reached": cap or "false",
             "calendar_coverage_verified": "false",
             "outcome": outcome,
@@ -237,7 +238,7 @@ def main() -> int:
     ], out_dir, stage_results)
     ensure_csv(inspection_dir / "event_page_inspection.csv", INSPECTED_FIELDS)
     ensure_csv(inspection_dir / "event_page_crawl_audit.csv", [
-        "venue", "seed_candidate_links", "external_seed_links_skipped", "pages_fetched",
+        "venue", "seed_candidate_links", "external_seed_links_skipped", "external_event_pages_inspected", "pages_fetched",
         "pages_failed", "same_host_links_added", "crawl_cap_reached", "status", "notes",
     ])
 
