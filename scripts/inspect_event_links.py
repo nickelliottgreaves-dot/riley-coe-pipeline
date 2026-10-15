@@ -20,7 +20,7 @@ from urllib.request import Request,urlopen
 
 UA="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
 EVENT_FIELDS=["venue","page_url","http_status","content_type","page_title","event_title","event_date","performer_names","price","currency","availability","event_jsonld_found","visible_text_snapshot","verified","status","notes"]
-AUDIT_FIELDS=["venue","seed_candidate_links","external_seed_links_skipped","pages_fetched","pages_failed","same_host_links_added","crawl_cap_reached","status","notes"]
+AUDIT_FIELDS=["venue","seed_candidate_links","external_seed_links_skipped","external_event_pages_inspected","pages_fetched","pages_failed","same_host_links_added","crawl_cap_reached","status","notes"]
 
 class Parser(HTMLParser):
     def __init__(self):
@@ -708,6 +708,61 @@ def allowed_source_scoped_url(source_url, target_url, venue):
     return False
 
 
+
+EXTERNAL_TICKETING_HOST_SUFFIXES = (
+    "universe.com", "seetickets.com", "wegottickets.com", "eventbrite.co.uk",
+    "eventbrite.com", "ticketsource.com", "tickettailor.com", "skiddle.com",
+    "ticketweb.uk", "fatsoma.com", "ents24.com", "dice.fm", "ticketmaster.co.uk",
+    "ticketmaster.com", "gigantic.com", "eventim.co.uk",
+)
+
+
+def is_external_event_detail_url(value: str) -> bool:
+    """Allow only specific event-detail pages on known ticketing providers.
+
+    This is intentionally not a general external crawler: generic venue,
+    promoter, artist, search, account, cart and social pages are excluded.
+    """
+    parsed = urlparse(value)
+    host = parsed.netloc.casefold().removeprefix("www.")
+    path = parsed.path.casefold().rstrip("/")
+    if parsed.scheme not in {"http", "https"} or not host or not path:
+        return False
+    if not any(host == suffix or host.endswith("." + suffix) for suffix in EXTERNAL_TICKETING_HOST_SUFFIXES):
+        return False
+    segments = [part for part in path.split("/") if part]
+    if len(segments) < 2:
+        return False
+    if host.endswith(("eventbrite.co.uk", "eventbrite.com")):
+        return path.startswith("/e/") and len(segments) >= 3
+    if host.endswith("universe.com"):
+        return path.startswith("/events/") and len(segments) >= 3
+    if host.endswith("seetickets.com"):
+        return path.startswith("/event/") and len(segments) >= 3
+    if host.endswith("wegottickets.com"):
+        return path.startswith("/event/") and len(segments) >= 2
+    if host.endswith("ticketsource.com"):
+        return path.startswith("/t-") or (path.startswith("/event/") and len(segments) >= 2)
+    if host.endswith("tickettailor.com"):
+        return path.startswith("/events/") and len(segments) >= 3
+    if host.endswith("skiddle.com"):
+        return path.startswith("/whats-on/") and len(segments) >= 4 and bool(re.search(r"\d{5,}", path))
+    if host.endswith("ticketweb.uk"):
+        return path.startswith(("/event/", "/tickets/")) and len(segments) >= 2
+    if host.endswith("fatsoma.com"):
+        return path.startswith("/e/") and len(segments) >= 2
+    if host.endswith("ents24.com"):
+        return ("-events/" in path or path.startswith("/event/")) and bool(re.search(r"/\d{5,}$", path))
+    if host.endswith("dice.fm"):
+        return path.startswith(("/event/", "/events/")) and len(segments) >= 2
+    if host.endswith(("ticketmaster.co.uk", "ticketmaster.com")):
+        return "/event/" in path and len(segments) >= 2
+    if host.endswith("gigantic.com"):
+        return path.startswith(("/event/", "/events/")) and len(segments) >= 2
+    if host.endswith("eventim.co.uk"):
+        return path.startswith(("/event/", "/events/")) and len(segments) >= 2
+    return False
+
 def main():
     ap=argparse.ArgumentParser()
     ap.add_argument("--links",type=Path,required=True)
@@ -715,6 +770,7 @@ def main():
     ap.add_argument("--out-dir",type=Path,required=True)
     ap.add_argument("--max-pages-per-venue",type=int,default=30)
     ap.add_argument("--max-depth",type=int,default=2)
+    ap.add_argument("--max-external-event-pages-per-venue",type=int,default=6,help="Bounded allowlist of external ticketing event-detail pages to inspect per venue")
     ap.add_argument("--delay",type=float,default=.12)
     ap.add_argument("--start",default=date.today().isoformat(),help="First local event date to inspect")
     ap.add_argument("--end",default=(date.today()+timedelta(days=13)).isoformat(),help="Last local event date to inspect")
@@ -726,6 +782,7 @@ def main():
         ap.error("--start and --end must be ISO dates")
     if args.start_date>args.end_date: ap.error("--start must not be after --end")
     if args.max_pages_per_venue<1: ap.error("--max-pages-per-venue must be positive")
+    if args.max_external_event_pages_per_venue<0: ap.error("--max-external-event-pages-per-venue must not be negative")
     args.out_dir.mkdir(parents=True,exist_ok=True); snapdir=args.out_dir/"snapshots"; snapdir.mkdir(exist_ok=True)
     with args.links.open(encoding="utf-8-sig",newline="") as f: seeds=list(csv.DictReader(f))
     by_venue=defaultdict(list)
@@ -751,7 +808,7 @@ def main():
     def crawl_venue(venue, urls):
         all_rows=[]
         audits=[]
-        queue=deque(); queued=set(); visited=set(); failed=0; added=0; cap=False
+        queue=deque(); queued=set(); visited=set(); failed=0; added=0; cap=False; external_pages_inspected=0
         canonical_urls=[]
         primary_source_url=urls[0] if urls else ""
         primary_host=urlparse(primary_source_url).netloc.casefold()
@@ -774,9 +831,15 @@ def main():
             queue.append((canonical_urls[0],0)); queued.add(canonical_urls[0])
         official_host=urlparse(canonical_urls[0]).netloc if canonical_urls else ""
         fallback_seed_urls=[u for u in canonical_urls[1:] if urlparse(u).netloc == official_host and allowed_source_scoped_url(canonical_urls[0],u,venue)]
-        external_seed_links_skipped=max(0,len(canonical_urls[1:])-len(fallback_seed_urls))
-        # Follow links only on the official venue host. Third-party ticket links are
-        # retained in discovery inputs but must not explode the crawl into global ticketing pages.
+        external_candidates=[u for u in canonical_urls[1:] if urlparse(u).netloc.casefold().removeprefix("www.") != primary_host.removeprefix("www.")]
+        allowlisted_external=[u for u in external_candidates if is_external_event_detail_url(u)]
+        allowlisted_external=allowlisted_external[:args.max_external_event_pages_per_venue]
+        external_seed_links_skipped=max(0,len(external_candidates)-len(allowlisted_external))
+        # Fetch a small number of explicit ticketing event-detail pages, but do
+        # not follow links from those pages or crawl generic ticketing/artist/venue pages.
+        for external_url in allowlisted_external:
+            if external_url not in queued and external_url not in visited:
+                queue.append((external_url,1)); queued.add(external_url)
         source_hosts={official_host} if official_host else set()
         while queue:
             url,depth=queue.popleft()
@@ -787,6 +850,8 @@ def main():
             visited.add(url)
             try:
                 status,ctype,html,truncated=fetch(url)
+                if urlparse(url).netloc.casefold().removeprefix("www.") != official_host.casefold().removeprefix("www."):
+                    external_pages_inspected += 1
                 if "html" not in ctype.lower(): raise ValueError("Non-HTML response")
                 p=Parser(); p.feed(html); visible="\n".join(p.text)
                 # HTTP 202 is not proof that a usable page was served. Some
@@ -938,7 +1003,7 @@ def main():
                 failed+=1
                 all_rows.append({"venue":venue,"page_url":url,"http_status":"","content_type":"","page_title":"","event_title":"","event_date":"","performer_names":"","price":"","currency":"","availability":"","event_jsonld_found":"false","visible_text_snapshot":"","verified":"false","status":"fetch_failed","notes":f"{type(exc).__name__}: {exc}"})
             time.sleep(max(0,args.delay))
-        audits.append({"venue":venue,"seed_candidate_links":len(set(urls)),"external_seed_links_skipped":external_seed_links_skipped,"pages_fetched":len(visited)-failed,"pages_failed":failed,"same_host_links_added":added,"crawl_cap_reached":str(cap).lower(),"status":"PARTIAL" if urls else "NO_SEED_LINKS","notes":("Bounded crawl only; cap, JavaScript content, pagination and event/support completeness require review. External ticketing hosts are not crawled in this pass." if urls else "No candidate links supplied for this configured venue. This is a discovery gap, not evidence that the calendar is empty.")})
+        audits.append({"venue":venue,"seed_candidate_links":len(set(urls)),"external_seed_links_skipped":external_seed_links_skipped,"external_event_pages_inspected":external_pages_inspected,"pages_fetched":len(visited)-failed,"pages_failed":failed,"same_host_links_added":added,"crawl_cap_reached":str(cap).lower(),"status":"PARTIAL" if urls else "NO_SEED_LINKS","notes":("Bounded crawl only; cap, JavaScript content, pagination and event/support completeness require review. External ticketing hosts are not crawled in this pass." if urls else "No candidate links supplied for this configured venue. This is a discovery gap, not evidence that the calendar is empty.")})
         return all_rows, audits
 
     # Crawl independent venues concurrently so a slow or blocked site cannot
@@ -976,7 +1041,7 @@ def main():
         w=csv.DictWriter(f,fieldnames=EVENT_FIELDS);w.writeheader();w.writerows(all_rows)
     with (args.out_dir/"event_page_crawl_audit.csv").open("w",encoding="utf-8",newline="") as f:
         w=csv.DictWriter(f,fieldnames=AUDIT_FIELDS);w.writeheader();w.writerows(audits)
-    summary={"venues_configured":sum(1 for _ in audits),"venues_with_seed_links":sum(r["seed_candidate_links"]>0 for r in audits),"venues_without_seed_links":sum(r["seed_candidate_links"]==0 for r in audits),"pages_inspected":sum(r["pages_fetched"]+r["pages_failed"] for r in audits),"pages_failed":sum(r["pages_failed"] for r in audits),"external_seed_links_skipped":sum(r["external_seed_links_skipped"] for r in audits),"event_jsonld_rows":sum(r["event_jsonld_found"]=="true" for r in all_rows),"crawl_caps_reached":sum(r["crawl_cap_reached"]=="true" for r in audits),"status":"PARTIAL","limitations":["No event row is marked verified.","Only same-host links are followed after seed discovery.","JavaScript-only calendars, hidden pagination, third-party ticket pages and support acts can be missed.","Manual event-by-event verification and venue coverage records remain required."]}
+    summary={"venues_configured":sum(1 for _ in audits),"venues_with_seed_links":sum(r["seed_candidate_links"]>0 for r in audits),"venues_without_seed_links":sum(r["seed_candidate_links"]==0 for r in audits),"pages_inspected":sum(r["pages_fetched"]+r["pages_failed"] for r in audits),"pages_failed":sum(r["pages_failed"] for r in audits),"external_seed_links_skipped":sum(r["external_seed_links_skipped"] for r in audits),"external_event_pages_inspected":sum(r["external_event_pages_inspected"] for r in audits),"event_jsonld_rows":sum(r["event_jsonld_found"]=="true" for r in all_rows),"crawl_caps_reached":sum(r["crawl_cap_reached"]=="true" for r in audits),"status":"PARTIAL","limitations":["No event row is marked verified.","Only same-host links are followed after seed discovery, apart from at most six allowlisted third-party ticketing event-detail pages per venue; those pages are not recursively crawled.","JavaScript-only calendars, hidden pagination, unallowlisted third-party ticket pages and support acts can be missed.","Manual event-by-event verification and venue coverage records remain required."]}
     (args.out_dir/"event_page_crawl_summary.json").write_text(json.dumps(summary,indent=2)+"\n",encoding="utf-8")
     print(json.dumps(summary,indent=2))
     # Partial page failures are recorded in the audit and must not discard
