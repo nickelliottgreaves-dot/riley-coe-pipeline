@@ -441,6 +441,37 @@ Tickets"""
                 rows=list(csv.DictReader(f))
             self.assertTrue(any(r["event_title"]=="Skating Polly" and r["status"]=="visible_event_candidate_needs_review" for r in rows))
 
+    def test_explicit_regression_seed_is_fetched_and_marked(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            links=root/"links.csv"; sources=root/"sources.csv"; extra=root/"extra.csv"
+            with links.open("w",encoding="utf-8",newline="") as f:
+                w=csv.DictWriter(f,fieldnames=["venue","candidate_url","link_text"]); w.writeheader()
+            with sources.open("w",encoding="utf-8",newline="") as f:
+                w=csv.DictWriter(f,fieldnames=["venue","source_url"]); w.writeheader()
+                w.writerow({"venue":"The Cluny","source_url":"https://thecluny.com/gigs/"})
+            with extra.open("w",encoding="utf-8",newline="") as f:
+                w=csv.DictWriter(f,fieldnames=["venue","source_url"]); w.writeheader()
+                w.writerow({"venue":"The Cluny","source_url":"https://thecluny.com/events/skating-polly/"})
+            calendar="<title>Gigs</title><p>No current listings on the landing page.</p>"
+            detail="<title>Skating Polly - The Cluny</title><p>Date:</p><p>Thu 15 Oct 2026</p><p>Venue:</p><p>The Cluny</p><p>Advance tickets:</p><p>£17.50</p>"
+            fetched=[]
+            def fake_fetch(url):
+                fetched.append(url)
+                if url=="https://thecluny.com/gigs/": return 200,"text/html",calendar,False
+                if url=="https://thecluny.com/events/skating-polly/": return 200,"text/html",detail,False
+                raise AssertionError("Unexpected crawl URL: "+url)
+            with patch("inspect_event_links.fetch",side_effect=fake_fetch):
+                with patch("sys.argv",["inspect_event_links.py","--links",str(links),"--sources",str(sources),
+                    "--extra-seeds",str(extra),"--out-dir",str(root/"out"),"--start","2026-10-15","--end","2026-10-28","--delay","0"]):
+                    self.assertEqual(main(),0)
+            self.assertEqual(fetched,["https://thecluny.com/gigs/","https://thecluny.com/events/skating-polly/"])
+            with (root/"out"/"event_page_inspection.csv").open(newline="",encoding="utf-8") as f:
+                rows=list(csv.DictReader(f))
+            self.assertTrue(any(r["event_title"]=="Skating Polly" and "Explicit regression seed page" in r["notes"] for r in rows))
+            summary=json.loads((root/"out"/"event_page_crawl_summary.json").read_text())
+            self.assertEqual(summary["explicit_regression_seed_pages"],1)
+
     def test_external_ticket_hosts_are_not_crawled_as_venue_pages(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp); links=root/"links.csv"; sources=root/"sources.csv"
