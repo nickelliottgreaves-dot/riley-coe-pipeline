@@ -264,8 +264,18 @@ def fetch_cloudcasts(username: str, since: date, until: date) -> tuple[list[dict
                     "Profile links may be incomplete; visible tracklists still require verification."
                 )
             else:
-                errors.extend(fallback_errors)
-                errors.extend(html_errors)
+                dated_found, dated_errors = fetch_dated_slug_cloudcasts(username, since, until)
+                if dated_found:
+                    found = dated_found
+                    errors = []
+                    warnings.append(
+                        f"Mixcloud listing/search/profile recovery failed; recovered {len(found)} weekday show candidate(s) by probing dated show URLs. "
+                        "This fallback may miss renamed, delayed or non-standard uploads; visible tracklists remain unverified."
+                    )
+                else:
+                    errors.extend(fallback_errors)
+                    errors.extend(html_errors)
+                    errors.extend(dated_errors)
     return found, errors, warnings
 
 def fetch_search_cloudcasts(username: str, since: date, until: date) -> tuple[list[dict], list[str]]:
@@ -319,6 +329,75 @@ def fetch_search_cloudcasts(username: str, since: date, until: date) -> tuple[li
         if pages >= 10 and url and url not in visited:
             errors.append(f"Mixcloud search fallback stopped after 10 pages for query {term!r}; inventory may be incomplete.")
     return found, errors
+
+def _ordinal(day: int) -> str:
+    if 10 <= day % 100 <= 20:
+        suffix="th"
+    else:
+        suffix={1:"st",2:"nd",3:"rd"}.get(day % 10,"th")
+    return f"{day}{suffix}"
+
+
+def fetch_dated_slug_cloudcasts(username: str, since: date, until: date) -> tuple[list[dict], list[str]]:
+    """Probe predictable weekday show slugs when Mixcloud's account listing/search is unavailable.
+
+    This is a recovery path, not proof of archive completeness. Every recovered
+    episode still requires visible-tracklist review and may be missing tracks.
+    """
+    account=username.strip("/")
+    found=[]; errors=[]
+    current=since
+    decoder=json.JSONDecoder()
+    while current<=until:
+        if current.weekday()<5:
+            slug=f"riley-coe-{current.strftime('%A').lower()}-{_ordinal(current.day)}-{current.strftime('%B').lower()}-{current.year}"
+            public_url=f"https://www.mixcloud.com/{account}/{slug}/"
+            api_url=f"{API_ROOT}/{account}/{slug}/"
+            item=None
+            try:
+                payload=get_json(api_url)
+                if isinstance(payload,dict) and (payload.get("url") or payload.get("name") or payload.get("key")):
+                    item=dict(payload)
+            except HTTPError as exc:
+                if exc.code != 404:
+                    errors.append(f"Mixcloud dated-slug API request failed for {public_url}: {exc}")
+            except (URLError,TimeoutError,OSError,json.JSONDecodeError) as exc:
+                errors.append(f"Mixcloud dated-slug API request failed for {public_url}: {exc}")
+            if item is None:
+                req=Request(public_url,headers={"User-Agent":USER_AGENT,"Accept":"text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8","Accept-Language":"en-GB,en;q=0.9"})
+                try:
+                    with urlopen(req,timeout=12) as response:
+                        if response.status == 200 and "html" in response.headers.get("Content-Type","").lower():
+                            raw=response.read(4_000_001)
+                            html_text=raw[:4_000_000].decode("utf-8",errors="replace")
+                            title_match=re.search(r"(?is)<title[^>]*>(.*?)</title>",html_text)
+                            page_title=re.sub(r"\s+"," ",re.sub(r"<[^>]+>"," ",title_match.group(1))).strip() if title_match else ""
+                            if "riley" in page_title.casefold() and "coe" in page_title.casefold():
+                                item={"name":page_title,"url":public_url,"key":f"/{account}/{slug}/"}
+                                # Hydration JSON may expose candidate sections. These are still
+                                # incomplete until checked against the visible tracklist.
+                                for match in re.finditer(r'"(?:sections|tracklist)"\s*:\s*',html_text):
+                                    try:
+                                        sections, _ = decoder.raw_decode(html_text[match.end():])
+                                    except (ValueError,json.JSONDecodeError):
+                                        continue
+                                    if isinstance(sections,list):
+                                        item["sections"]=sections
+                                        break
+                except HTTPError as exc:
+                    if exc.code != 404:
+                        errors.append(f"Mixcloud dated-slug page request failed for {public_url}: {exc}")
+                except (URLError,TimeoutError,OSError) as exc:
+                    errors.append(f"Mixcloud dated-slug page request failed for {public_url}: {exc}")
+            if item is not None:
+                item.setdefault("name",f"Riley & Coe {current.strftime('%A')} {_ordinal(current.day)} {current.strftime('%B')} {current.year}")
+                item.setdefault("url",public_url)
+                item.setdefault("key",f"/{account}/{slug}/")
+                item.setdefault("created_time",current.isoformat()+"T12:00:00Z")
+                found.append(item)
+        current=current.fromordinal(current.toordinal()+1)
+    return found,errors
+
 
 def fetch_show_detail(item: dict) -> dict:
     # The user cloudcasts endpoint may omit per-show tracklist sections. Fetch
