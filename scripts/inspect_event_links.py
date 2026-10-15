@@ -630,6 +630,15 @@ def main():
                 status,ctype,html,truncated=fetch(url)
                 if "html" not in ctype.lower(): raise ValueError("Non-HTML response")
                 p=Parser(); p.feed(html); visible="\n".join(p.text)
+                # HTTP 202 is not proof that a usable page was served. Some
+                # anti-bot/JS shells return an empty HTML body with no event
+                # data; do not count those as successful page inspections.
+                if status != 200 and not visible.strip() and not p.scripts:
+                    if depth == 0:
+                        for seed_url in fallback_seed_urls:
+                            if seed_url not in visited and seed_url not in queued:
+                                queue.append((seed_url,1)); queued.add(seed_url)
+                    raise ValueError(f"HTTP {status} returned no visible text or JSON-LD; response is not usable event evidence")
                 page_title=" ".join(" ".join(p.title).split())
                 snap_name=hashlib.sha1(url.encode()).hexdigest()[:14]+".txt"
                 (snapdir/snap_name).write_text("SOURCE: "+url+"\nVENUE: "+venue+"\n\n"+visible+"\n",encoding="utf-8")
