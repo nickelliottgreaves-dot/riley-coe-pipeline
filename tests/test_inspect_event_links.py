@@ -5,7 +5,7 @@ from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/"scripts"))
 import inspect_event_links as crawler
-from inspect_event_links import calendar_target_in_window, canonicalize_url, event_link_matches, event_performer_candidate, extract_visible_event, extract_visible_listing_events, is_calendar_navigation, is_event_object, likely, main
+from inspect_event_links import calendar_target_in_window, canonicalize_url, event_link_matches, event_performer_candidate, extract_visible_event, extract_visible_listing_events, is_calendar_navigation, is_event_object, is_plausible_event_page_url, likely, main
 
 class EventPageCrawlerTests(unittest.TestCase):
     def test_calendar_date_filters_stay_inside_requested_window(self):
@@ -40,6 +40,15 @@ class EventPageCrawlerTests(unittest.TestCase):
         self.assertFalse(is_event_object({"@type":"BreadcrumbList","name":"Breadcrumbs"}))
         self.assertTrue(event_link_matches({"event_title":"Skating Polly"},"/listing/skating-polly/","Tickets"))
         self.assertFalse(event_link_matches({"event_title":"Skating Polly"},"/listing/another-act/","Another Act"))
+
+    def test_plausible_event_url_filter_blocks_artist_and_metro_pages(self):
+        source="https://www.songkick.com/venues/2716778-boiler-shop/calendar"
+        self.assertTrue(is_plausible_event_page_url("https://www.songkick.com/concerts/43180861-heaven-17-at-boiler-shop",source))
+        self.assertTrue(is_plausible_event_page_url("https://www.songkick.com/venues/2716778-boiler-shop/calendar?page=2",source))
+        self.assertFalse(is_plausible_event_page_url("https://www.songkick.com/en/metro-areas/24577-uk-newcastle-upon-tyne",source))
+        self.assertFalse(is_plausible_event_page_url("https://www.songkick.com/artists/525074-heaven-17",source))
+        ents_source="https://www.ents24.com/newcastle-events/the-lubber-fiend"
+        self.assertTrue(is_plausible_event_page_url("https://www.ents24.com/newcastle-events/the-lubber-fiend/ye-gods/7515428",ents_source))
 
     def test_likely_filter_keeps_event_and_ticket_links(self):
         self.assertTrue(likely("/listing/artist-name/", "Artist"))
