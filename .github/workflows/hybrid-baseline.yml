@@ -1,0 +1,29 @@
+name: Hybrid gig-research baseline
+
+on:
+  push:
+    branches:
+      - hybrid-gig-research
+    paths:
+      - 'data/artist_pool.csv'
+      - 'config/definitive_venues.csv'
+      - 'tests/fixtures/known_gig_regressions.csv'
+      - 'scripts/validate_hybrid_baseline.py'
+      - '.github/workflows/hybrid-baseline.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-baseline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: hybrid-gig-research
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate hybrid baseline
+        run: python scripts/validate_hybrid_baseline.py
