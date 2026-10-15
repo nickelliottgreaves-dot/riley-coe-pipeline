@@ -14,7 +14,7 @@ from concurrent.futures import ThreadPoolExecutor
 from html.parser import HTMLParser
 from pathlib import Path
 from urllib.error import HTTPError,URLError
-from urllib.parse import parse_qs,urljoin,urlparse
+from urllib.parse import parse_qs,urlencode,urljoin,urlparse,urlunparse
 from urllib.request import Request,urlopen
 
 UA="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
@@ -46,6 +46,19 @@ class Parser(HTMLParser):
             t=" ".join(data.split())
             if t: self.text.append(t)
             if self._anchor is not None and t: self._anchor["text"].append(t)
+
+def canonicalize_url(url):
+    """Remove tracking parameters so a calendar page is not crawled repeatedly."""
+    parsed=urlparse(url)
+    query=parse_qs(parsed.query,keep_blank_values=True)
+    cleaned={}
+    for key,value in query.items():
+        low=key.casefold()
+        if low.startswith("utm_") or low in {"fbclid","gclid","mc_cid","mc_eid","ref","source","campaign"}:
+            continue
+        cleaned[key]=value
+    return urlunparse(parsed._replace(query=urlencode(cleaned,doseq=True),fragment=""))
+
 
 def fetch(url):
     req=Request(url,headers={"User-Agent":UA,"Accept":"text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8","Accept-Language":"en-GB,en;q=0.9"})
@@ -139,12 +152,13 @@ def extract_visible_listing_events(visible_text):
     lines=[line.strip() for line in visible_text.splitlines() if line.strip()]
     date_pattern=re.compile(r"(?i)\b(?:(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)(?:day)?\s+)?\d{1,2}\s+[A-Za-z]{3,9}\s+20\d{2}\b")
     generic={"gigs","events","what's on","whats on","info","tickets","buy tickets","details","view as list","choose date","search","next","previous","older"}
-    known_venues=[
-        "The Cluny","Cluny 2","Boiler Shop","Wylam Brewery","The Grove","Glasshouse","Sage Two","Sage One",
-        "Cumberland Arms","Cobalt Studios","NX Newcastle","Think Tank","O2 City Hall","Central Bar",
-        "Gosforth Civic Theatre","Newcastle University","Students' Union","Lubber Fiend","The Globe",
-        "Little Buildings","Utilita Arena","ZEROX"
-    ]
+    known_venues={re.sub(r"[^a-z0-9]+","",name.casefold()) for name in [
+        "The Cluny","Cluny 2","Boiler Shop","Wylam Brewery","The Grove","The Glasshouse",
+        "Glasshouse International Centre for Music","Sage Two","Sage One","Cumberland Arms","Cobalt Studios",
+        "NX Newcastle","Think Tank","O2 City Hall","O2 City Hall Newcastle","Central Bar","Central Gateshead",
+        "Gosforth Civic Theatre","Newcastle University","Newcastle University Students' Union","Students' Union",
+        "Lubber Fiend","The Globe","Little Buildings","Utilita Arena","Utilita Arena Newcastle","ZEROX","ZEROX Newcastle"
+    ]}
     def parsed_date(value):
         value=value.strip()
         for fmt in ("%a %d %b %Y","%A %d %B %Y","%a %d %B %Y","%d %B %Y","%d %b %Y"):
@@ -170,7 +184,8 @@ def extract_visible_listing_events(visible_text):
         while j<len(lines) and lines[j] in {"/","|","–","—","-"}: j+=1
         if j>=len(lines): continue
         venue_line=lines[j]
-        if not any(name.casefold() in venue_line.casefold() for name in known_venues):
+        venue_key=re.sub(r"[^a-z0-9]+","",venue_line.casefold())
+        if venue_key not in known_venues:
             continue
         supports=[]
         k=j+1
@@ -196,8 +211,6 @@ def extract_visible_listing_events(visible_text):
             seen.add(key); unique.append(row)
     return unique
 
-def likely(href,text):
-    return bool(re.search(r"event|gig|show|concert|ticket|whats-on|whatson|live-music|performance|listing|page=|next|older",href+" "+text,re.I))
 
 def _pagination_number(url):
     parsed=urlparse(url)
@@ -267,7 +280,7 @@ def main():
     def crawl_venue(venue, urls):
         all_rows=[]
         audits=[]
-        queue=deque((u,0) for u in dict.fromkeys(urls)); visited=set(); failed=0; added=0; cap=False
+        queue=deque((canonicalize_url(u),0) for u in dict.fromkeys(urls)); visited=set(); failed=0; added=0; cap=False
         source_hosts={urlparse(u).netloc for u in urls if urlparse(u).netloc}
         while queue:
             url,depth=queue.popleft()
@@ -314,7 +327,7 @@ def main():
                         target=urljoin(url,href); parsed=urlparse(target)
                         if parsed.scheme not in {"https","http"} or parsed.netloc not in source_hosts or target in visited or not likely(href,txt): continue
                         # Avoid adding fragments and tracking-only URL variants.
-                        target=target.split("#",1)[0]
+                        target=canonicalize_url(target)
                         if target not in visited and not any(x[0]==target for x in queue):
                             item=(target,depth+1)
                             if is_calendar_navigation(href,txt,url):
