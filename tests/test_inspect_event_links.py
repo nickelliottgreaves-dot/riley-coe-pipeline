@@ -467,10 +467,13 @@ Tickets"""
                 w=csv.DictWriter(f,fieldnames=["venue","candidate_url"]); w.writeheader()
                 w.writerow({"venue":"Test Venue","candidate_url":"https://venue.example/events/good"})
                 w.writerow({"venue":"Test Venue","candidate_url":"https://venue.example/events/broken"})
+                w.writerow({"venue":"Test Venue","candidate_url":"https://venue.example/events/broken-two"})
             with sources.open("w",newline="",encoding="utf-8") as f:
                 w=csv.DictWriter(f,fieldnames=["venue","source_url"]); w.writeheader()
                 w.writerow({"venue":"Test Venue","source_url":"https://venue.example/whats-on"})
             def fake_fetch(url, *args, **kwargs):
+                if "broken-two" in url:
+                    return 403,"text/html","",False
                 if "broken" in url:
                     return 503,"text/plain","",False
                 return 200,"text/html","<html><head><title>Test Venue gigs</title></head><body>Nothing else listed</body></html>",False
@@ -482,6 +485,19 @@ Tickets"""
             self.assertEqual(summary["status"],"PARTIAL")
             self.assertGreater(summary["pages_failed"],0)
             self.assertGreater(summary["pages_inspected"]-summary["pages_failed"],0)
+            with (root/"out"/"event_page_fetch_failures.csv").open(newline="",encoding="utf-8") as f:
+                failures=list(csv.DictReader(f))
+            self.assertEqual(len(failures),2)
+            self.assertEqual({r["page_url"] for r in failures},{
+                "https://venue.example/events/broken",
+                "https://venue.example/events/broken-two",
+            })
+            self.assertEqual({r["http_status"] for r in failures},{"503","403"})
+            self.assertTrue(all(r["crawl_depth"] for r in failures))
+            with (root/"out"/"event_page_inspection.csv").open(newline="",encoding="utf-8") as f:
+                inspection=list(csv.DictReader(f))
+            failed_inspection=[r for r in inspection if r["status"]=="fetch_failed"]
+            self.assertEqual(len(failed_inspection),2,"failed URLs must not collapse into one deduplicated row")
 
     def test_crawler_preserves_unverified_status_and_audit(self):
         with tempfile.TemporaryDirectory() as tmp:
