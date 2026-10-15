@@ -317,27 +317,21 @@ Before considering the candidate-finder implementation assembled:
 - A successful technical run is not represented as a COMPLETE verified gig report unless independent coverage/verification criteria are met.
 
 
-## Latest acceptance run findings (run 38738653337; artifact inspected 2026-10-15)
+## Current handover and next live acceptance (2026-10-15)
 
-The first independent gig-finder run used a deliberate simulated failure for Cobalt Studios. Its package validator passed and it preserved a PARTIAL report, but inspection exposed real defects that must not be hidden by that structural pass:
+The latest normal run [38739286368](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38739286368) and simulated Cobalt Studios failure run [38739731517](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38739731517) both validated as PARTIAL, with 20 source rows, 847/847 pool searches, six candidate matches and zero out-of-scope event rows. The source-failure run correctly kept Cobalt partial. Both runs predate the current Utilita Songkick source config and the latest visible price/ticket-status extraction change, so the newest source/parser combination still needs a live normal sweep.
 
-- Window was correctly inclusive 2026-10-15 through 2026-11-11 (28 days).
-- 20 configured source rows had 20 explicit venue coverage rows.
-- At the run's commit, the pool contained **847 rows**, not the earlier 833-row reference count. This needs a provenance/diff audit against the pool backup and dated additions audit before treating 847 as authoritative. Do not discard additions or roll back without reconciling them.
-- 847 artist event-comparison rows were emitted; 21 event/artist candidate rows were found, zero marked verified.
-- Venue outcomes: 10 `checked_in_captured_scope`, 10 `partial`; zero sources had calendar completeness verified. This is a valid PARTIAL result, not a verified local gig report.
-- Two collection stages exited non-zero: venue inventory and event candidate discovery. The recorded causes were the deliberate Cobalt Studios connection-refused simulation and Utilita Arena Newcastle HTTP 403. This is expected evidence of failure handling, but Utilita still requires an alternative source or explicit unresolved status.
-- 103 out-of-scope candidate rows were excluded. However, the first artifact contained false event attribution: generic Skiddle listings for Cardiff/Birmingham/other cities were being assigned to local venues (notably Lubber Fiend and Little Buildings). This is a serious matching defect.
-- Subsequent commits specifically constrain Skiddle calendar sources to their configured local venue/city and add regression tests. Run 38739200928 confirms those new tests passed on the latest commit, but it was a normal push and skipped the live collection.
-- The artist-pool updater produced a structurally valid PARTIAL proposal with zero stage failures; this does not mean episode coverage is complete and must not automatically mutate the pool.
+Latest tests-only run [38740250115](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38740250115) passed after the ticket-status regex correction. Current branch changes since the last live sweep:
+- `config/venue_sources.csv` now uses the venue-specific Songkick calendar for Utilita Arena Newcastle because the Ticketmaster calendar returned HTTP 403. The official venue URL and Ticketmaster URL remain in notes.
+- `scripts/inspect_event_links.py` can supplement missing structured price/status with visible event text, and its ticket-status regex boundaries have been corrected.
+- `README.md` has been updated to describe the active independent runners, current 847-row pool, 20 required sources, and the legacy assembler distinction.
 
-### Next action after this handover
+**Next action:** this handover commit intentionally triggers a normal full sweep on the latest branch head. Check the run ID and inspect the artifact:
+1. Confirm 20/20 venue coverage rows, 847/847 page-search rows and 847/847 event-comparison rows.
+2. Confirm zero out-of-scope event rows after the Skiddle venue/city scope guard.
+3. Confirm Utilita Arena's Songkick calendar is fetched and yields only Newcastle Arena events; if not, retain partial status and document the exact failure.
+4. Check the six existing candidate matches and whether visible-text price/ticket-status extraction improves any fields without false positives.
+5. Keep all automated candidate rows `verified=false` and all 20 `calendar_coverage_verified=false` unless separate verification evidence supports a change.
+6. Preserve the current 847-row pool and backup hashes; do not promote any new artists from this updater run without an independently reviewed exact-tracklist proposal.
 
-This handover commit intentionally triggers a fresh full sweep against the latest Skiddle source-filtering changes. Inspect the new artifact—not merely the green workflow result—and verify that:
-1. unrelated-city Skiddle listings no longer appear as local venue candidates or matches;
-2. all 20 source outcomes and all pool artist comparison rows exist;
-3. the pool's 847-row provenance is explained;
-4. Cobalt's simulated failure produces a usable PARTIAL report and Utilita's 403 is explicitly disclosed;
-5. candidates remain unverified and all event URLs/venue/date fields are plausible.
-
-Do not claim a usable accurate gig report until these checks are done.
+Do not merge to `main` or claim a COMPLETE verified gig report. The initial repeatable PARTIAL-report path and simulated-failure handling have been demonstrated; remaining work is bounded source coverage and manual event verification, not another broad redesign.
