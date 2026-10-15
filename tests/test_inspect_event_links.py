@@ -133,6 +133,25 @@ Fri
 7:00 pm"""
         self.assertIsNone(extract_visible_event("Boiler Shop", visible, "Boiler Shop"))
 
+    def test_conflicting_url_and_visible_dates_remain_undated_for_review(self):
+        visible = """SOURCE: https://www.boilershop.net/events/heaven-17-15-11-26
+VENUE: Boiler Shop
+Heaven 17 - performing 'Penthouse and Pavement' at Boiler Shop Newcastle
+Heaven 17 - performing 'Penthouse and Pavement'
++ Peter Coyle
+Thu
+15 Oct
+'
+26
+7:00 pm
+BUY TICKETS
+SOLD OUT"""
+        row = extract_visible_event("Heaven 17 - performing 'Penthouse and Pavement' at Boiler Shop Newcastle",
+            visible,"Boiler Shop","https://www.boilershop.net/events/heaven-17-15-11-26")
+        self.assertIsNotNone(row)
+        self.assertEqual(row["event_date"],"")
+        self.assertIn("URL date conflicts with visible date",row["notes"])
+
     def test_cobalt_detail_uses_main_ordinal_date_price_and_billed_acts(self):
         visible = """SOURCE: https://cobaltstudios.co.uk/events/l-a-ds-presents-marion-hawkes/
 VENUE: Cobalt Studios
