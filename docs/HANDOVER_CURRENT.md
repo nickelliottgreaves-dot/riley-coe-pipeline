@@ -134,6 +134,18 @@ Artist-pool updater results from its artifact:
 
 The combined run is a useful diagnostic run, but Process B should be re-run once with the corrected metric before treating the combined acceptance as passed.
 
+
+## Latest verified milestones (2026-10-15)
+
+- **Clean full sweep** [38736205749](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38736205749): workflow and unit tests succeeded; independent gig finder and independent pool updater both completed successfully; legacy jobs were skipped on the redesign branch.
+- Gig-finder artifact `riley-coe-independent-gig-finder-38736205749`: window 2026-10-15 through 2026-11-11 (28 inclusive days); 20/20 source coverage rows; 833/833 artist page-search rows and 833/833 dated-event comparison rows; 5 candidate artist/event matches; zero verified event rows; 18 source outcomes `checked_in_captured_scope`, 2 `partial`; 364 pages inspected, 4 page fetch failures, 0 crawl caps. Calendar coverage verified count remains zero by design. This is a valid **PARTIAL** candidate report, not a complete gig list.
+- Candidate rows: Cabaret Voltaire (Boiler Shop, 17 Oct), The Wedding Present (Boiler Shop, 23 Oct), Radhika support (same event), Teenage Fanclub (Boiler Shop, 10 Nov), and Barbican Estate (The Cluny, 9 Nov; third-party Songkick evidence only).
+- Independent manual review file `artifacts/manual-review/gig-finder-candidate-review-2026-10-15.csv` records four official Boiler Shop page confirmations (Cabaret Voltaire, The Wedding Present, Radhika support, Teenage Fanclub; all marked sold out and price not visible) and Barbican Estate as needing official Cluny cross-check. This review file is separate from the automated artifact; future report assembly should merge prior reviewed records only under a clear date/source freshness policy.
+- **Simulated source failure** [38735167465](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38735167465): Cobalt Studios was deliberately replaced with a local failing URL. The runner still produced a valid PARTIAL report with all 20 source rows, all 833 artist rows, two collector stages recorded as failed, and Cobalt marked partial. This tests failure handling; it does not test exhaustive coverage.
+- **Artist updater** from [38736205749](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38736205749): 12 BBC episode rows and 12 RadioFiles episode rows; 11 episodes cross-checkable; 8 exact full-tracklist matches, 3 mismatches, 1 BBC episode with no cross-check, 4 episodes not exactly cross-checked; 15 ambiguous names in review queue; zero proposed additions; authoritative pool unchanged at 833 rows, and before/after SHA-256 identical. Status PARTIAL. Do not promote artists from the mismatched episodes.
+- Timeout guard: `scripts/run_gig_finder.py` now applies a 300-second limit to each subprocess stage and preserves partial logs on timeout. Tests verify this behavior. The next full sweep should confirm this code works in a live scrape; if any stage times out, inspect its preserved log and adjust the bounded strategy rather than removing the timeout.
+
+
 ## Key redesign decision
 
 Do not patch the legacy assembler/validator separately again. Build two independent processes around one contract:
