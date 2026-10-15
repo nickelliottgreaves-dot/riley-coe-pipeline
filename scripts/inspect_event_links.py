@@ -262,6 +262,9 @@ def extract_visible_event(page_title, visible_text, default_venue="", page_url="
             support_mode=False
         elif support_mode and len(line)<120 and line.casefold()!=title.casefold():
             supports.append(line)
+    supports=[name for name in supports if not re.search(
+        r"(?i)^(?:\d{1,2}(?:[:.]\d{2})?\s*(?:am|pm)?\s*(?:[-–—]|to)\s*\d{1,2}(?:[:.]\d{2})?\s*(?:am|pm)?|interval|timings? are approximate|age:|what they say|the guardian|your visit|plan your journey|parking|eat and drink|access info|more info|take a listen|about .+|stay connected)$",
+        name.strip())]
     supports=list(dict.fromkeys(supports))
     price_text=next_value("Advance tickets",main_lines) or next_value("Price",main_lines) or next_value("Tickets",main_lines)
     price_match=re.search(r"£\s?\d+(?:\.\d{1,2})?(?:\s*(?:[-–]|to)\s*£?\s?\d+(?:\.\d{1,2})?)?",price_text,re.I)
@@ -300,7 +303,10 @@ def extract_visible_event(page_title, visible_text, default_venue="", page_url="
     section_start=None
     stop_sections={"what s happening in the music","what is happening in the music","what you ll hear",
                    "what they are playing","what they re playing","need to know","more from",
-                   "your visit","tickets","stay connected","this event takes place at"}
+                   "your visit","tickets","stay connected","this event takes place at",
+                   "timings are approximate and subject to change","timings","interval",
+                   "what they say","the guardian","plan your journey","parking","eat and drink",
+                   "access info","access information","more info","take a listen","about samling academy"}
     role_labels={"conductor","cello","violin","piano","vocals","guitar","drums","composer","leader",
                  "viola","orchestra","bass","percussion","director","tenor","soprano","mezzo soprano",
                  "baritone","flute","oboe","clarinet","harp","trumpet","trombone","saxophone","organ"}
@@ -319,7 +325,9 @@ def extract_visible_event(page_title, visible_text, default_venue="", page_url="
             if (not candidate or candidate_key in role_labels or all(token in role_labels for token in candidate_key.split())
                     or candidate_key in stop_sections or candidate_key.startswith("this event takes place at")
                     or candidate.casefold()==title.casefold() or len(candidate)>90
-                    or re.search(r"[.!?]$",candidate)):
+                    or re.search(r"[.!?]$",candidate)
+                    or re.fullmatch(r"(?i)\d{1,2}(?:[:.]\d{2})?\s*(?:am|pm)?(?:\s*(?:[-–—]|to)\s*\d{1,2}(?:[:.]\d{2})?\s*(?:am|pm)?)?",candidate)
+                    or re.match(r"(?i)^(?:age|doors|interval|timings?|what they say|the guardian|your visit|plan your journey|parking|eat and drink|access info|more info|take a listen|about)\b",candidate)):
                 continue
             credit_names.append(candidate)
     performers=list(dict.fromkeys([primary]+title_acts[1:]+supports+credit_names))
@@ -338,7 +346,7 @@ def extract_visible_listing_events(visible_text, default_venue=""):
     """Extract event-card candidates from listing pages with title/date/venue lines."""
     lines=[line.strip() for line in visible_text.splitlines() if line.strip()]
     date_pattern=re.compile(r"(?i)\b(?:(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)(?:day)?\s+)?\d{1,2}\s+[A-Za-z]{3,9}\s+20\d{2}\b")
-    generic={"gigs","events","what's on","whats on","info","more info","limited availability","limited tickets","tickets","buy tickets","book tickets","book now","details","event details","view event","view details","find out more","read more","on sale","on sale now","sold out","coming soon","view as list","choose date","search","next","previous","older","available now","full price","advance tickets"}
+    generic={"gigs","events","what's on","whats on","info","more info","limited availability","limited tickets","tickets","buy tickets","book tickets","book now","details","event details","view event","view details","find out more","read more","on sale","on sale now","sold out","coming soon","view as list","choose date","search","next","previous","older","available now","full price","advance tickets","interval","timings are approximate and subject to change","what they say","the guardian","your visit","plan your journey","parking","eat and drink","access info","access information","take a listen","about samling academy"}
     known_venues={re.sub(r"[^a-z0-9]+","",name.casefold()) for name in [
         "The Cluny","Cluny 2","Boiler Shop","Wylam Brewery","The Grove","The Glasshouse",
         "Glasshouse International Centre for Music","Sage Two","Sage One","Cumberland Arms","Cobalt Studios",
@@ -409,7 +417,9 @@ def extract_visible_listing_events(visible_text, default_venue=""):
             if venue_key not in known_venues:
                 continue
             j+=1
-        if not title or title.casefold() in generic or len(title)>180:
+        if (not title or title.casefold() in generic or len(title)>180
+                or re.fullmatch(r"(?i)\d{1,2}(?:[:.]\d{2})?\s*(?:am|pm)?(?:\s*(?:[-–—]|to)\s*\d{1,2}(?:[:.]\d{2})?\s*(?:am|pm)?)?",title.strip())
+                or re.match(r"(?i)^(?:age|doors|interval|timings?|what they say|the guardian|your visit|plan your journey|parking|eat and drink|access info|more info|take a listen|about)\b",title.strip())):
             continue
         supports=[]
         k=j
