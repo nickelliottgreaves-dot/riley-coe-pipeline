@@ -68,7 +68,7 @@ def main() -> int:
 
     episode_fields = ["episode_pid","episode_date","episode_title","bbc_track_rows","radiofiles_track_rows","counts_match","position_by_position_match","matched_track_rows","mismatched_track_rows","crosscheck_status","bbc_episode_url","radiofiles_episode_url","notes"]
     track_fields = ["episode_pid","episode_date","track_position","bbc_track_title","bbc_artist","radiofiles_track_title","radiofiles_artist","track_match","bbc_episode_url","radiofiles_episode_url","notes"]
-    candidate_fields = ["episode_date","episode_pid","episode_title","track_position","track_title","artist_candidate","bbc_episode_url","radiofiles_episode_url","crosscheck_status","evidence"]
+    candidate_fields = ["episode_date","episode_pid","episode_title","track_position","track_title","artist_candidate","radiofiles_artist_candidate","bbc_episode_url","radiofiles_episode_url","crosscheck_status","evidence"]
     episode_results, track_results, verified_candidates = [], [], []
     pids = sorted(set(bbc_by_pid) | set(rf_by_pid))
     for pid in pids:
@@ -113,7 +113,7 @@ def main() -> int:
                 verified_candidates.append({
                     "episode_date":episode_date,"episode_pid":pid,"episode_title":episode_title,
                     "track_position":br.get("track_position",""),"track_title":br.get("track_title",""),
-                    "artist_candidate":br.get("artist_candidate",""),"bbc_episode_url":bbc_url,
+                    "artist_candidate":br.get("artist_candidate",""),"radiofiles_artist_candidate":rr.get("artist_candidate",""),"bbc_episode_url":bbc_url,
                     "radiofiles_episode_url":rf_url,"crosscheck_status":status,
                     "evidence":"Exact position/title/artist match across official BBC embedded tracklist and RadioFiles."
                 })
