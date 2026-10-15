@@ -15,11 +15,11 @@ class VerifiedPoolProposalTests(unittest.TestCase):
             pool_fields=["index","artist","status","source_basis"]
             pool_rows=[{"index":"1","artist":"Existing Artist","status":"ACTIVE","source_basis":"baseline"}]
             self.write(pool,pool_fields,pool_rows)
-            cand_fields=["episode_date","episode_pid","episode_title","track_position","track_title","artist_candidate","bbc_episode_url","radiofiles_episode_url","crosscheck_status","evidence"]
+            cand_fields=["episode_date","episode_pid","episode_title","track_position","track_title","artist_candidate","radiofiles_artist_candidate","bbc_episode_url","radiofiles_episode_url","crosscheck_status","evidence"]
             self.write(candidates,cand_fields,[
-                {"episode_date":"2026-10-13","episode_pid":"m0031tk4","track_title":"Song A","artist_candidate":"Existing Artist","crosscheck_status":"EXACT_FULL_TRACKLIST_MATCH","bbc_episode_url":"https://bbc.example/a","radiofiles_episode_url":"https://radiofiles.example/a"},
-                {"episode_date":"2026-10-13","episode_pid":"m0031tk4","track_title":"Song B","artist_candidate":"New Artist","crosscheck_status":"EXACT_FULL_TRACKLIST_MATCH","bbc_episode_url":"https://bbc.example/a","radiofiles_episode_url":"https://radiofiles.example/a"},
-                {"episode_date":"2026-10-14","episode_pid":"m0031tk5","track_title":"Song C","artist_candidate":"Unsafe Candidate","crosscheck_status":"MISMATCH_REQUIRES_REVIEW","bbc_episode_url":"https://bbc.example/b","radiofiles_episode_url":"https://radiofiles.example/b"},
+                {"episode_date":"2026-10-13","episode_pid":"m0031tk4","track_title":"Song A","artist_candidate":"Existing Artist","radiofiles_artist_candidate":"Existing Artist","crosscheck_status":"EXACT_FULL_TRACKLIST_MATCH","bbc_episode_url":"https://bbc.example/a","radiofiles_episode_url":"https://radiofiles.example/a"},
+                {"episode_date":"2026-10-13","episode_pid":"m0031tk4","track_title":"Song B","artist_candidate":"New Artist","radiofiles_artist_candidate":"New Artist","crosscheck_status":"EXACT_FULL_TRACKLIST_MATCH","bbc_episode_url":"https://bbc.example/a","radiofiles_episode_url":"https://radiofiles.example/a"},
+                {"episode_date":"2026-10-14","episode_pid":"m0031tk5","track_title":"Song C","artist_candidate":"Unsafe Candidate","radiofiles_artist_candidate":"Unsafe Candidate","crosscheck_status":"MISMATCH_REQUIRES_REVIEW","bbc_episode_url":"https://bbc.example/b","radiofiles_episode_url":"https://radiofiles.example/b"},
             ])
             subprocess.run([sys.executable,str(SCRIPT),"--pool",str(pool),"--verified-candidates",str(candidates),"--out-dir",str(out)],check=True,capture_output=True,text=True)
             import datetime
