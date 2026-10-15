@@ -4,7 +4,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
-from inspect_event_links import main, extract_visible_listing_events, allowed_source_scoped_url
+from inspect_event_links import main, extract_visible_listing_events, allowed_source_scoped_url, is_external_event_detail_url
 
 
 class StructuredDataFallbackTests(unittest.TestCase):
@@ -460,6 +460,99 @@ Book Tickets
             self.assertFalse(any("metro-areas" in row["page_url"] for row in rows))
             self.assertFalse(any("/artists/" in row["page_url"] for row in rows))
 
+
+
+    def test_external_ticketing_allowlist_accepts_event_details_not_generic_pages(self):
+        self.assertTrue(is_external_event_detail_url(
+            "https://www.universe.com/events/example-act-tickets-ABC123"
+        ))
+        self.assertTrue(is_external_event_detail_url(
+            "https://www.seetickets.com/event/example-act/the-cumberland-arms/3726530"
+        ))
+        self.assertTrue(is_external_event_detail_url(
+            "https://www.eventbrite.co.uk/e/example-act-tickets-1984620387002"
+        ))
+        self.assertFalse(is_external_event_detail_url(
+            "https://www.songkick.com/metro-areas/1409-us-washington"
+        ))
+        self.assertFalse(is_external_event_detail_url(
+            "https://www.eventbrite.co.uk/o/cobalt-studios-cic-47234260433"
+        ))
+        self.assertFalse(is_external_event_detail_url(
+            "https://www.ticketmaster.co.uk/the-cluny-tickets-newcastle-upon-tyne/venue/254267?page=1"
+        ))
+
+    def test_bounded_allowlisted_external_event_page_is_inspected_without_recursive_external_crawl(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            links = root / "links.csv"
+            sources = root / "sources.csv"
+            out = root / "out"
+            with links.open("w", encoding="utf-8", newline="") as f:
+                w = csv.DictWriter(f, fieldnames=["venue", "candidate_url", "link_text"])
+                w.writeheader()
+                w.writerow({
+                    "venue": "Cumberland Arms",
+                    "candidate_url": "https://www.universe.com/events/example-act-tickets-ABC123",
+                    "link_text": "Example Act tickets",
+                })
+                w.writerow({
+                    "venue": "Cumberland Arms",
+                    "candidate_url": "https://www.songkick.com/metro-areas/1409-us-washington",
+                    "link_text": "unrelated Songkick city page",
+                })
+            with sources.open("w", encoding="utf-8", newline="") as f:
+                w = csv.DictWriter(f, fieldnames=["venue", "source_url"])
+                w.writeheader()
+                w.writerow({
+                    "venue": "Cumberland Arms",
+                    "source_url": "https://venue.example/events/",
+                })
+            calendar = '<title>Cumberland Arms Events</title><p>Upcoming live music</p>'
+            external = (
+                '<title>Example Act at Cumberland Arms</title>'
+                '<script type="application/ld+json">'
+                '{"@type":"MusicEvent","name":"Example Act","startDate":"2026-10-20T19:00:00+01:00",'
+                '"performer":{"@type":"MusicGroup","name":"Example Act"}}'
+                '</script>'
+                '<a href="https://www.songkick.com/metro-areas/999-us-nowhere">Other events</a>'
+            )
+            fetched = []
+            def fake_fetch(url):
+                fetched.append(url)
+                if url == "https://venue.example/events/":
+                    return 200, "text/html", calendar, False
+                if url == "https://www.universe.com/events/example-act-tickets-ABC123":
+                    return 200, "text/html", external, False
+                raise AssertionError("Unexpected URL fetched: " + url)
+
+            with patch("inspect_event_links.fetch", side_effect=fake_fetch):
+                with patch("sys.argv", [
+                    "inspect_event_links.py", "--links", str(links),
+                    "--sources", str(sources), "--out-dir", str(out),
+                    "--start", "2026-10-15", "--end", "2026-10-28",
+                    "--delay", "0", "--max-external-event-pages-per-venue", "2",
+                ]):
+                    self.assertEqual(main(), 0)
+
+            self.assertEqual(fetched, [
+                "https://venue.example/events/",
+                "https://www.universe.com/events/example-act-tickets-ABC123",
+            ])
+            summary = json.loads((out / "event_page_crawl_summary.json").read_text())
+            self.assertEqual(summary["external_event_pages_inspected"], 1)
+            self.assertEqual(summary["external_seed_links_skipped"], 1)
+            with (out / "event_page_crawl_audit.csv").open(encoding="utf-8", newline="") as f:
+                audit = next(csv.DictReader(f))
+            self.assertEqual(audit["external_event_pages_inspected"], "1")
+            with (out / "event_page_inspection.csv").open(encoding="utf-8", newline="") as f:
+                rows = list(csv.DictReader(f))
+            self.assertTrue(any(
+                row["event_title"] == "Example Act"
+                and row["event_date"] == "2026-10-20"
+                and row["page_url"] == "https://www.universe.com/events/example-act-tickets-ABC123"
+                for row in rows
+            ))
 
 if __name__ == "__main__":
     unittest.main()
