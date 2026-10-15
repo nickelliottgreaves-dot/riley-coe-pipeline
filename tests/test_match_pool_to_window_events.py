@@ -4,9 +4,55 @@ from unittest.mock import patch
 
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/"scripts"))
-from match_pool_to_window_events import is_event_detail_url, main
+from match_pool_to_window_events import is_event_detail_url, main, load_venue_map, resolve_explicit_venue
 
 class PoolWindowEventMatchTests(unittest.TestCase):
+    def test_explicit_nonlocal_location_is_excluded_from_local_venue_matches(self):
+        venue, in_scope, location = resolve_explicit_venue(
+            "Arab Strap @ Howard Assembly Room", "The Cluny", load_venue_map()
+        )
+        self.assertFalse(in_scope)
+        self.assertEqual(location, "Howard Assembly Room")
+        self.assertEqual(venue, "The Cluny")
+
+    def test_explicit_local_location_overrides_wrong_crawl_root_venue(self):
+        venue, in_scope, location = resolve_explicit_venue(
+            "Cabaret Voltaire @ Boiler Shop", "The Cluny", load_venue_map()
+        )
+        self.assertTrue(in_scope)
+        self.assertEqual(location, "Boiler Shop")
+        self.assertEqual(venue, "Boiler Shop")
+
+    def test_same_event_from_discovery_and_detail_page_is_deduplicated(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            d=Path(tmp)
+            pool=d/"pool.csv"
+            with pool.open("w",newline="",encoding="utf-8") as f:
+                w=csv.DictWriter(f,fieldnames=["artist"]);w.writeheader();w.writerow({"artist":"Barbican Estate"})
+            events=d/"events.csv"
+            with events.open("w",newline="",encoding="utf-8") as f:
+                w=csv.DictWriter(f,fieldnames=["event_date","venue","event_title","artist","source_url","price","ticket_status","notes"])
+                w.writeheader()
+                w.writerow({"event_date":"2026-11-09","venue":"The Cluny","event_title":"Barbican Estate @ The Cluny",
+                    "artist":"Barbican Estate","source_url":"https://www.songkick.com/venues/17634-cluny/calendar"})
+            inspected=d/"inspected.csv"
+            with inspected.open("w",newline="",encoding="utf-8") as f:
+                w=csv.DictWriter(f,fieldnames=["event_date","venue","event_title","performer_names","page_url","status","price","availability","notes"])
+                w.writeheader()
+                w.writerow({"event_date":"2026-11-09","venue":"The Cluny","event_title":"Barbican Estate @ The Cluny",
+                    "performer_names":"Barbican Estate","page_url":"https://www.songkick.com/concerts/43399167-barbican-estate-at-cluny",
+                    "status":"structured_candidate_needs_review","price":"12","availability":"Available"})
+            out=d/"matches.csv"
+            with patch("sys.argv",["match_pool_to_window_events.py","--pool",str(pool),"--events",str(events),
+                "--inspected",str(inspected),"--start","2026-10-15","--end","2026-11-11","--out",str(out)]):
+                self.assertEqual(main(),0)
+            with out.open(newline="",encoding="utf-8") as f:
+                rows=list(csv.DictReader(f))
+            self.assertEqual(len(rows),1)
+            self.assertEqual(rows[0]["source_kind"],"event_page_inspection")
+            self.assertEqual(rows[0]["source_url"],"https://www.songkick.com/concerts/43399167-barbican-estate-at-cluny")
+            self.assertEqual(rows[0]["ticket_status"],"Available")
+
     def test_only_individual_event_detail_urls_are_used_for_page_text_joins(self):
         self.assertTrue(is_event_detail_url("https://www.boilershop.net/events/the-wedding-present-23-10-26"))
         self.assertTrue(is_event_detail_url("https://www.utilitaarena.co.uk/events/detail/2026-mercury-prize"))
