@@ -913,6 +913,7 @@ def main():
                     all_rows.append({"venue":venue,"page_url":url,"http_status":status,"content_type":ctype,"page_title":page_title,"event_title":"","event_date":"","performer_names":"","price":"","currency":"","availability":"","event_jsonld_found":"false","visible_text_snapshot":f"snapshots/{snap_name}","verified":"false","status":"off_venue_page_excluded","notes":"Excluded: detail page explicitly identifies a different venue than the configured calendar."})
                     continue
                 event_objects=[]
+                off_scope_structured_event_seen=False
                 for raw in p.scripts:
                     try: data=json.loads(raw)
                     except (ValueError,json.JSONDecodeError): continue
@@ -940,6 +941,7 @@ def main():
                                 # A same-host calendar can link to other cities' events
                                 # through recommendations and artist pages. Never relabel
                                 # explicit off-venue structured data as this venue's gig.
+                                off_scope_structured_event_seen=True
                                 continue
                         elif canonicalize_url(url)!=canonicalize_url(canonical_urls[0]) and not venue_scope_matches(" ".join((name,page_title,url)),venue):
                             # Detail pages without a location need their own venue evidence;
@@ -969,7 +971,10 @@ def main():
                         all_rows.append({"venue":candidate["venue"],"page_url":url,"http_status":status,"content_type":ctype,"page_title":page_title,"event_title":candidate["event_title"],"event_date":candidate["event_date"],"performer_names":candidate["performer_names"],"price":candidate["price"],"currency":candidate["currency"],"availability":candidate["availability"],"event_jsonld_found":"false","visible_text_snapshot":f"snapshots/{snap_name}","verified":"false","status":"visible_event_candidate_needs_review","notes":candidate["notes"]+( " HTML truncated." if truncated else "")})
                 visible_event_found=False
                 if not event_objects:
-                    visible_event=extract_visible_event(page_title,visible,venue,url)
+                    # Do not let a generic title/date parser reintroduce a match after
+                    # structured data has explicitly identified a different venue.
+                    external_city_in_title=bool(re.search(r"\\b(london|carlisle|kendal|middlesbrough|manchester|birmingham|edinburgh|glasgow|leeds)\\b",page_title.casefold()))
+                    visible_event=None if (off_scope_structured_event_seen or (not is_calendar_page and external_city_in_title and not venue_scope_matches(page_title,venue))) else extract_visible_event(page_title,visible,venue,url)
                     visible_event_found=visible_event is not None
                     # Prefer a structured visible calendar card over a generic
                     # page-title candidate; do not let the latter suppress
