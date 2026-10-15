@@ -85,47 +85,95 @@ def main():
             shutil.copy2(source,out/dest)
     episode_rows=[]
     bbc_rows=read_csv(args.bbc_episodes,["episode_date","episode_title","episode_url","tracklist_status","notes"]) if args.bbc_episodes else []
-    for r in bbc_rows:
-        source_state=(r.get("tracklist_status") or "needs_review").strip()
-        # Map collector-specific states to the validator's controlled vocabulary.
-        # A detected heading is not proof that the complete list was extracted.
-        normalized_state="not_yet_checked"
-        episode_rows.append({"episode_date":r.get("episode_date",""),"source":"BBC Sounds official episode page",
-            "url":r.get("episode_url",""),"tracklist_status":normalized_state,
-            "tracks_extracted":"0","notes":((r.get("notes") or "")+f" Original BBC collector state: {source_state}. BBC inventory/candidates only; visible tracklist completeness and all artists remain to be verified.").strip()})
     radiofiles_episodes=read_csv(args.radiofiles_episodes,["episode_date","episode_title","episode_pid","source_url","tracklist_status","notes"]) if args.radiofiles_episodes else []
     radiofiles_tracks=read_csv(args.radiofiles_track_candidates,["episode_date","episode_title","episode_pid","artist_candidate","track_title","track_position","source_url","tracklist_api_url","source","verification_status","notes"]) if args.radiofiles_track_candidates else []
+    bbc_tracks=read_csv(args.bbc_track_candidates,["episode_date","episode_title","episode_url","artist_candidate","track_title","extraction_method","review_status","evidence_text","notes"]) if args.bbc_track_candidates else []
+    embedded_tracks=read_csv(args.bbc_embedded_track_candidates,["episode_date","episode_title","episode_url","track_position","track_title","artist_candidate","source_url","review_status","notes"]) if args.bbc_embedded_track_candidates else []
+    crosscheck_rows=read_csv(args.bbc_radiofiles_episode_crosscheck,
+        ["episode_pid","episode_date","bbc_track_rows","radiofiles_track_rows","matched_track_rows","mismatched_track_rows","crosscheck_status","bbc_episode_url","radiofiles_episode_url","notes"]) if args.bbc_radiofiles_episode_crosscheck else []
+    crosscheck_by_pid={row.get("episode_pid","").strip():row for row in crosscheck_rows if row.get("episode_pid","").strip()}
+    verified_candidate_rows=read_csv(args.bbc_radiofiles_verified_candidates,
+        ["episode_pid","track_position","track_title","artist_candidate","crosscheck_status","evidence"]) if args.bbc_radiofiles_verified_candidates else []
+    verified_track_keys={
+        (row.get("episode_pid","").strip(),str(row.get("track_position","")).strip(),
+         normalize_artist(row.get("track_title","")),normalize_artist(row.get("artist_candidate","")))
+        for row in verified_candidate_rows if row.get("crosscheck_status")=="EXACT_FULL_TRACKLIST_MATCH"
+    }
+    def pid_from_url(url):
+        return (url or "").rstrip("/").rsplit("/",1)[-1]
+    def episode_state(crosscheck, count, source_state):
+        if crosscheck:
+            status=(crosscheck.get("crosscheck_status") or "").strip()
+            if status=="EXACT_FULL_TRACKLIST_MATCH": return "complete"
+            if status=="MISMATCH_REQUIRES_REVIEW": return "incomplete"
+        if int(count or 0)==0 and any(token in (source_state or "").casefold() for token in ("next_data_not_found","tracklist unavailable","zero tracks")):
+            return "unavailable"
+        return "not_yet_checked"
     radiofiles_track_counts={}
     for track in radiofiles_tracks:
         key=(track.get("episode_date",""),track.get("source_url",""))
         radiofiles_track_counts[key]=radiofiles_track_counts.get(key,0)+1
-    for r in radiofiles_episodes:
+    embedded_track_counts={}
+    for track in embedded_tracks:
+        key=(track.get("episode_date",""),pid_from_url(track.get("episode_url","")))
+        embedded_track_counts[key]=embedded_track_counts.get(key,0)+1
+    for r in bbc_rows:
+        pid=pid_from_url(r.get("episode_url",""))
+        crosscheck=crosscheck_by_pid.get(pid)
+        count=(crosscheck.get("bbc_track_rows","") if crosscheck else embedded_track_counts.get((r.get("episode_date",""),pid),0))
         source_state=(r.get("tracklist_status") or "needs_review").strip()
-        count=radiofiles_track_counts.get((r.get("episode_date",""),r.get("source_url","")),0)
+        normalized_state=episode_state(crosscheck,count,source_state)
+        cross_note=""
+        if crosscheck:
+            cross_note=f" Cross-check {crosscheck.get('crosscheck_status')}: BBC tracks={crosscheck.get('bbc_track_rows')}, RadioFiles tracks={crosscheck.get('radiofiles_track_rows')}, matched={crosscheck.get('matched_track_rows')}, mismatched={crosscheck.get('mismatched_track_rows')}. RadioFiles URL: {crosscheck.get('radiofiles_episode_url','')}."
+        episode_rows.append({"episode_date":r.get("episode_date",""),"source":"BBC Sounds official episode page",
+            "url":r.get("episode_url",""),"tracklist_status":normalized_state,"tracks_extracted":str(count),
+            "notes":((r.get("notes") or "")+f" Original BBC collector state: {source_state}."+cross_note+
+                (" Exact full tracklist cross-checked position-by-position against RadioFiles." if normalized_state=="complete" else
+                 " Tracklist differs from RadioFiles and requires review." if normalized_state=="incomplete" else
+                 " No usable tracklist rows were exposed by either source." if normalized_state=="unavailable" else
+                 " Tracklist completeness remains unverified.")).strip()})
+    for r in radiofiles_episodes:
+        pid=(r.get("episode_pid") or "").strip()
+        crosscheck=crosscheck_by_pid.get(pid)
+        count=(crosscheck.get("radiofiles_track_rows","") if crosscheck else radiofiles_track_counts.get((r.get("episode_date",""),r.get("source_url","")),0))
+        source_state=(r.get("tracklist_status") or "needs_review").strip()
+        normalized_state=episode_state(crosscheck,count,source_state)
+        cross_note=""
+        if crosscheck:
+            cross_note=f" Cross-check {crosscheck.get('crosscheck_status')}: BBC tracks={crosscheck.get('bbc_track_rows')}, RadioFiles tracks={crosscheck.get('radiofiles_track_rows')}, matched={crosscheck.get('matched_track_rows')}, mismatched={crosscheck.get('mismatched_track_rows')}. BBC URL: {crosscheck.get('bbc_episode_url','')}."
         episode_rows.append({"episode_date":r.get("episode_date",""),"source":"RadioFiles public tracklist",
-            "url":r.get("source_url",""),"tracklist_status":"not_yet_checked","tracks_extracted":str(count),
-            "notes":((r.get("notes") or "")+f" Original RadioFiles collector state: {source_state}; reported={r.get('track_count_reported','')}, returned={r.get('track_count_returned','')}, count_match={r.get('count_match','')}. Candidate tracklist only; compare every row with the complete visible tracklist before updating the artist pool.").strip()})
+            "url":r.get("source_url",""),"tracklist_status":normalized_state,"tracks_extracted":str(count),
+            "notes":((r.get("notes") or "")+f" Original RadioFiles collector state: {source_state}; reported={r.get('track_count_reported','')}, returned={r.get('track_count_returned','')}, count_match={r.get('count_match','')}."+cross_note+
+                (" Exact full tracklist cross-checked position-by-position against official BBC embedded data." if normalized_state=="complete" else
+                 " Tracklist differs from BBC and requires review." if normalized_state=="incomplete" else
+                 " No usable RadioFiles tracklist rows were exposed." if normalized_state=="unavailable" else
+                 " Tracklist completeness remains unverified.")).strip()})
     # Consolidate machine-extracted track candidates from both services into one review queue.
     track_review_fields=["episode_date","episode_title","episode_url","artist_candidate","track_title","track_position","extraction_method","review_status","evidence_text","notes"]
     track_review_rows=[]
     for track in radiofiles_tracks:
+        key=(str(track.get("episode_pid","")).strip(),str(track.get("track_position","")).strip(),
+             normalize_artist(track.get("track_title","")),normalize_artist(track.get("artist_candidate","")))
+        verified=key in verified_track_keys
         track_review_rows.append({"episode_date":track.get("episode_date",""),"episode_title":track.get("episode_title",""),
             "episode_url":track.get("source_url",""),"artist_candidate":track.get("artist_candidate",""),"track_title":track.get("track_title",""),
             "track_position":track.get("track_position",""),"extraction_method":"radiofiles_json_tracklist_candidate",
-            "review_status":"needs_manual_review","evidence_text":"",
-            "notes":(track.get("notes","")+" RadioFiles candidate only; verify every track against the complete visible tracklist. Tracklist API: "+track.get("tracklist_api_url","")).strip()})
-    bbc_tracks=read_csv(args.bbc_track_candidates,["episode_date","episode_title","episode_url","artist_candidate","track_title","extraction_method","review_status","evidence_text","notes"]) if args.bbc_track_candidates else []
+            "review_status":"verified_full_tracklist_match" if verified else "needs_manual_review","evidence_text":"",
+            "notes":((track.get("notes","")+(" Exact position/title/artist match across official BBC embedded tracklist and RadioFiles." if verified else " RadioFiles candidate only; compare against the complete visible tracklist before updating the artist pool."))+" Tracklist API: "+track.get("tracklist_api_url","")).strip()})
     for track in bbc_tracks:
         track_review_rows.append({k:track.get(k,"") for k in track_review_fields})
-    embedded_tracks=read_csv(args.bbc_embedded_track_candidates,["episode_date","episode_title","episode_url","track_position","track_title","artist_candidate","source_url","review_status","notes"]) if args.bbc_embedded_track_candidates else []
     for track in embedded_tracks:
+        pid=pid_from_url(track.get("episode_url",""))
+        key=(pid,str(track.get("track_position","")).strip(),normalize_artist(track.get("track_title","")),normalize_artist(track.get("artist_candidate","")))
+        verified=key in verified_track_keys
         track_review_rows.append({
             "episode_date":track.get("episode_date",""),"episode_title":track.get("episode_title",""),
             "episode_url":track.get("episode_url",""),"artist_candidate":track.get("artist_candidate",""),
             "track_title":track.get("track_title",""),"track_position":track.get("track_position",""),
             "extraction_method":"official_bbc_embedded_aod_tracks",
-            "review_status":"needs_manual_crosscheck","evidence_text":track.get("segment_urn",""),
-            "notes":(track.get("notes","")+" Official BBC page embedded data; compare with RadioFiles position-by-position.").strip()
+            "review_status":"verified_full_tracklist_match" if verified else "needs_manual_crosscheck","evidence_text":track.get("segment_urn",""),
+            "notes":(track.get("notes","")+(" Exact position/title/artist match across official BBC embedded data and RadioFiles." if verified else " Official BBC page embedded data; compare with RadioFiles position-by-position.")).strip()
         })
     write_csv(out/"tracklist_candidate_review.csv",track_review_fields,track_review_rows)
     event_rows=read_csv(args.events,["event_date","venue","event_title","artist","artist_role","source_url","verified","notes"]) if args.events else []
