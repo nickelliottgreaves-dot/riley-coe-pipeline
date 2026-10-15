@@ -47,7 +47,7 @@ class WorkflowArtifactContractTests(unittest.TestCase):
         self.assertIn("artifacts/evidence-package", WORKFLOW)
         self.assertIn("--sources config/venue_sources.csv", WORKFLOW)
         self.assertIn("NO_SEED_LINKS", INSPECTOR)
-        for venue in ("The Globe","Little Buildings","Utilita Arena Newcastle","ZEROX Newcastle"):
+        for venue in ("The Cluny","Little Buildings","The Newgate Social","ZEROX Newcastle"):
             self.assertIn(venue, (ROOT / "config/venue_sources.csv").read_text(encoding="utf-8"))
 
 if __name__ == "__main__": unittest.main()
