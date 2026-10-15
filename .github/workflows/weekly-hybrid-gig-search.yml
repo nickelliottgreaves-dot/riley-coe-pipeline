@@ -15,12 +15,14 @@ on:
       - 'scripts/verify_event_candidates.py'
       - 'scripts/validate_hybrid_baseline.py'
       - 'scripts/check_known_gig_regressions.py'
+      - 'scripts/verify_event_candidates.py'
       - 'data/artist_pool.csv'
       - 'tests/fixtures/known_gig_regressions.csv'
       - 'tests/test_inspect_event_links.py'
       - 'tests/test_check_known_gig_regressions.py'
       - 'tests/test_verify_event_candidates.py'
       - 'tests/test_event_inspection_structured_fallback.py'
+      - 'tests/test_verify_event_candidates.py'
   workflow_dispatch:
   schedule:
     - cron: "0 8 * * 1"
@@ -216,6 +218,20 @@ jobs:
             --out "$OUT/verified_event_review.csv"
           echo "Event-level verification exit code: $?"
 
+      - name: Verify event candidates against naturally collected source evidence
+        if: success()
+        shell: bash
+        run: |
+          OUT="artifacts/hybrid-search-${{ steps.window.outputs.start }}"
+          python scripts/verify_event_candidates.py \
+            --matches "$OUT/artist_window_event_matches.csv" \
+            --events "$OUT/combined/event_candidates.csv" \
+            --inspected "$OUT/combined/event_page_inspection.csv" \
+            --primary-sources config/hybrid_venue_sources.csv \
+            --secondary-sources config/hybrid_secondary_sources.csv \
+            --natural-links "$OUT/combined/event_link_candidates.csv" \
+            --out "$OUT/verified_event_candidates.csv"
+
       - name: Produce source coverage and honest result status
         if: success()
         shell: bash
@@ -227,21 +243,39 @@ jobs:
           def rows(path):
               if not path.exists(): return []
               with path.open(encoding="utf-8-sig",newline="") as f: return list(csv.DictReader(f))
+          def json_file(path, fallback):
+              try: return json.loads(path.read_text(encoding="utf-8"))
+              except (OSError, json.JSONDecodeError): return fallback
           primary_audit=rows(out/"primary-discovery/event_discovery_audit.csv")
           secondary_audit=rows(out/"secondary-discovery/event_discovery_audit.csv")
           primary_crawl=rows(out/"primary-inspection/event_page_crawl_audit.csv")
           secondary_crawl=rows(out/"secondary-inspection/event_page_crawl_audit.csv")
           matches=rows(out/"artist_window_event_matches.csv")
-          verification_path=out/"verified_event_review.summary.json"
-          verification=json.loads(verification_path.read_text(encoding="utf-8")) if verification_path.exists() else {"candidate_match_rows":len(matches),"verified_match_rows":0,"verified_events":0,"unverified_candidate_match_rows":len(matches),"status":"NOT_RUN"}
           reg_path=out/"known_gig_regressions.summary.json"
-          regression=json.loads(reg_path.read_text(encoding="utf-8")) if reg_path.exists() else {"fixtures":5,"recovered":0,"not_recovered":5,"status":"NOT_RUN"}
+          regression=json_file(reg_path, {"fixtures":5,"recovered":0,"naturally_recovered":0,"natural_discovery_status":"NOT_RUN","status":"NOT_RUN"})
+          verification=json_file(out/"verified_event_candidates.summary.json", {"candidate_match_rows":len(matches),"verified_match_rows":0,"unverified_candidate_match_rows":len(matches),"verified_events":0,"status":"NOT_RUN"})
           primary_ok=sum(r.get("status")=="fetched_candidates_only" for r in primary_audit)
           secondary_ok=sum(r.get("status")=="fetched_candidates_only" for r in secondary_audit)
           primary_failed=[r.get("venue","") for r in primary_audit if r.get("status")!="fetched_candidates_only"]
           secondary_failed=[r.get("venue","") for r in secondary_audit if r.get("status")!="fetched_candidates_only"]
           caps=[f"primary:{r.get('venue','')}" for r in primary_crawl if str(r.get("crawl_cap_reached","")).casefold() in {"true","1","yes"}]
           caps += [f"secondary:{r.get('venue','')}" for r in secondary_crawl if str(r.get("crawl_cap_reached","")).casefold() in {"true","1","yes"}]
+          verified_gigs=int(verification.get("verified_events",0))
+          verified_rows=int(verification.get("verified_match_rows",0))
+          unverified_rows=int(verification.get("unverified_candidate_match_rows",len(matches)))
+          source_coverage_complete=(primary_ok==18 and secondary_ok==18 and not primary_failed and not secondary_failed)
+          regression_pass=regression.get("natural_discovery_status")=="PASS" and regression.get("status")=="PASS"
+          all_candidates_verified=bool(matches) and unverified_rows==0
+          useful=source_coverage_complete and not caps and regression_pass and all_candidates_verified and verified_gigs>0
+          status="USEFUL_RESULTS" if useful else "LIMITED_RESULTS"
+          reasons=[]
+          if primary_failed: reasons.append("Primary source failures: "+", ".join(primary_failed))
+          if secondary_failed: reasons.append("Secondary source failures: "+", ".join(secondary_failed))
+          if caps: reasons.append("Crawl caps reached: "+", ".join(caps))
+          if not regression_pass: reasons.append(f"Natural discovery regression gate is {regression.get('natural_discovery_status','NOT_RUN')} ({regression.get('naturally_recovered',0)}/{regression.get('fixtures',5)} naturally recovered)")
+          if unverified_rows: reasons.append(f"{unverified_rows} candidate match rows still require manual verification")
+          if verified_gigs==0: reasons.append("No event groups met the verification threshold")
+          if not reasons: reasons.append("All current candidate matches passed the verification threshold; source and regression gates passed. The search is bounded and cannot prove absolute calendar completeness.")
           summary={
             "window_start":"${{ steps.window.outputs.start }}",
             "window_end":"${{ steps.window.outputs.end }}",
@@ -258,12 +292,12 @@ jobs:
             "event_page_crawl_caps":caps,
             "candidate_pool_matches":len(matches),
             "known_gig_regressions":regression,
-            "event_level_verification":verification,
-            "verified_match_rows":verification.get("verified_match_rows",0),
-            "unverified_candidate_match_rows":verification.get("unverified_candidate_match_rows",len(matches)),
-            "verified_gigs":verification.get("verified_events",0),
-            "status":"LIMITED_RESULTS",
-            "reason":f"Conservative verification accepted {verification.get('verified_events',0)} event(s); {verification.get('unverified_candidate_match_rows',len(matches))} candidate performer rows still need manual review. Source coverage is {primary_ok}/18 primary and {secondary_ok}/18 secondary; bounded crawling cannot prove full calendar completeness.",
+            "verification":verification,
+            "verified_gigs":verified_gigs,
+            "verified_candidate_match_rows":verified_rows,
+            "unverified_candidate_match_rows":unverified_rows,
+            "status":status,
+            "reason":"; ".join(reasons),
             "pool_modified":False
           }
           (out/"run_summary.json").write_text(json.dumps(summary,indent=2)+"\n",encoding="utf-8")
@@ -281,10 +315,12 @@ jobs:
               f.write(f"- Artist pool rows: {summary['artist_pool_rows']}\n")
               f.write(f"- Primary sources usable: {primary_ok}/18\n")
               f.write(f"- Secondary sources usable: {secondary_ok}/18\n")
-              f.write(f"- Candidate artist/event rows after deduplication: {len(matches)}\n")
-              f.write(f"- Known-gig regression cases recovered: {regression.get('recovered',0)}/{regression.get('fixtures',5)} ({regression.get('status','NOT_RUN')})\n")
-              f.write("- Verified gigs: 0 (manual verification required)\n")
-              f.write("- Final status: LIMITED_RESULTS\n")
+              f.write(f"- Deduplicated candidate artist/event rows: {len(matches)}\n")
+              f.write(f"- Known-gig natural regressions: {regression.get('naturally_recovered',0)}/{regression.get('fixtures',5)} ({regression.get('natural_discovery_status','NOT_RUN')})\n")
+              f.write(f"- Verified event groups: {verified_gigs}\n")
+              f.write(f"- Candidate match rows needing manual review: {unverified_rows}\n")
+              f.write(f"- Final status: {status}\n")
+              f.write(f"- Status reason: {'; '.join(reasons)}\n")
               if primary_failed: f.write("- Primary source failures: "+", ".join(primary_failed)+"\n")
               if secondary_failed: f.write("- Secondary source failures: "+", ".join(secondary_failed)+"\n")
               if caps: f.write("- Crawl caps reached: "+", ".join(caps)+"\n")
