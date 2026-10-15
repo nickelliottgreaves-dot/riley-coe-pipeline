@@ -5,9 +5,19 @@ from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/"scripts"))
 import inspect_event_links as crawler
-from inspect_event_links import calendar_target_in_window, canonicalize_url, event_link_matches, event_performer_candidate, extract_visible_event, extract_visible_listing_events, is_calendar_navigation, is_event_object, is_plausible_event_page_url, likely, main
+from inspect_event_links import calendar_target_in_window, canonicalize_url, event_link_matches, event_matches_configured_venue, event_performer_candidate, extract_visible_event, extract_visible_listing_events, is_calendar_navigation, is_event_object, is_plausible_event_page_url, likely, main
 
 class EventPageCrawlerTests(unittest.TestCase):
+    def test_structured_events_from_other_cities_are_not_attributed_to_venue_calendar(self):
+        self.assertTrue(event_matches_configured_venue(
+            {"name": "Heaven 17 @ Boiler Shop", "location": {"name": "Boiler Shop"}}, "Boiler Shop"))
+        self.assertFalse(event_matches_configured_venue(
+            {"name": "Heaven 17 @ Edinburgh Corn Exchange", "location": {"name": "Edinburgh Corn Exchange"}}, "Boiler Shop"))
+        self.assertFalse(event_matches_configured_venue(
+            {"name": "Heaven 17 @ Leeds Beckett University Students Union"}, "Boiler Shop"))
+        self.assertTrue(event_matches_configured_venue(
+            {"name": "Dexys Midnight Runners", "location": {"name": "O2 City Hall Newcastle"}}, "O2 City Hall Newcastle"))
+
     def test_calendar_date_filters_stay_inside_requested_window(self):
         start=date(2026,10,15); end=date(2026,10,28)
         self.assertTrue(calendar_target_in_window("https://thecluny.com/gigs/date/2026/10",start,end))
