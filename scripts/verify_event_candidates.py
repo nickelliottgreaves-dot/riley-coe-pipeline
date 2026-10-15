@@ -136,10 +136,14 @@ def main() -> int:
     }
     natural_url_keys = set()
     for row in natural_links:
-        for field in ("candidate_url", "source_page_url"):
-            value = (row.get(field) or "").strip()
-            if value.startswith(("https://", "http://")):
-                natural_url_keys.add(url_key(value))
+        # A discovered candidate URL is event-level discovery evidence. The
+        # source_page_url is only the listing/calendar that linked to it; it
+        # must not turn an explicitly seeded inspection URL into natural
+        # discovery merely because that page happened to be another link's
+        # source page.
+        value = (row.get("candidate_url") or "").strip()
+        if value.startswith(("https://", "http://")):
+            natural_url_keys.add(url_key(value))
 
     evidence_rows: list[tuple[str, dict[str, str]]] = [
         ("event_candidate", row) for row in events
