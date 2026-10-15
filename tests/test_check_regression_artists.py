@@ -26,6 +26,8 @@ class RegressionArtistSearchTests(unittest.TestCase):
             by_artist={r["artist"]:r for r in rows}
             self.assertEqual(set(by_artist),{"Delines","Gallus"})
             self.assertEqual(by_artist["Delines"]["result"],"found_in_collected_pages")
+            self.assertIn("The Delines are listed on this page",by_artist["Delines"]["notes"])
+            self.assertIn("Matching text (context only",by_artist["Delines"]["notes"])
             self.assertEqual(by_artist["Gallus"]["result"],"not_found_in_collected_pages")
             self.assertEqual(by_artist["Gallus"]["searched"],"true")
             self.assertIn("bounded corpus",by_artist["Gallus"]["notes"])
