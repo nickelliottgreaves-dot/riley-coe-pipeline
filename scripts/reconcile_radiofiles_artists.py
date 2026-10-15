@@ -2,7 +2,7 @@
 """Create review-only RadioFiles artist/episode reconciliation reports.
 
 [full-sweep] Each run compares retrieved candidates to the preserved 747-row
-baseline and records episode gaps without promoting unverified artists.
+baseline, suggests close-name candidates for manual review, and records episode\ngaps without promoting unverified artists.\n\n[full-sweep] Produce the updated reconciliation as part of full pipeline validation.
 """
 import argparse, csv, json, re, unicodedata
 from collections import defaultdict
