@@ -315,3 +315,29 @@ Before considering the candidate-finder implementation assembled:
 - Evidence is unique per run and prior outputs/backups are preserved.
 - Two end-to-end runs pass; one includes a deliberately simulated source failure.
 - A successful technical run is not represented as a COMPLETE verified gig report unless independent coverage/verification criteria are met.
+
+
+## Latest acceptance run findings (run 38738653337; artifact inspected 2026-10-15)
+
+The first independent gig-finder run used a deliberate simulated failure for Cobalt Studios. Its package validator passed and it preserved a PARTIAL report, but inspection exposed real defects that must not be hidden by that structural pass:
+
+- Window was correctly inclusive 2026-10-15 through 2026-11-11 (28 days).
+- 20 configured source rows had 20 explicit venue coverage rows.
+- At the run's commit, the pool contained **847 rows**, not the earlier 833-row reference count. This needs a provenance/diff audit against the pool backup and dated additions audit before treating 847 as authoritative. Do not discard additions or roll back without reconciling them.
+- 847 artist event-comparison rows were emitted; 21 event/artist candidate rows were found, zero marked verified.
+- Venue outcomes: 10 `checked_in_captured_scope`, 10 `partial`; zero sources had calendar completeness verified. This is a valid PARTIAL result, not a verified local gig report.
+- Two collection stages exited non-zero: venue inventory and event candidate discovery. The recorded causes were the deliberate Cobalt Studios connection-refused simulation and Utilita Arena Newcastle HTTP 403. This is expected evidence of failure handling, but Utilita still requires an alternative source or explicit unresolved status.
+- 103 out-of-scope candidate rows were excluded. However, the first artifact contained false event attribution: generic Skiddle listings for Cardiff/Birmingham/other cities were being assigned to local venues (notably Lubber Fiend and Little Buildings). This is a serious matching defect.
+- Subsequent commits specifically constrain Skiddle calendar sources to their configured local venue/city and add regression tests. Run 38739200928 confirms those new tests passed on the latest commit, but it was a normal push and skipped the live collection.
+- The artist-pool updater produced a structurally valid PARTIAL proposal with zero stage failures; this does not mean episode coverage is complete and must not automatically mutate the pool.
+
+### Next action after this handover
+
+This handover commit intentionally triggers a fresh full sweep against the latest Skiddle source-filtering changes. Inspect the new artifact—not merely the green workflow result—and verify that:
+1. unrelated-city Skiddle listings no longer appear as local venue candidates or matches;
+2. all 20 source outcomes and all pool artist comparison rows exist;
+3. the pool's 847-row provenance is explained;
+4. Cobalt's simulated failure produces a usable PARTIAL report and Utilita's 403 is explicitly disclosed;
+5. candidates remain unverified and all event URLs/venue/date fields are plausible.
+
+Do not claim a usable accurate gig report until these checks are done.
