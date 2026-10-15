@@ -68,6 +68,16 @@ Doors:
         self.assertEqual(row["performer_names"], "Skating Polly; Lord Friday The 13th")
         self.assertIn("independently verify", row["notes"])
 
+    def test_detail_page_with_generic_page_title_is_not_promoted_as_an_event(self):
+        visible = """Jack Savoretti
+Date:
+Sun 25 Oct 2026
+Venue:
+Sage One
+Advance tickets:
+£42.50"""
+        self.assertIsNone(extract_visible_event("Limited Availability - The Glasshouse", visible))
+
     def test_extracts_multiple_dated_cards_from_cluny_calendar(self):
         visible = """Gigs
 October 2026
