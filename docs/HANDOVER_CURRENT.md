@@ -341,3 +341,15 @@ Run [38740356838](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/a
 5. Do not promote automated candidate rows to verified without a defined review-to-report policy. Do not merge to `main` or claim a COMPLETE verified gig report.
 
 This is now a bounded source-coverage and event-verification task, not an open-ended architecture redesign. The repeatable PARTIAL-report path has passed normal and simulated-failure acceptance; the next meaningful work is resolving the six partial venue sources and independently reviewing the seven candidate rows.
+
+
+## Direct event URL regression found and fixed (2026-10-15)
+
+Inspection of the 38740356838 artifact found that some Songkick matches were linked to the generic venue calendar even though event discovery had supplied a direct event URL. The deduplication logic preferred the richer inspection row and then overwrote the specific URL with the calendar URL. This is not a false artist match, but it weakens the report and makes independent review less direct.
+
+- Fixed `scripts/match_pool_to_window_events.py` so a higher-priority inspection row cannot replace a direct event-detail URL with a generic calendar URL.
+- Added a regression test in `tests/test_match_pool_to_window_events.py`.
+- The first version of that test failed, exposing a second overwrite in the later source-priority block. That was corrected in commit `3b5d4af60d25076e15a22f1f99e6e6a9b0e76e17`.
+- Test run [38741006947](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38741006947) passed after the correction.
+
+This handover update intentionally triggers a fresh normal full sweep. Confirm that the Songkick candidates in the resulting match file use individual `/concerts/<id>-...` event URLs rather than the venue `/calendar` URL. Do not change any candidate's verification status merely because the URL is improved.
