@@ -55,5 +55,30 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertEqual(result["artist_count"], 847)
 
 
+    def test_registry_validator_rejects_unquoted_commas_in_csv_fields(self):
+        with TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / "config").mkdir()
+            (root / "data").mkdir()
+            (root / "config" / "workflow_contract.json").write_text(
+                json.dumps(load_contract()), encoding="utf-8"
+            )
+            (root / "config" / "venue_sources.csv").write_text(
+                "venue,source_url,source_status,notes\\n"
+                "Test Venue,https://example.test/events,official,Note with comma, extra field\\n",
+                encoding="utf-8",
+            )
+            (root / "config" / "required_venues.csv").write_text(
+                "venue,mandatory\\nTest Venue,true\\n", encoding="utf-8"
+            )
+            (root / "data" / "artist_pool.csv").write_text(
+                "index,artist,status,source_basis\\n1,Test Artist,ACTIVE,baseline\\n",
+                encoding="utf-8",
+            )
+            result = validate_registries(root)
+            self.assertFalse(result["valid"])
+            self.assertTrue(any("extra fields" in error for error in result["errors"]))
+
+
 if __name__ == "__main__":
     unittest.main()
