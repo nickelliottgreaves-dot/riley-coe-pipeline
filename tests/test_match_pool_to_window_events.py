@@ -136,6 +136,41 @@ class PoolWindowEventMatchTests(unittest.TestCase):
             with out.open(newline="",encoding="utf-8") as f: rows=list(csv.DictReader(f))
             self.assertEqual(rows,[])
 
+    def test_deduplicates_same_performer_event_across_source_title_and_venue_variants(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            d=Path(tmp)
+            pool=d/"pool.csv"
+            with pool.open("w",newline="",encoding="utf-8") as f:
+                w=csv.DictWriter(f,fieldnames=["artist"]); w.writeheader()
+                w.writerow({"artist":"Dexys Midnight Runners"})
+            events=d/"events.csv"
+            with events.open("w",newline="",encoding="utf-8") as f:
+                w=csv.DictWriter(f,fieldnames=["event_date","venue","event_title","artist","source_url","status"])
+                w.writeheader()
+                w.writerow({"event_date":"2026-10-21","venue":"O2 City Hall","event_title":"Dexys Midnight Runners @ O2 City Hall",
+                            "artist":"Dexys Midnight Runners","source_url":"https://songkick.example/concert/1","status":"candidate"})
+                w.writerow({"event_date":"2026-10-21","venue":"O2 City Hall Newcastle","event_title":"Dexys Midnight Runners",
+                            "artist":"Dexys Midnight Runners","source_url":"https://songkick.example/venue/calendar","status":"candidate"})
+                w.writerow({"event_date":"2026-10-21","venue":"O2 City Hall Newcastle","event_title":"Dexys Midnight Runners @ O2 City Hall",
+                            "artist":"Dexys Midnight Runners","source_url":"https://ents24.example/dexys","status":"candidate"})
+            inspected=d/"inspected.csv"
+            with inspected.open("w",newline="",encoding="utf-8") as f:
+                w=csv.DictWriter(f,fieldnames=["event_date","venue","event_title","performer_names","page_url","status"])
+                w.writeheader()
+            out=d/"matches.csv"
+            with patch("sys.argv",["match_pool_to_window_events.py","--pool",str(pool),"--events",str(events),
+                "--inspected",str(inspected),"--start","2026-10-15","--end","2026-10-28","--out",str(out)]):
+                self.assertEqual(main(),0)
+            with out.open(newline="",encoding="utf-8") as f:
+                rows=list(csv.DictReader(f))
+            self.assertEqual(len(rows),1)
+            self.assertEqual(rows[0]["venue"],"O2 City Hall Newcastle")
+            self.assertEqual(rows[0]["event_title"],"Dexys Midnight Runners")
+            self.assertIn("https://songkick.example/concert/1",rows[0]["source_url"])
+            self.assertIn("https://songkick.example/venue/calendar",rows[0]["source_url"])
+            self.assertIn("https://ents24.example/dexys",rows[0]["source_url"])
+            self.assertEqual(rows[0]["verified"],"false")
+
     def test_matches_only_exact_performer_names_inside_date_window(self):
         with tempfile.TemporaryDirectory() as tmp:
             d=Path(tmp)
