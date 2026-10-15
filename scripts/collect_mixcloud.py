@@ -269,58 +269,56 @@ def fetch_cloudcasts(username: str, since: date, until: date) -> tuple[list[dict
     return found, errors, warnings
 
 def fetch_search_cloudcasts(username: str, since: date, until: date) -> tuple[list[dict], list[str]]:
-    """Best-effort dated fallback when the account's cloudcasts connection is unavailable.
+    """Search several public query variants when the account listing is unavailable.
 
-    Search is a discovery fallback only; it may omit results, so callers must
-    retain an explicit warning and never interpret it as a complete archive.
+    Results are still discovery candidates, not a complete archive. Query variants
+    improve recall where the platform's search index treats ampersands, spacing,
+    or account names differently.
     """
-    query = urlencode({
-        "q": "Riley",
-        "type": "cloudcast",
-        "limit": 100,
-        "offset": 0,
-        "since": since.isoformat(),
-        "until": until.isoformat(),
-    })
-    url = f"{API_ROOT}/search/?{query}"
+    queries = ["Riley & Coe", "Riley Coe", "Riley", username.strip("/")]
     found: list[dict] = []
     errors: list[str] = []
-    visited: set[str] = set()
-    pages = 0
+    seen: set[str] = set()
     account = username.strip("/").casefold()
-    while url and url not in visited and pages < 30:
-        visited.add(url)
-        pages += 1
-        try:
-            payload = get_json(url)
-        except (HTTPError, URLError, TimeoutError, OSError, json.JSONDecodeError) as exc:
-            errors.append(f"Mixcloud search fallback failed for {url}: {exc}")
-            break
-        data = payload.get("data", [])
-        if not isinstance(data, list):
-            errors.append(f"Unexpected Mixcloud search response shape at {url}")
-            break
-        for item in data:
-            if not isinstance(item, dict):
-                continue
-            public_url = str(item.get("url") or "").strip()
-            key = str(item.get("key") or "").strip()
-            path = urlparse(public_url).path.strip("/") if public_url else key.strip("/")
-            slug = path.split("/", 1)[0].casefold() if path else ""
-            if slug != account:
-                continue
-            published = parse_date(item.get("created_time") or item.get("updated_time"))
-            if published and since <= published <= until:
-                found.append(item)
-        next_url = payload.get("paging", {}).get("next")
-        if not next_url:
-            break
-        url = next_url
-        time.sleep(0.15)
-    if pages >= 30 and url and url not in visited:
-        errors.append("Mixcloud search fallback stopped after 30 pages; inventory may be incomplete.")
-    return found, errors
 
+    for term in queries:
+        url = f"{API_ROOT}/search/?{urlencode({'q': term, 'type': 'cloudcast', 'limit': 100, 'offset': 0, 'since': since.isoformat(), 'until': until.isoformat()})}"
+        visited: set[str] = set()
+        pages = 0
+        while url and url not in visited and pages < 10:
+            visited.add(url)
+            pages += 1
+            try:
+                payload = get_json(url)
+            except (HTTPError, URLError, TimeoutError, OSError, json.JSONDecodeError) as exc:
+                errors.append(f"Mixcloud search fallback failed for query {term!r} at {url}: {exc}")
+                break
+            data = payload.get("data", [])
+            if not isinstance(data, list):
+                errors.append(f"Unexpected Mixcloud search response shape for query {term!r} at {url}")
+                break
+            for item in data:
+                if not isinstance(item, dict):
+                    continue
+                public_url = str(item.get("url") or "").strip()
+                key = str(item.get("key") or "").strip()
+                path = urlparse(public_url).path.strip("/") if public_url else key.strip("/")
+                parts = path.split("/", 1) if path else []
+                if not parts or parts[0].casefold() != account:
+                    continue
+                published = parse_date(item.get("created_time") or item.get("updated_time"))
+                identity = public_url or key
+                if published and since <= published <= until and identity and identity not in seen:
+                    found.append(item)
+                    seen.add(identity)
+            next_url = payload.get("paging", {}).get("next")
+            if not next_url:
+                break
+            url = next_url
+            time.sleep(0.15)
+        if pages >= 10 and url and url not in visited:
+            errors.append(f"Mixcloud search fallback stopped after 10 pages for query {term!r}; inventory may be incomplete.")
+    return found, errors
 
 def fetch_show_detail(item: dict) -> dict:
     # The user cloudcasts endpoint may omit per-show tracklist sections. Fetch
