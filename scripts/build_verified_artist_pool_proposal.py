@@ -46,12 +46,15 @@ def main() -> int:
     for row in candidates:
         if row.get("crosscheck_status")!="EXACT_FULL_TRACKLIST_MATCH":
             continue
-        for field in ("artist_candidate","radiofiles_artist_candidate"):
-            artist=" ".join(str(row.get(field) or "").split()).strip()
-            if artist:
-                evidence_row=dict(row)
-                evidence_row["artist_candidate"]=artist
-                by_artist[norm(artist)].append(evidence_row)
+        # The pool tracks RadioFiles' primary artist strings. Preserve the
+        # fuller BBC collaboration credit as supporting evidence, but do not
+        # create a separate pool entry for every composite credit variant.
+        artist=" ".join(str(row.get("radiofiles_artist_candidate") or row.get("artist_candidate") or "").split()).strip()
+        if artist:
+            evidence_row=dict(row)
+            evidence_row["bbc_full_credit"]=str(row.get("artist_candidate") or "").strip()
+            evidence_row["artist_candidate"]=artist
+            by_artist[norm(artist)].append(evidence_row)
     additions=[]
     proposed=[dict(r) for r in pool]
     for key, appearances in sorted(by_artist.items(),key=lambda pair:pair[0]):
@@ -61,7 +64,8 @@ def main() -> int:
         dates=sorted({r["episode_date"] for r in appearances if r.get("episode_date")})
         evidence_urls=sorted({u for r in appearances for u in (r.get("bbc_episode_url",""),r.get("radiofiles_episode_url","")) if u})
         examples=sorted({str(r.get("track_title","")).strip() for r in appearances if r.get("track_title")},key=str.casefold)
-        source_basis="Official BBC embedded tracklist + RadioFiles exact position-by-position full-list match; dates: "+", ".join(dates)+"; evidence: "+"; ".join(evidence_urls)
+        bbc_credits=sorted({str(r.get("bbc_full_credit") or "").strip() for r in appearances if str(r.get("bbc_full_credit") or "").strip()},key=str.casefold)
+        source_basis="Official BBC embedded tracklist + RadioFiles exact position-by-position full-list match; dates: "+", ".join(dates)+"; BBC full credit(s): "+", ".join(bbc_credits)+"; evidence: "+"; ".join(evidence_urls)
         additions.append({"artist":display,"status":"ACTIVE","source_basis":source_basis,
                           "track_examples":"; ".join(examples),"appearance_count":len(appearances),
                           "episode_dates":"; ".join(dates),"evidence_urls":"; ".join(evidence_urls)})
