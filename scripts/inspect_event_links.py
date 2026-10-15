@@ -93,16 +93,21 @@ def clean(v):
 def extract_visible_event(page_title, visible_text, default_venue=""):
     """Extract review-only event candidates from common visible event-detail layouts."""
     lines=[line.strip() for line in visible_text.splitlines() if line.strip()]
-    def next_value(label):
-        for i,line in enumerate(lines):
+    related_start=next((i for i,line in enumerate(lines)
+        if line.casefold().startswith(("you may also like","more from","related events"))),len(lines))
+    main_lines=lines[:related_start]
+    def next_value(label, source_lines=None):
+        source_lines=source_lines or lines
+        for i,line in enumerate(source_lines):
             if line.casefold().rstrip(":") == label.casefold().rstrip(":") and i+1 < len(lines):
                 return lines[i+1]
             match=re.match(r"(?i)^"+re.escape(label.rstrip(":"))+r":\s*(.+)$",line)
             if match:
                 return match.group(1).strip()
         return ""
-    date_text=next_value("Date")
+    date_text=next_value("Date",main_lines)
     event_date=""
+    date_text=re.sub(r"(?i)\b(\d{1,2})(st|nd|rd|th)\b",r"\1",date_text)
     for fmt in ("%a %d %b %Y","%A %d %B %Y","%a %d %B %Y","%d %B %Y","%d %b %Y"):
         try:
             event_date=datetime.strptime(date_text,fmt).date().isoformat()
@@ -110,14 +115,14 @@ def extract_visible_event(page_title, visible_text, default_venue=""):
         except ValueError:
             pass
     if not event_date:
-        match=re.search(r"(?i)\b(20\d{2}-\d{2}-\d{2})\b",visible_text)
+        match=re.search(r"(?i)\b(20\d{2}-\d{2}-\d{2})\b"," ".join(main_lines))
         if match:
             event_date=match.group(1)
     if not event_date:
         # Several official venue pages expose dates as separate visible lines,
         # e.g. "Fri / 23 Oct / ' / 26", rather than a labelled Date field.
-        flat=" ".join(lines)
-        match=re.search(r"(?i)\b(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)(?:[a-z]+)?\s+['’]?\s*(\d{2}|20\d{2})\b",flat)
+        flat=" ".join(main_lines)
+        match=re.search(r"(?i)\b(\d{1,2})(?:st|nd|rd|th)?\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)(?:[a-z]+)?\s+['’]?\s*(\d{2}|20\d{2})\b",flat)
         if match:
             day=int(match.group(1)); month=match.group(2).title(); year=int(match.group(3))
             if year<100: year+=2000
@@ -145,8 +150,8 @@ def extract_visible_event(page_title, visible_text, default_venue=""):
         "king s place",
     }
     date_line_index=0
-    date_line_pattern=re.compile(r"(?i)\b(?:\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+['’]?\s*(?:\d{2}|20\d{2})|(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)(?:day)?\s+\d{1,2}\s+[A-Za-z]+\s+20\d{2})\b")
-    for line_index,line in enumerate(lines):
+    date_line_pattern=re.compile(r"(?i)\b(?:\d{1,2}(?:st|nd|rd|th)?\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+['’]?\s*(?:\d{2}|20\d{2})|(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)(?:day)?\s+\d{1,2}(?:st|nd|rd|th)?\s+[A-Za-z]+\s+20\d{2})\b")
+    for line_index,line in enumerate(main_lines):
         if date_line_pattern.search(line) or event_date in line:
             date_line_index=line_index
             break
@@ -181,7 +186,7 @@ def extract_visible_event(page_title, visible_text, default_venue=""):
             break
         if scope=="external":
             return None
-    for location_line in lines[date_line_index:min(len(lines),date_line_index+28)]:
+    for location_line in main_lines[date_line_index:min(len(main_lines),date_line_index+28)]:
         location_key=" ".join(re.sub(r"[^a-z0-9]+"," ",location_line.casefold()).split())
         if location_key in local_locations:
             venue=local_locations[location_key]
@@ -214,9 +219,22 @@ def extract_visible_event(page_title, visible_text, default_venue=""):
             or venue_title==f"{configured_venue} newcastle"
             or re.fullmatch(r"(?i)\d{1,2}:\d{2}\s*(?:am|pm)?",title.strip())):
         return None
+    billing_title=title
+    # Strip event-series/promoter prefixes so the billed act, not the series,
+    # is used for artist-pool matching.
+    series_prefixes=[
+        r"(?i)^L\.A\.D['’]s\s+presents\s*:\s*",
+        r"(?i)^['’]?Some Like It Early['’]?\s+Presents\s*:\s*",
+        r"(?i)^Mercury Prize Fringe\s*:\s*",
+        r"(?i)^Fresh Thursday\s*//\s*",
+        r"(?i)^Spotty Dog\s*:\s*",
+    ]
+    for prefix in series_prefixes:
+        billing_title=re.sub(prefix,"",billing_title).strip()
+    title_acts=[part.strip() for part in re.split(r"\s+\+\s+",billing_title) if part.strip()]
     supports=[]
     support_mode=False
-    for line in lines:
+    for line in main_lines:
         low=line.casefold()
         if line.startswith("+ ") and len(line[2:].strip())<120:
             supports.append(line[2:].strip())
@@ -229,14 +247,27 @@ def extract_visible_event(page_title, visible_text, default_venue=""):
         elif support_mode and len(line)<120 and line.casefold()!=title.casefold():
             supports.append(line)
     supports=list(dict.fromkeys(supports))
-    price_text=next_value("Advance tickets") or next_value("Price") or next_value("Tickets")
-    if not price_text or not re.search(r"£\s?\d",price_text):
-        # Some venue pages render a price range inline, e.g. "Tickets – £5.00 to £53.00",
-        # while a separate "Tickets" heading may be followed by a date instead of a price.
-        price_text=next((line for line in lines[:120] if re.search(r"£\s?\d",line)), price_text)
+    price_text=next_value("Advance tickets",main_lines) or next_value("Price",main_lines) or next_value("Tickets",main_lines)
     price_match=re.search(r"£\s?\d+(?:\.\d{1,2})?(?:\s*(?:[-–]|to)\s*£?\s?\d+(?:\.\d{1,2})?)?",price_text,re.I)
+    if not price_match:
+        # Some venues omit the pound symbol in the primary event block (e.g.
+        # "9-14"). Read price-like lines only before the related-events section,
+        # and only before the venue/location block, so a related event's price
+        # can never be attached to this event.
+        location_idx=next((i for i,line in enumerate(main_lines) if line.casefold().rstrip(":") in {"location","venue"}),len(main_lines))
+        price_range=re.compile(r"(?i)^\s*(?:£\s*)?\d+(?:\.\d{1,2})?\s*(?:[-–]\s*£?\s*\d+(?:\.\d{1,2})?)\s*$")
+        price_single=re.compile(r"(?i)^\s*£\s*\d+(?:\.\d{1,2})?\s*$")
+        for line in main_lines[date_line_index+1:location_idx]:
+            if price_range.fullmatch(line) or price_single.fullmatch(line):
+                normalized=line.strip()
+                if not normalized.startswith("£"): normalized="£"+normalized
+                price_text=normalized
+                break
+        if not price_text or not re.search(r"£\s?\d",price_text):
+            price_text=next((line for line in main_lines[:120] if re.search(r"£\s?\d",line)),price_text)
+        price_match=re.search(r"£\s?\d+(?:\.\d{1,2})?(?:\s*(?:[-–]|to)\s*£?\s?\d+(?:\.\d{1,2})?)?",price_text,re.I)
     price=re.sub(r"\s+"," ",price_match.group(0)).strip() if price_match else ""
-    ticket_text=" ".join(lines).casefold()
+    ticket_text=" ".join(main_lines).casefold()
     if "sold out" in ticket_text:
         availability="SoldOut"
     else:
@@ -244,8 +275,8 @@ def extract_visible_event(page_title, visible_text, default_venue=""):
     # Event titles may include tour/series subtitles or descriptions such as
     # "Sheku Kanneh-Mason plays Saint-Saëns". Keep the full display title but
     # extract the actual lead act for exact pool matching.
-    lead_match=re.match(r"(?i)^(.+?)\s+(?:plays|performs)\s+",title)
-    primary=lead_match.group(1).strip() if lead_match else (title.split(":",1)[0].strip() if ":" in title else title)
+    lead_match=re.match(r"(?i)^(.+?)\s+(?:plays|performs)\s+",billing_title)
+    primary=lead_match.group(1).strip() if lead_match else (title_acts[0] if title_acts else (billing_title.split(":",1)[0].strip() if ":" in billing_title else billing_title))
     # Classical/ensemble detail pages often list credits in a "Who's playing it"
     # section with a role on the line after each name. Keep the names, not the
     # role labels or prose paragraphs, so these acts can be compared to the pool.
@@ -275,7 +306,7 @@ def extract_visible_event(page_title, visible_text, default_venue=""):
                     or re.search(r"[.!?]$",candidate)):
                 continue
             credit_names.append(candidate)
-    performers=list(dict.fromkeys([primary]+supports+credit_names))
+    performers=list(dict.fromkeys([primary]+title_acts[1:]+supports+credit_names))
     return {
         "event_title":title,
         "event_date":event_date,
