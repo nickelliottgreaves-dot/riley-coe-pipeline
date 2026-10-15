@@ -76,7 +76,7 @@ jobs:
           echo "Primary discovery exit code: $?"
 
       - name: Discover independent secondary venue calendars and event links
-        if: always()
+        if: success()
         shell: bash
         run: |
           set +e
