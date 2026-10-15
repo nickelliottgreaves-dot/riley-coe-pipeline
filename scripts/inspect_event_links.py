@@ -90,6 +90,15 @@ def clean(v):
     if isinstance(v,list): return "; ".join(x for x in (clean(i) for i in v) if x)
     return unescape(str(v or "").strip())
 
+def is_page_furniture(value):
+    """Return true for timing, ticket-navigation and visitor-info labels."""
+    raw=str(value or "").strip()
+    normalized=" ".join(re.sub(r"[^a-z0-9:]+"," ",raw.casefold()).split())
+    return bool(
+        re.fullmatch(r"\d{1,2}(?:[:.]\d{2})?\s*(?:am|pm)?(?:\s*(?:-|to)\s*\d{1,2}(?:[:.]\d{2})?\s*(?:am|pm)?)?",normalized)
+        or re.match(r"^(?:age|doors|interval|timings?|what they say|the guardian|your visit|plan your journey|parking|eat and drink|access info|access information|more info|take a listen|about|stay connected)\b",normalized)
+    )
+
 def extract_visible_event(page_title, visible_text, default_venue="", page_url=""):
     """Extract review-only event candidates from common visible event-detail layouts."""
     lines=[line.strip() for line in visible_text.splitlines() if line.strip()]
@@ -258,13 +267,11 @@ def extract_visible_event(page_title, visible_text, default_venue="", page_url="
         if low in {"with support from","supports","support"}:
             support_mode=True
             continue
-        if support_mode and low in {"details","date","venue","advance tickets","tickets","doors","age restrictions"}:
+        if support_mode and (low in {"details","date","venue","advance tickets","tickets","doors","age restrictions"} or is_page_furniture(line)):
             support_mode=False
         elif support_mode and len(line)<120 and line.casefold()!=title.casefold():
             supports.append(line)
-    supports=[name for name in supports if not re.search(
-        r"(?i)^(?:\d{1,2}(?:[:.]\d{2})?\s*(?:am|pm)?\s*(?:[-–—]|to)\s*\d{1,2}(?:[:.]\d{2})?\s*(?:am|pm)?|interval|timings? are approximate|age:|what they say|the guardian|your visit|plan your journey|parking|eat and drink|access info|more info|take a listen|about .+|stay connected)$",
-        name.strip())]
+    supports=[name for name in supports if not is_page_furniture(name)]
     supports=list(dict.fromkeys(supports))
     price_text=next_value("Advance tickets",main_lines) or next_value("Price",main_lines) or next_value("Tickets",main_lines)
     price_match=re.search(r"£\s?\d+(?:\.\d{1,2})?(?:\s*(?:[-–]|to)\s*£?\s?\d+(?:\.\d{1,2})?)?",price_text,re.I)
