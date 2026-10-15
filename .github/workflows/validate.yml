@@ -94,6 +94,19 @@ jobs:
           else
             echo "RadioFiles episode/track files unavailable; reconciliation skipped and the collection audit remains the evidence of failure."
           fi
+      - name: Cross-check full RadioFiles tracklists against official BBC embedded lists
+        if: always()
+        run: |
+          if [ -f artifacts/bbc-sounds-inventory/bbc_embedded_track_candidates.csv ] && [ -f artifacts/bbc-sounds-inventory/bbc_episode_inventory.csv ] && [ -f artifacts/radiofiles/radiofiles_episode_inventory.csv ] && [ -f artifacts/radiofiles/radiofiles_track_candidates.csv ]; then
+            python scripts/verify_radiofiles_against_bbc.py \
+              --bbc-tracks artifacts/bbc-sounds-inventory/bbc_embedded_track_candidates.csv \
+              --bbc-episodes artifacts/bbc-sounds-inventory/bbc_episode_inventory.csv \
+              --radiofiles-tracks artifacts/radiofiles/radiofiles_track_candidates.csv \
+              --radiofiles-episodes artifacts/radiofiles/radiofiles_episode_inventory.csv \
+              --out-dir artifacts/radiofiles/bbc-crosscheck
+          else
+            echo "BBC embedded tracklists or RadioFiles rows unavailable; cross-check skipped. Do not promote any artist."
+          fi
       - name: Preserve RadioFiles tracklists, raw JSON, reconciliation and audit even when collection fails
         if: always()
         uses: actions/upload-artifact@v4
