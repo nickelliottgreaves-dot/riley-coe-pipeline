@@ -50,9 +50,9 @@ def is_noise_event_title(title: str) -> bool:
     if value in {"location", "venue", "venue space", "tickets", "details", "event details",
                  "buy tickets", "book now", "limited availability", "sold out"}:
         return True
-    if re.fullmatch(r"(?:from:\\s*)?£?\\s*\\d+(?:\\.\\d{1,2})?(?:\\s*[-–]\\s*£?\\s*\\d+(?:\\.\\d{1,2})?)?", value):
+    if re.fullmatch(r"(?:from:\s*)?£?\s*\d+(?:\.\d{1,2})?(?:\s*[-–]\s*£?\s*\d+(?:\.\d{1,2})?)?", value):
         return True
-    if re.fullmatch(r"\\d{1,2}(?::\\d{2})?\\s*(?:am|pm)", value):
+    if re.fullmatch(r"\d{1,2}(?::\d{2})?\s*(?:am|pm)", value):
         return True
     return False
 
