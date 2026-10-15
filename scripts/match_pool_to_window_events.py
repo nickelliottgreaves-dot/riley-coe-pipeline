@@ -219,9 +219,13 @@ def main() -> int:
             if not (existing.get(field) or "").strip() and (row.get(field) or "").strip():
                 existing[field]=row[field]
         if source_priority.get(row["source_kind"],0)>source_priority.get(existing["source_kind"],0):
-            for field in ("source_url","source_kind","candidate_status","notes"):
+            for field in ("source_kind","candidate_status","notes"):
                 if row.get(field):
                     existing[field]=row[field]
+            # Source priority must not replace a specific event URL with a generic calendar URL.
+            if row_detail or not existing_detail:
+                if row.get("source_url"):
+                    existing["source_url"]=row["source_url"]
             if len(row.get("event_title",""))>len(existing.get("event_title","")):
                 existing["event_title"]=row["event_title"]
     candidates=list(dedup.values())
