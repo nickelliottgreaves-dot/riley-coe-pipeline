@@ -150,6 +150,37 @@ def extract_visible_event(page_title, visible_text, default_venue=""):
         if date_line_pattern.search(line) or event_date in line:
             date_line_index=line_index
             break
+    external_city=("london","carlisle","kendal","middlesbrough","manchester","birmingham","edinburgh","glasgow","leeds")
+    def location_scope(location_lines):
+        block_key=" ".join(" ".join(re.sub(r"[^a-z0-9]+"," ",line.casefold()).split()) for line in location_lines)
+        for key,canonical in local_locations.items():
+            if re.search(r"\b"+re.escape(key)+r"\b",block_key):
+                return "local",canonical
+        if (any(re.search(r"\b"+re.escape(place)+r"\b",block_key) for place in out_of_scope_locations)
+                or any(re.search(r"\b"+city+r"\b",block_key) for city in external_city)):
+            return "external",""
+        return "unknown",""
+    # Prefer the venue's explicit location block when supplied. On The Glasshouse
+    # site, multi-date productions can be at Sage One, Carlisle or London; the
+    # location block is more reliable than the shared calendar source label.
+    for idx,line in enumerate(lines):
+        label_match=re.match(r"(?i)^this event takes place at\s*:?[ \t]*(.*)$",line)
+        if not label_match:
+            continue
+        block=[]
+        if label_match.group(1).strip():
+            block.append(label_match.group(1).strip())
+        for following in lines[idx+1:idx+8]:
+            following_key=" ".join(re.sub(r"[^a-z0-9]+"," ",following.casefold()).split())
+            if following_key in {"website","tickets","book now","buy tickets"} or following_key.startswith("website "):
+                break
+            block.append(following)
+        scope,canonical=location_scope(block)
+        if scope=="local":
+            venue=canonical
+            break
+        if scope=="external":
+            return None
     for location_line in lines[date_line_index:min(len(lines),date_line_index+28)]:
         location_key=" ".join(re.sub(r"[^a-z0-9]+"," ",location_line.casefold()).split())
         if location_key in local_locations:
@@ -159,7 +190,6 @@ def extract_visible_event(page_title, visible_text, default_venue=""):
         # or "The Sands Centre, Carlisle"). Ignore short location-like lines
         # from regional tours rather than assigning them to the local crawl seed.
         is_location_line=len(location_line)<=80 and not re.search(r"[.!?]",location_line)
-        external_city=("london","carlisle","kendal","middlesbrough","manchester","birmingham","edinburgh","glasgow","leeds")
         external_location=(location_key in out_of_scope_locations
             or any(location_key.startswith(place+" ") for place in out_of_scope_locations)
             or (is_location_line and (location_key in external_city or any(location_key.endswith(" "+city) for city in external_city))))
@@ -223,7 +253,7 @@ def extract_visible_event(page_title, visible_text, default_venue=""):
     section_start=None
     stop_sections={"what s happening in the music","what is happening in the music","what you ll hear",
                    "what they are playing","what they re playing","need to know","more from",
-                   "your visit","tickets","stay connected"}
+                   "your visit","tickets","stay connected","this event takes place at"}
     role_labels={"conductor","cello","violin","piano","vocals","guitar","drums","composer","leader",
                  "viola","orchestra","bass","percussion","director","tenor","soprano","mezzo soprano",
                  "baritone","flute","oboe","clarinet","harp","trumpet","trombone","saxophone","organ"}
@@ -239,7 +269,8 @@ def extract_visible_event(page_title, visible_text, default_venue=""):
                 break
             candidate=line.strip(" -–—:")
             candidate_key=" ".join(re.sub(r"[^a-z0-9]+"," ",candidate.casefold()).split())
-            if (not candidate or candidate_key in role_labels or candidate_key in stop_sections
+            if (not candidate or candidate_key in role_labels or all(token in role_labels for token in candidate_key.split())
+                    or candidate_key in stop_sections or candidate_key.startswith("this event takes place at")
                     or candidate.casefold()==title.casefold() or len(candidate)>90
                     or re.search(r"[.!?]$",candidate)):
                 continue
