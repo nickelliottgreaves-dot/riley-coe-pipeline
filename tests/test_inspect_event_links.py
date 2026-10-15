@@ -120,9 +120,9 @@ Audition for the Newcastle University Symphony Orchestra!"""
                 if url=="https://thecluny.com/events/skating-polly/":
                     return 200,"text/html",detail,False
                 raise AssertionError("Unexpected crawl URL: "+url)
-            with patch("inspect_event_links.fetch",side_effect=fake_fetch), \\
-                 patch("sys.argv",["inspect_event_links.py","--links",str(links),"--sources",str(sources),"--out-dir",str(root/"out"),"--start","2026-10-15","--end","2026-10-28","--delay","0"]):
-                self.assertEqual(main(),0)
+            with patch("inspect_event_links.fetch",side_effect=fake_fetch):
+                with patch("sys.argv",["inspect_event_links.py","--links",str(links),"--sources",str(sources),"--out-dir",str(root/"out"),"--start","2026-10-15","--end","2026-10-28","--delay","0"]):
+                    self.assertEqual(main(),0)
             self.assertEqual(fetched,["https://thecluny.com/gigs/","https://thecluny.com/events/skating-polly/"])
             summary=json.loads((root/"out"/"event_page_crawl_summary.json").read_text())
             self.assertEqual(summary["pages_inspected"],2)
