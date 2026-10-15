@@ -255,6 +255,15 @@ def is_event_object(obj):
     return any(str(t).casefold().rstrip("/").endswith("event") for t in types)
 
 
+def event_performer_candidate(event):
+    """Use structured performers when present; otherwise retain the title as a review-only candidate."""
+    performer=clean(event.get("performer") or event.get("performers"))
+    if performer:
+        return performer,False
+    title=clean(event.get("name"))
+    return title,bool(title)
+
+
 def event_link_matches(candidate,href,text):
     key=lambda value: re.sub(r"[^a-z0-9]+","",str(value or "").casefold())
     title=key(candidate.get("event_title",""))
@@ -346,7 +355,7 @@ def main():
                             continue
                         event_objects.append(ev)
                         name=clean(ev.get("name")); start=clean(ev.get("startDate"))
-                        perf=clean(ev.get("performer") or ev.get("performers"))
+                        perf,performer_fallback=event_performer_candidate(ev)
                         offers=ev.get("offers") or []; offers=offers if isinstance(offers,list) else [offers]
                         prices=[]; currencies=[]; avail=[]
                         for o in offers:
@@ -354,7 +363,7 @@ def main():
                             if o.get("price") is not None: prices.append(str(o["price"]))
                             if o.get("priceCurrency"): currencies.append(str(o["priceCurrency"]))
                             if o.get("availability"): avail.append(clean(o["availability"]).split("/")[-1])
-                        all_rows.append({"venue":venue,"page_url":url,"http_status":status,"content_type":ctype,"page_title":page_title,"event_title":name,"event_date":start[:10],"performer_names":perf,"price":"; ".join(sorted(set(prices))),"currency":"; ".join(sorted(set(currencies))),"availability":"; ".join(sorted(set(avail))),"event_jsonld_found":"true","visible_text_snapshot":f"snapshots/{snap_name}","verified":"false","status":"structured_candidate_needs_review","notes":"Structured data is candidate evidence only; independently verify event, exact date, room, billing/support, price and ticket status."+( " HTML truncated." if truncated else "")})
+                        all_rows.append({"venue":venue,"page_url":url,"http_status":status,"content_type":ctype,"page_title":page_title,"event_title":name,"event_date":start[:10],"performer_names":perf,"price":"; ".join(sorted(set(prices))),"currency":"; ".join(sorted(set(currencies))),"availability":"; ".join(sorted(set(avail))),"event_jsonld_found":"true","visible_text_snapshot":f"snapshots/{snap_name}","verified":"false","status":"structured_candidate_needs_review","notes":"Structured data is candidate evidence only; independently verify event, exact date, room, billing/support, price and ticket status."+(" Performer metadata absent; event title retained as an unverified artist candidate." if performer_fallback else "")+( " HTML truncated." if truncated else "")})
                 listing_events=extract_visible_listing_events(visible)
                 visible_event_found=False
                 if not event_objects:
