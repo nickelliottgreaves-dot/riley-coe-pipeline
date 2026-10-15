@@ -255,6 +255,17 @@ jobs:
             --event-snapshots "artifacts/riley-coe-event-page-inspection-${{ github.run_id }}/snapshots" \
             --venues config/venue_sources.csv \
             --out artifacts/artist_pool_venue_page_matches.csv
+      - name: Match the full artist pool to dated event candidates
+        if: always()
+        run: |
+          START=$(python -c "from datetime import date; print(date.today().isoformat())")
+          END=$(python -c "from datetime import date,timedelta; print((date.today()+timedelta(days=13)).isoformat())")
+          python scripts/match_pool_to_window_events.py \
+            --pool data/artist_pool.csv \
+            --events "artifacts/riley-coe-event-candidates-${{ github.run_id }}/event_candidates.csv" \
+            --inspected "artifacts/riley-coe-event-page-inspection-${{ github.run_id }}/event_page_inspection.csv" \
+            --start "$START" --end "$END" \
+            --out artifacts/artist_window_event_matches.csv
       - name: Assemble dated PARTIAL evidence package
         run: |
           START=$(python -c "from datetime import date; print(date.today().isoformat())")
@@ -276,6 +287,13 @@ jobs:
             --regression-artist-checks "artifacts/regression_artist_checks.csv" \
             --pool-venue-page-matches "artifacts/artist_pool_venue_page_matches.csv" \
             --out-dir artifacts/evidence-package
+      - name: Attach date-window artist match tables to evidence package
+        if: always()
+        run: |
+          mkdir -p artifacts/evidence-package
+          for f in artifacts/artist_window_event_matches.csv artifacts/artist_window_event_matches.summary.json artifacts/artist_window_event_coverage.csv; do
+            if [ -f "$f" ]; then cp "$f" artifacts/evidence-package/; fi
+          done
       - name: Preserve dated evidence scaffold for review
         if: always()
         uses: actions/upload-artifact@v4
