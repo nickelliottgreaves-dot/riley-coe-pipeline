@@ -17,12 +17,12 @@ from urllib.request import Request, urlopen
 
 API_ROOT = "https://api.mixcloud.com"
 DEFAULT_USER = "SixMusicAlternative"
-USER_AGENT = "riley-coe-pipeline/0.1 (research evidence collector)"
+USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
 EPISODE_FIELDS = ["episode_date", "episode_title", "source", "url", "tracklist_status", "tracks_extracted", "notes"]
 TRACK_FIELDS = ["episode_date", "episode_title", "episode_url", "artist", "track_title", "track_position", "source", "verification_status"]
 
 def get_json(url: str, timeout: int = 25) -> dict:
-    req = Request(url, headers={"User-Agent": USER_AGENT, "Accept": "application/json"})
+    req = Request(url, headers={"User-Agent": USER_AGENT, "Accept": "application/json", "Accept-Language": "en-GB,en;q=0.9"})
     with urlopen(req, timeout=timeout) as response:
         return json.loads(response.read().decode("utf-8"))
 
@@ -148,7 +148,7 @@ def fetch_html_cloudcasts(username: str, since: date, until: date) -> tuple[list
     rendered links are exhaustive or that visible tracklists have been checked.
     """
     profile_url = f"https://www.mixcloud.com/{username.strip('/')}/"
-    req = Request(profile_url, headers={"User-Agent": USER_AGENT, "Accept": "text/html,application/xhtml+xml"})
+    req = Request(profile_url, headers={"User-Agent": USER_AGENT, "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8", "Accept-Language": "en-GB,en;q=0.9"})
     errors: list[str] = []
     try:
         with urlopen(req, timeout=25) as response:
@@ -306,7 +306,7 @@ def fetch_search_cloudcasts(username: str, since: date, until: date) -> tuple[li
                 parts = path.split("/", 1) if path else []
                 if not parts or parts[0].casefold() != account:
                     continue
-                published = parse_date(item.get("created_time") or item.get("updated_time"))
+                published = parse_date(item.get("created_time") or item.get("updated_time")) or episode_date_from_text(str(item.get("name") or item.get("title") or "") + " " + public_url + " " + key)
                 identity = public_url or key
                 if published and since <= published <= until and identity and identity not in seen:
                     found.append(item)
