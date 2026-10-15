@@ -35,7 +35,7 @@ def main() -> int:
     args=ap.parse_args()
     pool_fields,pool=read_rows(args.pool)
     candidate_fields,candidates=read_rows(args.verified_candidates)
-    required={"artist_candidate","episode_date","episode_pid","bbc_episode_url","radiofiles_episode_url","crosscheck_status","track_title"}
+    required={"artist_candidate","radiofiles_artist_candidate","episode_date","episode_pid","bbc_episode_url","radiofiles_episode_url","crosscheck_status","track_title"}
     if not required.issubset(candidate_fields):
         raise ValueError(f"Verified candidate file missing columns: {sorted(required-set(candidate_fields))}")
     if not {"artist","status","source_basis"}.issubset(pool_fields):
@@ -46,9 +46,12 @@ def main() -> int:
     for row in candidates:
         if row.get("crosscheck_status")!="EXACT_FULL_TRACKLIST_MATCH":
             continue
-        artist=" ".join(str(row.get("artist_candidate") or "").split()).strip()
-        if artist:
-            by_artist[norm(artist)].append(row)
+        for field in ("artist_candidate","radiofiles_artist_candidate"):
+            artist=" ".join(str(row.get(field) or "").split()).strip()
+            if artist:
+                evidence_row=dict(row)
+                evidence_row["artist_candidate"]=artist
+                by_artist[norm(artist)].append(evidence_row)
     additions=[]
     proposed=[dict(r) for r in pool]
     for key, appearances in sorted(by_artist.items(),key=lambda pair:pair[0]):
