@@ -353,3 +353,23 @@ Inspection of the 38740356838 artifact found that some Songkick matches were lin
 - Test run [38741006947](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38741006947) passed after the correction.
 
 This handover update intentionally triggers a fresh normal full sweep. Confirm that the Songkick candidates in the resulting match file use individual `/concerts/<id>-...` event URLs rather than the venue `/calendar` URL. Do not change any candidate's verification status merely because the URL is improved.
+
+
+## Latest normal sweep after direct-link fix
+
+Run [38741114377](https://github.com/nickelliottgreaves-dot/riley-coe-pipeline/actions/runs/38741114377) completed successfully. Artifact `riley-coe-independent-gig-finder-38741114377` (ID `11975653010`) was inspected.
+
+- 28-day window: 2026-10-15 through 2026-11-11.
+- 20 configured venues, 20 venue coverage rows; 847/847 artist page searches and 847/847 dated-event comparison rows.
+- 7 candidate matches, zero out-of-scope event rows, zero verified event rows.
+- All five pipeline stages completed successfully; no stage-level failures; 394 pages inspected, 24 failed fetches, 11 external ticketing pages inspected, no crawl caps.
+- 14 venue sources were checked in captured scope and 6 remain partial: Boiler Shop, Cumberland Arms, Cobalt Studios, NX Newcastle, Central Gateshead / Central Bar, and The Globe. All 20 calendar-coverage-verification flags remain false.
+- **The direct-link fix passed live acceptance:** Barbican Estate and Fat White Family now link to individual Songkick `/concerts/<id>-...` pages rather than the generic venue calendar. The direct links are still candidate evidence; manual review remains separate.
+- Ticket status is captured for the three Boiler Shop events as SoldOut; automated price fields remain blank for the seven candidate rows. The manual review ledger contains source-backed details and must remain the separate review layer.
+- The independent artist updater also completed with a valid PARTIAL proposal and zero stage failures; it did not modify the authoritative pool.
+
+### Next bounded implementation task
+
+The six partial venues are currently marked partial when one or more crawled detail pages fail, but the event-page inspection artifact exposes only a small subset of individual failed URLs while the crawl audit reports aggregate counts. That makes the failures hard to diagnose and leaves the coverage ledger less useful than it should be.
+
+Next, add an explicit `event_page_fetch_failures.csv` with one row per failed URL (venue, URL, crawl depth/source kind, HTTP status or exception, and whether it was an allowlisted external ticket page). Add regression tests for recording HTTP errors and unusable empty non-200 responses, and keep the run PARTIAL. Do not lower the partial status or imply calendar completeness just because the failure ledger exists.
