@@ -2,7 +2,7 @@ import unittest
 from urllib.error import HTTPError
 from unittest.mock import patch
 from datetime import date
-from scripts.collect_mixcloud import episode_date_from_text, fetch_html_cloudcasts, inventory_item, parse_date, resolve_cloudcasts_endpoint
+from scripts.collect_mixcloud import episode_date_from_text, fetch_html_cloudcasts, fetch_search_cloudcasts, inventory_item, parse_date, resolve_cloudcasts_endpoint
 
 class MixcloudInventoryTests(unittest.TestCase):
     def test_no_sections_is_unavailable_not_complete(self):
@@ -60,6 +60,23 @@ class MixcloudInventoryTests(unittest.TestCase):
         self.assertEqual(len(items), 1)
         self.assertEqual(items[0]["created_time"][:10], "2026-10-06")
         self.assertFalse(any("yielded no dated" in error for error in errors))
+
+    def test_search_fallback_tries_coe_query_variant_and_deduplicates(self):
+        def fake_get_json(url):
+            if "q=Riley+Coe" in url:
+                return {"data": [{
+                    "name": "Riley & Coe Tuesday 6 October 2026",
+                    "url": "https://www.mixcloud.com/SixMusicAlternative/riley-coe-tuesday-6th-october-2026/",
+                    "key": "/SixMusicAlternative/riley-coe-tuesday-6th-october-2026/",
+                    "created_time": "2026-10-06T20:00:00Z"
+                }]}
+            return {"data": []}
+
+        with patch("scripts.collect_mixcloud.get_json", side_effect=fake_get_json):
+            items, errors = fetch_search_cloudcasts("SixMusicAlternative", date(2026, 10, 1), date(2026, 10, 21))
+        self.assertEqual(len(items), 1)
+        self.assertIn("riley-coe-tuesday-6th-october-2026", items[0]["url"])
+        self.assertFalse(errors)
 
     def test_date_parser(self):
         self.assertEqual(parse_date("2026-10-01T20:00:00Z").isoformat(), "2026-10-01")
