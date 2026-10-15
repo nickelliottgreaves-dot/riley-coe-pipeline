@@ -12,6 +12,7 @@ on:
       - 'scripts/inspect_event_links.py'
       - 'scripts/match_pool_to_window_events.py'
       - 'scripts/validate_hybrid_baseline.py'
+      - 'scripts/check_known_gig_regressions.py'
       - 'data/artist_pool.csv'
   workflow_dispatch:
   schedule:
@@ -111,6 +112,24 @@ jobs:
             --end "${{ steps.window.outputs.end }}" \
             --out "$OUT/artist_window_event_matches.csv"
           echo "Pool matching exit code: $?"
+
+      - name: Check five known-gig regression cases against naturally collected candidates
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          OUT="artifacts/hybrid-search-${{ steps.window.outputs.start }}"
+          EVENTS="$OUT/discovery/event_candidates.csv"
+          INSPECTED="$OUT/inspection/event_page_inspection.csv"
+          [ -f "$EVENTS" ] || printf 'event_date,venue,event_title,artist,artist_role,source_url,verified,price,ticket_status,discovery_method,notes\\n' > "$EVENTS"
+          [ -f "$INSPECTED" ] || printf 'venue,page_url,http_status,content_type,page_title,event_title,event_date,performer_names,price,currency,availability,event_jsonld_found,visible_text_snapshot,verified,status,notes\\n' > "$INSPECTED"
+          python scripts/check_known_gig_regressions.py \\
+            --fixtures tests/fixtures/known_gig_regressions.csv \\
+            --events "$EVENTS" \\
+            --inspected "$INSPECTED" \\
+            --inspection-dir "$OUT/inspection" \\
+            --out "$OUT/known_gig_regressions.csv"
+          echo "Regression check exit code: $?"
 
       - name: Produce explicit coverage and result status
         if: always()
