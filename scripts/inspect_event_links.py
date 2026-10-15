@@ -285,10 +285,15 @@ def main():
     def crawl_venue(venue, urls):
         all_rows=[]
         audits=[]
-        queue=deque((canonicalize_url(u),0) for u in dict.fromkeys(urls)); visited=set(); failed=0; added=0; cap=False
+        queue=deque(); queued=set(); visited=set(); failed=0; added=0; cap=False
+        for seed_url in urls:
+            canonical=canonicalize_url(seed_url)
+            if canonical not in queued:
+                queue.append((canonical,0)); queued.add(canonical)
         source_hosts={urlparse(u).netloc for u in urls if urlparse(u).netloc}
         while queue:
             url,depth=queue.popleft()
+            queued.discard(url)
             if url in visited: continue
             if len(visited)>=args.max_pages_per_venue:
                 cap=True; break
@@ -333,12 +338,13 @@ def main():
                         if parsed.scheme not in {"https","http"} or parsed.netloc not in source_hosts or target in visited or not likely(href,txt): continue
                         # Avoid adding fragments and tracking-only URL variants.
                         target=canonicalize_url(target)
-                        if target not in visited and not any(x[0]==target for x in queue):
+                        if target not in visited and target not in queued:
                             item=(target,depth+1)
                             if is_calendar_navigation(href,txt,url):
                                 queue.appendleft(item)
                             else:
                                 queue.append(item)
+                            queued.add(target)
                             added+=1
             except (HTTPError,URLError,TimeoutError,OSError,ValueError) as exc:
                 failed+=1
