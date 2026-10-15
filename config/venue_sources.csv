@@ -3,17 +3,17 @@ The Cluny,https://thecluny.com/gigs/,verified_official_calendar,Official Gigs ca
 Cluny 2,https://thecluny.com/gigs/,verified_official_calendar,Same official calendar; identify room separately
 Boiler Shop,https://www.boilershop.net/,verified_official_calendar,Official calendar on homepage; follow View Full Calendar and pagination
 Wylam Brewery,https://www.wylambrewery.co.uk/events/,verified_official_calendar,Official What's On calendar
-The Grove,https://www.thegrovenewcastle.co.uk/,verified_official_site,Follow Events navigation and inspect the full calendar
+The Grove,https://thegrovenewcastle.gigantic.com/promoter/the-grove-newcastle-ltd?view=grid,verified_official_calendar,Venue-specific promoter ticket calendar; use this event feed because the venue homepage exposed no parseable event cards
 Glasshouse International Centre for Music,https://theglasshouseicm.org/whats-on/,verified_official_calendar,Check all result pages and date filters
 Sage Two,https://theglasshouseicm.org/whats-on/,verified_official_calendar,Same official calendar; record Sage Two room separately
-Cumberland Arms,https://www.thecumberlandarms.co.uk/,verified_official_site,Follow Live Events navigation; verify full listing
+Cumberland Arms,https://www.thecumberlandarms.co.uk/events/,verified_official_calendar,Direct official live music and events calendar
 Cobalt Studios,https://cobaltstudios.co.uk/,verified_official_site,Official site; find current events page and seasonal schedule
 NX Newcastle,https://www.nxnewcastle.com/whats-on/live-events/,verified_official_calendar,Official live events listing
 Think Tank,https://www.thinktankncl.co.uk/shows/,verified_official_calendar,Official Think Tank? NCL shows listing
 O2 City Hall Newcastle,https://www.academymusicgroup.com/o2cityhallnewcastle/events,verified_official_calendar,Official Academy Music Group event calendar
 Central Gateshead / Central Bar,https://linktr.ee/central.bar,verified_official_social_listing,Official venue Linktree with upcoming listings; verify individual event links
 Gosforth Civic Theatre,https://www.gosforthcivictheatre.co.uk/whats-on,verified_official_calendar,Official What's On calendar
-Newcastle University / Students' Union,https://nusu.co.uk/,verified_official_site,Follow official events calendar; also check university venue listings
+Newcastle University / Students' Union,https://nusu.co.uk/whatson/calendar,verified_official_calendar,Direct official What's On calendar; JavaScript-rendered event results may require a secondary source
 Lubber Fiend,https://www.thelubberfiend.com/venue,verified_official_site,Official venue page; locate full events listing
 The Globe,https://theglobenewcastle.bar/whats-on/,verified_official_calendar,Safety-net grassroots live-music venue; check dated listings and ticket links
 Little Buildings,https://www.littlebuildingslive.com/,verified_official_site,Safety-net grassroots live-music venue; inspect current What's On listings and linked ticket pages
