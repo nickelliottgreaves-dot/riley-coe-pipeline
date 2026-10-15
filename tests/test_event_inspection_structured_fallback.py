@@ -186,5 +186,56 @@ Book Tickets
         self.assertIn("Slate Label & Ben Harwood", rows[1]["performer_names"])
 
 
+    def test_successful_but_incomplete_jsonld_uses_bounded_fallback_probes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            links = root / "links.csv"
+            sources = root / "sources.csv"
+            out = root / "out"
+            with links.open("w", encoding="utf-8", newline="") as f:
+                w = csv.DictWriter(f, fieldnames=["venue", "candidate_url", "link_text"])
+                w.writeheader()
+                for i in range(20):
+                    w.writerow({
+                        "venue": "Example Venue",
+                        "candidate_url": f"https://venue.example/events/act-{i}",
+                        "link_text": f"Act {i}",
+                    })
+            with sources.open("w", encoding="utf-8", newline="") as f:
+                w = csv.DictWriter(f, fieldnames=["venue", "source_url"])
+                w.writeheader()
+                w.writerow({
+                    "venue": "Example Venue",
+                    "source_url": "https://venue.example/events/",
+                })
+
+            html = (
+                '<title>Example Venue Events</title>'
+                '<script type="application/ld+json">'
+                '{"@type":"Event","name":"One structured item","startDate":"2026-10-17"}'
+                '</script>'
+            )
+            fetched = []
+            def fake_fetch(url):
+                fetched.append(url)
+                return 200, "text/html", html, False
+
+            with patch("inspect_event_links.fetch", side_effect=fake_fetch):
+                with patch("sys.argv", [
+                    "inspect_event_links.py", "--links", str(links),
+                    "--sources", str(sources), "--out-dir", str(out),
+                    "--start", "2026-10-15", "--end", "2026-10-28",
+                    "--max-pages-per-venue", "30", "--delay", "0",
+                ]):
+                    self.assertEqual(main(), 0)
+
+            self.assertEqual(len(fetched), 4)
+            with (out / "event_page_crawl_audit.csv").open(encoding="utf-8", newline="") as f:
+                audit = list(csv.DictReader(f))[0]
+            self.assertEqual(audit["pages_fetched"], "4")
+            self.assertEqual(audit["pages_failed"], "0")
+            self.assertEqual(audit["crawl_cap_reached"], "false")
+
+
 if __name__ == "__main__":
     unittest.main()
