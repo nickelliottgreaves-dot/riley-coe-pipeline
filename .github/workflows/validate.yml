@@ -210,7 +210,7 @@ jobs:
 
   assemble-evidence-scaffold:
     if: always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && contains(github.event.head_commit.message, '[full-sweep]')))
-    needs: [mixcloud-inventory, bbc-sounds-inventory, venue-page-inventory, event-candidate-discovery, event-page-inspection]
+    needs: [mixcloud-inventory, bbc-sounds-inventory, radiofiles-inventory, venue-page-inventory, event-candidate-discovery, event-page-inspection]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -233,6 +233,8 @@ jobs:
             --bbc-episodes "artifacts/riley-coe-bbc-sounds-inventory-${{ github.run_id }}/bbc_episode_inventory.csv" \
             --bbc-track-candidates "artifacts/riley-coe-bbc-sounds-inventory-${{ github.run_id }}/bbc_track_candidates.csv" \
             --mixcloud-track-candidates "artifacts/riley-coe-mixcloud-inventory-${{ github.run_id }}/mixcloud_api_track_candidates.csv" \
+            --radiofiles-episodes "artifacts/riley-coe-radiofiles-inventory-${{ github.run_id }}/radiofiles_episode_inventory.csv" \
+            --radiofiles-track-candidates "artifacts/riley-coe-radiofiles-inventory-${{ github.run_id }}/radiofiles_track_candidates.csv" \
             --events "artifacts/riley-coe-event-candidates-${{ github.run_id }}/event_candidates.csv" \
             --venue-audit "artifacts/riley-coe-event-candidates-${{ github.run_id }}/event_discovery_audit.csv" \
             --event-page-inspection "artifacts/riley-coe-event-page-inspection-${{ github.run_id }}/event_page_inspection.csv" \
