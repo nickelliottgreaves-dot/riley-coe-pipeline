@@ -130,3 +130,10 @@ Every assembled run now emits `venue_discovery_coverage.csv` plus `Riley_Coe_ven
 The configured venue discovery registry now includes four optional safety-net venues in addition to the 16 mandatory rooms/sites: The Globe, Little Buildings, Utilita Arena Newcastle and ZEROX Newcastle. These are searched in the same venue-first candidate-discovery flow, so their billed acts can be compared against the full artist pool without reverting to artist-by-artist venue searches.
 
 The event-page inspector receives the full venue registry and writes one crawl-audit row per configured venue, including venues for which discovery found zero candidate links. Such rows use `NO_SEED_LINKS` and explicitly mean "discovery gap"—never "no relevant gigs". The dated discovery coverage export includes mandatory and optional venues, while only the 16 required venues block the mandatory venue-completion gate.
+
+
+### Mixcloud discovery fallback and validation
+
+The Mixcloud collector tries the public account API, supported search API, public profile/site-search HTML, Bing RSS, and DuckDuckGo HTML in sequence. Search-engine results are discovery candidates only; they are date-filtered and the public show URL is fetched before acceptance. Generic unavailable-page shells that return HTTP 200 are rejected, and an individual show's API detail request failing does not certify a tracklist. Episode candidates and extracted artist rows remain incomplete until the visible tracklist has been independently checked. Public search indexing can be stale or incomplete, so an empty or partial inventory must be reported as a gap, not as a complete archive.
+
+The event-page inspection budget is 120 pages per venue per run. Reaching that cap still makes coverage partial; the larger limit is intended to reduce premature cut-offs, not to certify that a venue calendar is exhaustive.
