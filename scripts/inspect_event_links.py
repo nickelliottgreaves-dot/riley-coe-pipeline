@@ -693,12 +693,13 @@ def is_plausible_event_page_url(target, source_url):
         return False
     if path==base:
         return True
-    # Pagination on the exact configured venue calendar is allowed.
-    if path==base and is_pagination_link(target,"",source_url):
+    # Pagination is allowed only when it stays on this configured calendar,
+    # not when it jumps to a global /events or metro-wide listing.
+    if path.startswith(base+"/page/") and is_pagination_link(target,"",source_url):
         return True
     if re.match(r"^/venues/[^/]+(?:/calendar)?$",base) and path.startswith(base.split("/calendar",1)[0]+"/calendar"):
         return True
-    if is_calendar_navigation(target,"",source_url):
+    if base in {"/events","/event","/gigs","/gig","/whats-on","/whatson","/shows","/concerts"} and path.startswith(base+"/"):
         return True
     # Common event-detail patterns across official venues, Songkick and Ents24.
     if re.search(r"/(?:concerts?|events?|gigs?|shows?|performances?|tickets?)/[^/]+",path):
@@ -934,7 +935,7 @@ def main():
                             elif not event_objects and not likely(href,txt):
                                 continue
                             target=canonicalize_url(target)
-                            if not navigation and not is_plausible_event_page_url(target,url):
+                            if not is_plausible_event_page_url(target,url):
                                 non_event_links_skipped+=1
                                 continue
                             if target in visited or target in queued:
