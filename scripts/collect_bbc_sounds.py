@@ -326,6 +326,11 @@ def main():
     rows=[]; linkrows=[]; trackrows=[]; embedded_trackrows=[]; embedded_audit_rows=[]
     for ep in episodes:
         url=ep["url"]
+        # The programme metadata page may omit the embedded tracklist state.
+        # Prefer the equivalent Sounds player URL for the same official PID.
+        pid=episode_id(url)
+        if pid and "/sounds/play/" not in url:
+            url=f"{ROOT_URL}/sounds/play/{pid}"
         try:
             status,ctype,html=fetch(url)
             if status!=200 or "html" not in ctype.lower(): raise ValueError(f"Unexpected episode response: {status} {ctype}")
